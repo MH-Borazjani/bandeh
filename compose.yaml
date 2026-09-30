@@ -1,13 +1,23 @@
 services:
+  # ---------------------------------------------------------------------------
+  # Web Service: FastAPI Application
+  # ---------------------------------------------------------------------------
   web:
+    # Build container image using the Dockerfile in the project root
     build: .
     ports:
+      # Expose container port 80 to host machine port 8000
       - "8000:80"
     env_file:
+      # Inject local application configuration and secrets from .env
       - .env
     volumes:
+      # Bind-mount current directory for live code reload during development
       - .:/app
+      # Anonymous volume preventing the host's virtual environment from
+      # overwriting the container's isolated Linux-built virtual environment
       - /app/.venv
+    # Execute the FastAPI dev server using uv package runner, bound to all network interfaces
     command:
       [
         "uv",
@@ -21,6 +31,95 @@ services:
         "80",
       ]
 
-#ما در حال حاضر سرویس ردیس رو نیاوردیم بالا
-# سرویس odoo هم همینطور
-# سرویس postgres هم همینطور
+  # ---------------------------------------------------------------------------
+  # Database Service: PostgreSQL
+  # ---------------------------------------------------------------------------
+  database:
+    image: postgres:16-alpine
+    volumes:
+      # Persist PostgreSQL data locally on host disk across container restarts
+      - ./data/database:/var/lib/postgresql/data
+    environment:
+      # Initialize primary database credentials from environment variables
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      # Verify database readiness before dependent services attempt connections
+      # Note: username flag is currently checked against user 'directus'
+      test: ["CMD", "pg_isready", "--host=localhost", "--username=directus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Cache Service: Redis
+  # ---------------------------------------------------------------------------
+  cache:
+    image: redis:7
+    healthcheck:
+      # Validate Redis connectivity via the CLI ping command
+      test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Headless CMS Service: Directus
+  # ---------------------------------------------------------------------------
+  directus:
+    image: directus/directus:12.0.2
+    ports:
+      # Directus administrative UI and API endpoint
+      - "8055:8055" #Verify HTTP responsiveness on the internal ping rout
+    volumes:
+      # Persist uploaded media assets
+      - ./volumes/uploads:/directus/uploads
+      # Mount custom extensions, hooks, or display plugins
+      - ./volumes/extensions:/directus/extensions
+    depends_on:
+      # Block startup until database and Redis pass their respective health checks
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      # Verify HTTP responsiveness on the internal ping route
+      test:
+        [
+          "CMD-SHELL",
+          "wget --spider -q http://localhost:8055/server/ping || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+    environment:
+      # Secret key used for signing session cookies and JWTs
+      SECRET: ${SECRET_KEY}
+
+      # Database connection configuration using Docker DNS hostname
+      DB_CLIENT: "pg"
+      DB_HOST: "database"
+      DB_PORT: "5432"
+      DB_DATABASE: "directus"
+      DB_USER: "directus"
+      DB_PASSWORD: "directus"
+
+      # Redis caching configuration for API and metadata performance
+      CACHE_ENABLED: "true"
+      CACHE_AUTO_PURGE: "true"
+      CACHE_STORE: "redis"
+      REDIS: "redis://cache:6379"
+
+      # Initial admin credentials generated on first boot
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+      # Accessible external URL required for asset URLs, webhooks, and CORS
+      PUBLIC_URL: "REPLACE_WITH_YOUR_URL"
