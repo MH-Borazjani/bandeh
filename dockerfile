@@ -67,4 +67,4 @@ EXPOSE 80
 # -----------------------------------------------------------------------------
 # Execute the production server directly via the virtualenv's executable.
 # FastAPIs CLI `fastapi run` automatically selects a production-grade ASGI runner (Uvicorn).
-CMD ["fastapi", "run", "app/main.py", "--host", "0.0.0.0", "--port", "80"]
+CMD ["fastapi", "run", "app/e-commerce/main.py", "--host", "0.0.0.0", "--port", "80"]

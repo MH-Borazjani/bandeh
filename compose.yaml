@@ -24,7 +24,7 @@ services:
         "run",
         "fastapi",
         "dev",
-        "app/main.py",
+        "app/e-commerce/main.py",
         "--host",
         "0.0.0.0",
         "--port",
@@ -37,17 +37,14 @@ services:
   database:
     image: postgres:16-alpine
     volumes:
-      # Persist PostgreSQL data locally on host disk across container restarts
       - ./data/database:/var/lib/postgresql/data
     environment:
-      # Initialize primary database credentials from environment variables
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
-      # Verify database readiness before dependent services attempt connections
-      # Note: username flag is currently checked against user 'directus'
-      test: ["CMD", "pg_isready", "--host=localhost", "--username=directus"]
+      # تست سلامت با استفاده از متغیرهای محیطی واقعی
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -68,27 +65,22 @@ services:
       start_interval: 5s
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
+ # ---------------------------------------------------------------------------
   # Headless CMS Service: Directus
   # ---------------------------------------------------------------------------
   directus:
     image: directus/directus:12.0.2
     ports:
-      # Directus administrative UI and API endpoint
-      - "8055:8055" #Verify HTTP responsiveness on the internal ping rout
+      - "8055:8055"
     volumes:
-      # Persist uploaded media assets
       - ./volumes/uploads:/directus/uploads
-      # Mount custom extensions, hooks, or display plugins
       - ./volumes/extensions:/directus/extensions
     depends_on:
-      # Block startup until database and Redis pass their respective health checks
       database:
         condition: service_healthy
       cache:
         condition: service_healthy
     healthcheck:
-      # Verify HTTP responsiveness on the internal ping route
       test:
         [
           "CMD-SHELL",
@@ -100,26 +92,22 @@ services:
       start_interval: 5s
       start_period: 30s
     environment:
-      # Secret key used for signing session cookies and JWTs
       SECRET: ${SECRET_KEY}
 
-      # Database connection configuration using Docker DNS hostname
       DB_CLIENT: "pg"
       DB_HOST: "database"
       DB_PORT: "5432"
-      DB_DATABASE: "directus"
-      DB_USER: "directus"
-      DB_PASSWORD: "directus"
+      # اتصال به دیتابیس با همان متغیرهای یکسان سرویس database
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
 
-      # Redis caching configuration for API and metadata performance
       CACHE_ENABLED: "true"
       CACHE_AUTO_PURGE: "true"
       CACHE_STORE: "redis"
       REDIS: "redis://cache:6379"
 
-      # Initial admin credentials generated on first boot
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
 
-      # Accessible external URL required for asset URLs, webhooks, and CORS
-      PUBLIC_URL: "REPLACE_WITH_YOUR_URL"
+      PUBLIC_URL: "http://localhost:8055"
