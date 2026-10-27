@@ -3,6 +3,7 @@ services:
   # Web Service: FastAPI Application
   # ---------------------------------------------------------------------------
   web:
+    container_name: fastapi-e-commerce
     # Build container image using the Dockerfile in the project root
     build: .
     ports:
@@ -35,6 +36,7 @@ services:
   # Database Service: PostgreSQL
   # ---------------------------------------------------------------------------
   database:
+    container_name: fastapi-e-commerce-db
     image: postgres:16-alpine
     volumes:
       - ./data/database:/var/lib/postgresql/data
@@ -44,7 +46,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
       # تست سلامت با استفاده از متغیرهای محیطی واقعی
-      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -55,6 +61,7 @@ services:
   # Cache Service: Redis
   # ---------------------------------------------------------------------------
   cache:
+    container_name: fastapi-e-commerce-cache
     image: redis:7
     healthcheck:
       # Validate Redis connectivity via the CLI ping command
@@ -65,10 +72,11 @@ services:
       start_interval: 5s
       start_period: 30s
 
- # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
   # Headless CMS Service: Directus
   # ---------------------------------------------------------------------------
   directus:
+    container_name: fastapi-e-commerce-directus
     image: directus/directus:12.0.2
     ports:
       - "8055:8055"
