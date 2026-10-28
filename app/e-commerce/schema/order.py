@@ -13,7 +13,7 @@ Concepts shown here, and where to find them:
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import (
     BaseModel,
@@ -24,7 +24,7 @@ from pydantic import (
 )
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Allowed lifecycle states for an order."""
 
     PENDING = "pending"
@@ -37,7 +37,7 @@ class OrderStatus(str, Enum):
 class OrderCustomer(BaseModel):
     """Buyer contact details for one order. No account, no password."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     full_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
@@ -49,7 +49,7 @@ class OrderCustomer(BaseModel):
 class OrderItem(BaseModel):
     """One line of an order, with the product data frozen at order time."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     product_id: int = Field(gt=0)
     product_name: str = Field(min_length=2, max_length=120)
@@ -69,22 +69,24 @@ class OrderCreate(BaseModel):
     model_config = ConfigDict(
         str_strip_whitespace=True,
         json_schema_extra={
-            "example": {
-                "customer": {
-                    "full_name": "Sara Ahmadi",
-                    "email": "sara@example.com",
-                    "address": "12 Main Street",
-                    "city": "Tehran",
-                },
-                "items": [
-                    {
-                        "product_id": 1,
-                        "product_name": "Ceramic mug",
-                        "unit_price": "12.50",
-                        "quantity": 2,
-                    }
-                ],
-            }
+            "examples": [
+                {
+                    "customer": {
+                        "full_name": "Sara Ahmadi",
+                        "email": "sara@example.com",
+                        "address": "12 Main Street",
+                        "city": "Tehran",
+                    },
+                    "items": [
+                        {
+                            "product_id": 1,
+                            "product_name": "Ceramic mug",
+                            "unit_price": "12.50",
+                            "quantity": 2,
+                        }
+                    ],
+                }
+            ]
         },
     )
 
@@ -96,13 +98,15 @@ class OrderCreate(BaseModel):
 class OrderUpdateStatus(BaseModel):
     """Change only the status of an existing order."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     status: OrderStatus
 
 
 class Order(BaseModel):
     """What reads return: the placed order plus server-assigned fields."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     id: int
     customer: OrderCustomer

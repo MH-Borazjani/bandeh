@@ -15,12 +15,13 @@ Concepts shown here, and where to find them:
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class ProductStatus(str, Enum):
+class ProductStatus(StrEnum):
     """Allowed lifecycle states for a product."""
 
     DRAFT = "draft"
@@ -31,7 +32,7 @@ class ProductStatus(str, Enum):
 class Dimensions(BaseModel):
     """Physical size of a product. A nested model, not flat fields."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     width_cm: Decimal = Field(gt=0, description="Width in centimetres.")
     height_cm: Decimal = Field(gt=0, description="Height in centimetres.")
@@ -41,7 +42,7 @@ class Dimensions(BaseModel):
 class ProductBase(BaseModel):
     """Fields shared by create, update and read shapes."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     name: str = Field(min_length=2, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
@@ -55,14 +56,14 @@ class ProductBase(BaseModel):
 
     @field_validator("sku", mode="before")
     @classmethod
-    def normalise_sku(cls, value: object) -> object:
+    def normalise_sku(cls, value: Any) -> Any:
         """Upper-case (and strip) the SKU before pattern validation."""
         if isinstance(value, str):
             return value.strip().upper()
         return value
 
     @model_validator(mode="after")
-    def check_discount(self) -> "ProductBase":
+    def check_discount(self) -> Self:
         """A discount only makes sense when it is below the full price."""
         if (
             self.discount_price is not None
@@ -78,13 +79,15 @@ class ProductCreate(ProductBase):
     model_config = ConfigDict(
         str_strip_whitespace=True,
         json_schema_extra={
-            "example": {
-                "name": "Ceramic mug",
-                "price": "12.50",
-                "stock": 20,
-                "sku": "mug-001",
-                "status": "active",
-            }
+            "examples": [
+                {
+                    "name": "Ceramic mug",
+                    "price": "12.50",
+                    "stock": 20,
+                    "sku": "mug-001",
+                    "status": "active",
+                }
+            ]
         },
     )
 
@@ -92,7 +95,7 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     """Partial update: every field is optional, so only sent fields change."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
     name: str | None = Field(default=None, min_length=2, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
@@ -104,6 +107,17 @@ class ProductUpdate(BaseModel):
     tags: list[str] | None = Field(default=None, max_length=10)
     status: ProductStatus | None = None
     dimensions: Dimensions | None = None
+
+    @model_validator(mode="after")
+    def check_discount(self) -> Self:
+        """If both price and discount_price are provided, discount must be smaller than price."""
+        if (
+            self.price is not None
+            and self.discount_price is not None
+            and self.discount_price >= self.price
+        ):
+            raise ValueError("discount_price must be smaller than price")
+        return self
 
 
 class Product(ProductBase):

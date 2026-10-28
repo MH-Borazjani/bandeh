@@ -10,7 +10,7 @@ Run from ``app/e-commerce`` as::
     from schema.order import OrderCreate
 """
 
-from schema.order import (
+from .order import (
     Order,
     OrderCreate,
     OrderCustomer,
@@ -18,7 +18,7 @@ from schema.order import (
     OrderStatus,
     OrderUpdateStatus,
 )
-from schema.product import (
+from .product import (
     Dimensions,
     Product,
     ProductCreate,

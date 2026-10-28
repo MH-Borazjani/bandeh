@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pydantic import ValidationError
 
 from schema.order import Order, OrderCreate
-from schema.product import ProductCreate
+from schema.product import ProductCreate, ProductUpdate
 
 
 def main() -> None:
@@ -63,10 +63,14 @@ def main() -> None:
     for label, bad_input in [
         ("negative price", {"name": "Mug", "price": "-1", "sku": "X-1"}),
         ("empty order", {"customer": order.customer, "items": []}),
+        ("discount greater than price", {"name": "Mug", "price": "10.00", "discount_price": "15.00", "sku": "MUG-002"}),
+        ("update discount greater than price", {"price": Decimal("10.00"), "discount_price": Decimal("15.00")}),
     ]:
         try:
-            if label == "negative price":
+            if label == "negative price" or label == "discount greater than price":
                 ProductCreate(**bad_input)
+            elif label == "update discount greater than price":
+                ProductUpdate(**bad_input)
             else:
                 OrderCreate(**bad_input)
         except ValidationError as exc:
