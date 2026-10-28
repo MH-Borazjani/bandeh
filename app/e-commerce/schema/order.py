@@ -119,4 +119,4 @@ class Order(BaseModel):
     @property
     def total_amount(self) -> Decimal:
         """Sum of all line totals, computed by the model itself."""
-        return sum((item.line_total for item in self.items), Decimal("0"))
+        return sum((item.line_total for item in self.items), Decimal(0))

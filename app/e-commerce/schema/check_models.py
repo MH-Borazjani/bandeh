@@ -31,7 +31,7 @@ def main() -> None:
         price=Decimal("12.50"),
         stock=20,
         sku="mug-001",  # lower-case on purpose: the validator upper-cases it
-        status="active",
+        status="active", # type: ignore
     )
     print("product SKU after validation:", product.sku)
     assert product.sku == "MUG-001"
@@ -42,7 +42,7 @@ def main() -> None:
             "email": "sara@example.com",
             "address": "12 Main Street",
             "city": "Tehran",
-        },
+        }, # type: ignore
         items=[
             {
                 "product_id": 1,
@@ -50,7 +50,7 @@ def main() -> None:
                 "unit_price": Decimal("12.50"),
                 "quantity": 2,
             }
-        ],
+        ], # type: ignore
     )
     stored = Order(
         id=1,
