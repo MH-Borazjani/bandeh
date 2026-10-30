@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, EmailStr
 
 from auth_routes import router as auth_router
+from pages import router as pages_router
 
 class Schema_model(BaseModel):
     email:EmailStr
@@ -10,6 +11,7 @@ class Schema_model(BaseModel):
 app=FastAPI()
 
 app.include_router(auth_router)
+app.include_router(pages_router)
 
 @app.post("/signup")
 async def sin(cred:Schema_model):
