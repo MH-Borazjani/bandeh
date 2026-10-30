@@ -1,0 +1,29 @@
+<!-- Code-entry form. The server swaps this into #auth-box after the
+     SMS is sent. `phone` comes back as a hidden field so the verify
+     endpoint knows which number this code belongs to. -->
+<form hx-post="/auth/otp/verify" hx-target="#auth-box" hx-swap="innerHTML" class="space-y-4">
+  {% if error %}
+  <p class="bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">{{ error }}</p>
+  {% endif %}
+  <p class="text-neutral-300 text-sm">کد ۵ رقمی پیامک‌شده به <span dir="ltr">{{ phone }}</span> را وارد کن:</p>
+  <input type="hidden" name="phone" value="{{ phone }}">
+  <div>
+    <label for="code" class="block mb-2 text-sm text-neutral-300">کد تایید</label>
+    <input id="code" name="code" type="text" inputmode="numeric" dir="ltr" required
+           maxlength="5" minlength="5" placeholder="•••••" autocomplete="one-time-code"
+           class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-3 text-center text-2xl tracking-[0.5em] placeholder-neutral-600 focus:outline-none focus:border-teal-500">
+  </div>
+  <button type="submit"
+          class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg py-3">
+    تایید و ورود
+  </button>
+</form>
+
+<!-- Resend: posts the same number again. The server enforces the 60s
+     cooldown and answers with an error fragment if it's too soon. -->
+<form hx-post="/auth/otp/request" hx-target="#auth-box" hx-swap="innerHTML">
+  <input type="hidden" name="phone" value="{{ phone }}">
+  <button type="submit" class="w-full text-teal-400 text-sm py-2">
+    ارسال مجدد کد
+  </button>
+</form>

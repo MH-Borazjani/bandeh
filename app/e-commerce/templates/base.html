@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- Base layout for every Bandeh page. Hard rules, from Mamad himself:
+     - Dark theme, ALWAYS. The background is never white (it hurts eyes).
+     - dir="rtl" lang="fa": the whole shop speaks Persian.
+     - Mobile-first: content lives in a narrow centered column, big
+       tap targets, readable without zooming on a phone.
+     - No dropdown menus, no animation. Ever. -->
+<html dir="rtl" lang="fa" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}</title>
+  <!-- Tailwind via CDN: fine for learning and v1. Before real launch,
+       switch to compiled Tailwind (smaller, faster, works offline). -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- HTMX: form posts without page reloads, zero hand-written JS. -->
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body class="bg-neutral-900 text-neutral-100 min-h-screen">
+  <main class="max-w-md mx-auto px-4 py-10">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}ورود | بنده{% endblock %}
+{% block content %}
+<!-- The login page. #auth-box is the HTMX swap target: the server
+     replaces what's inside it (phone form -> code form -> errors)
+     without ever reloading the page. -->
+<h1 class="text-2xl font-bold mb-2">ورود به بنده</h1>
+<p class="text-neutral-400 mb-6">با شماره موبایل وارد شو؛ بدون رمز عبور، مثل دیجی‌کالا.</p>
+
+<div id="auth-box">
+  {% include "auth/_phone_form.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}حساب من | بنده{% endblock %}
+{% block content %}
+<!-- Demo protected page: you only get here with a valid session cookie.
+     Later topics will grow this into the real customer account area. -->
+<h1 class="text-2xl font-bold mb-2">خوش آمدی! 🎉</h1>
+<p class="text-neutral-400 mb-6">با شماره‌ی <span dir="ltr" class="text-neutral-200">{{ masked }}</span> وارد شدی.</p>
+
+<form action="/auth/logout" method="post">
+  <button type="submit"
+          class="w-full bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded-lg py-3">
+    خروج از حساب
+  </button>
+</form>
+{% endblock %}

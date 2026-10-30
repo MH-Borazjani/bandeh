@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.141.1",
+    # itsdangerous is no longer inside fastapi[standard] (it was dropped
+    # from the extra in recent versions): the signed session cookie in
+    # app/e-commerce/auth.py needs it directly.
+    "itsdangerous>=2.2.0",
     "pydantic-settings>=2.15.0",
     "zernio-sdk>=1.4.475",
 ]
