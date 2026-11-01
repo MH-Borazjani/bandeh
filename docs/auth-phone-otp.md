@@ -24,11 +24,14 @@
 
 | فایل | کارش |
 |---|---|
-| `app/e-commerce/auth.py` | همه‌ی منطق: نرمالایز شماره، کد یک‌بارمصرف، امضای کوکی، دیپندنسی‌ها |
-| `app/e-commerce/sms.py` | فقط ارسال پیامک؛ امروز چاپ در لاگ، فردا پنل واقعی |
-| `app/e-commerce/auth_routes.py` | روت‌ها: صفحه‌ی لاگین، درخواست/تأیید کد، خروج، صفحه‌ی حساب |
-| `app/e-commerce/templates/` | قالب‌های Jinja: `base.html` (تیره، راست‌به‌چپ)، فرم‌ها، صفحه‌ی حساب |
-| `app/e-commerce/check_auth.py` | تست‌ها: `python check_auth.py` — بدون سرور و دیتابیس |
+| `app/e-commerce/core/security.py` | امضای کوکی نشست (itsdangerous)، خواندن و پاک کردن کوکی، دیپندنسی‌های احراز هویت |
+| `app/e-commerce/core/cookies.py` | مدیریت کوکی سبد خرید مهمان |
+| `app/e-commerce/services/auth_service.py` | نرمالایز شماره موبایل، تولید و هش کد یک‌بارمصرف (OTP)، محدودیت نرخ درخواست و اعتبارسنجی |
+| `app/e-commerce/integrations/sms.py` | رابط ارسال پیامک؛ در فاز توسعه چاپ در لاگ، در پروداکشن اتصال به وب‌سرویس پیامکی |
+| `app/e-commerce/api/routes/auth.py` | روت‌های وب و HTMX: ورود، درخواست و تایید کد، خروج و داشبورد حساب کاربری |
+| `app/e-commerce/api/routes/pages.py` | روت‌های عمومی و صفحه لندینگ فروشگاه |
+| `app/e-commerce/templates/` | قالب‌های Jinja: `base.html` (تیره، راست‌به‌چپ)، فرم‌های تعاملی HTMX و صفحات |
+| `app/e-commerce/check_auth.py` | تست‌های خودکار: `python check_auth.py` — بدون نیاز به دیتابیس |
 
 ## سه تصمیم امنیتی که باید بدانی چرا گرفته شدند
 

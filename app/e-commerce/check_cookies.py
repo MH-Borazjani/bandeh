@@ -8,13 +8,12 @@ Response objects and inspects the Set-Cookie headers they produce.
 
 import uuid
 
-from fastapi import Response
-
 from cookies import (
     CART_COOKIE_NAME,
     delete_cart_cookie,
     ensure_cart_id,
 )
+from fastapi import Response
 
 
 def main() -> None:
