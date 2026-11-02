@@ -85,17 +85,25 @@ name = "easy-auto"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
     { name = "fastapi", extra = ["standard"] },
     { name = "itsdangerous" },
+    { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "zernio-sdk" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.13.0" },
+    { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
+    { name = "psycopg2-binary", specifier = ">=2.9.9" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
     { name = "zernio-sdk", specifier = ">=1.4.475" },
 ]
 

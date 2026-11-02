@@ -24,9 +24,6 @@ What is checked, in order:
 
 import time
 
-from fastapi import FastAPI, Request, Response
-from fastapi.testclient import TestClient
-
 import auth
 import sms
 from auth import (
@@ -42,6 +39,8 @@ from auth import (
     verify_otp,
 )
 from auth_routes import router as auth_router
+from fastapi import FastAPI, Request, Response
+from fastapi.testclient import TestClient
 
 
 def _request_with_cookie(cookie_value: str) -> Request:

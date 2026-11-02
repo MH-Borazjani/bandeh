@@ -52,6 +52,26 @@ class Settings(BaseSettings):
             path=self.postgres_db,
         )
 
+    @computed_field
+    @property
+    def async_database_url(self) -> str:
+        """Construct an async PostgreSQL URL for SQLAlchemy + asyncpg."""
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:"
+            f"{self.postgres_password.get_secret_value()}@"
+            f"{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field
+    @property
+    def sync_database_url(self) -> str:
+        """Construct a synchronous PostgreSQL URL for Alembic migrations."""
+        return (
+            f"postgresql://{self.postgres_user}:"
+            f"{self.postgres_password.get_secret_value()}@"
+            f"{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
 
 # Singleton pattern using an LRU cache
 @lru_cache

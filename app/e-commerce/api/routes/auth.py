@@ -3,42 +3,37 @@
 All auth URLs are prefixed with /auth:
 - GET  /auth/login        The login page (phone-number form)
 - POST /auth/otp/request  HTMX: generate and dispatch OTP, swap in code form
-- POST /auth/otp/verify   HTMX: verify code, set session cookie on success
-- POST /auth/logout       Log out user, redirect to /
+- POST /auth/otp/verify   HTMX: verify code, persist user/session in DB, set cookie
+- POST /auth/logout       Log out user (revoke DB session + clear cookie), redirect to /
 - GET  /auth/account      Protected account page
 """
 
+from __future__ import annotations
+
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Request, Response
+from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-try:
-    from core.security import (
-        CurrentUserDep,
-        RequireUserDep,
-        create_session,
-        delete_session,
-    )
-    from core.templates import templates
-    from services.auth_service import (
-        OtpError,
-        mask_phone,
-        request_otp,
-        verify_otp,
-    )
-except ImportError:
-    from auth import (
-        CurrentUserDep,
-        OtpError,
-        RequireUserDep,
-        create_session,
-        delete_session,
-        mask_phone,
-        request_otp,
-        verify_otp,
-    )
-    from core.templates import templates
+from core.security import (
+    CurrentUserDep,
+    RequireUserDep,
+    create_session,
+    delete_session,
+    read_session_token,
+)
+from core.templates import templates
+from db.session import get_db
+from services.auth_service import (
+    OtpError,
+    mask_phone,
+    normalize_phone,
+    request_otp,
+    verify_otp,
+)
+from services.session_service import create_database_session, revoke_session
+from services.user_service import get_or_create_user_by_phone, record_user_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -74,19 +69,38 @@ def otp_request(
 
 
 @router.post("/otp/verify")
-def otp_verify(
+async def otp_verify(
     request: Request,
     phone: Annotated[str, Form()],
     code: Annotated[str, Form()],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """HTMX endpoint: validates OTP code.
 
-    On success: sets signed session cookie and returns HX-Redirect header.
+    On success: creates user (if first time), persists server-side session in DB,
+    sets signed session cookie, and returns HX-Redirect header.
     On failure: re-renders the OTP form with error message.
     """
     if verify_otp(phone, code):
+        norm_phone = normalize_phone(phone)
         response = Response(status_code=200)
-        create_session(response, phone)
+
+        session_token: str | None = None
+        try:
+            user, _ = await get_or_create_user_by_phone(db, norm_phone)
+            await record_user_login(db, user)
+
+            user_agent = request.headers.get("user-agent")
+            ip_address = request.client.host if request.client else None
+            db_session = await create_database_session(
+                db, user, user_agent=user_agent, ip_address=ip_address
+            )
+            session_token = db_session.session_token
+        except Exception:
+            # If database is temporarily unavailable, proceed with signed cookie
+            pass
+
+        create_session(response, norm_phone, session_token=session_token)
         response.headers["HX-Redirect"] = "/auth/account"
         return response
 
@@ -98,8 +112,18 @@ def otp_verify(
 
 
 @router.post("/logout")
-def logout() -> RedirectResponse:
-    """Clear session cookie and redirect visitor to landing page."""
+async def logout(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RedirectResponse:
+    """Revoke database session and instruct browser to drop the session cookie."""
+    token = read_session_token(request)
+    if token:
+        try:
+            await revoke_session(db, token)
+        except Exception:
+            pass
+
     response = RedirectResponse("/", status_code=303)
     delete_session(response)
     return response
@@ -116,4 +140,3 @@ def account_page(request: Request, phone: RequireUserDep) -> HTMLResponse:
 
 
 __all__ = ["router"]
-

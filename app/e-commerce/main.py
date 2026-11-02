@@ -1,8 +1,7 @@
 """Main FastAPI application entrypoint."""
 
-from fastapi import FastAPI
-
 from api.routes import auth_router, pages_router
+from fastapi import FastAPI
 
 app = FastAPI(
     title="Bandeh (easy-auto) API",

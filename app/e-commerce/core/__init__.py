@@ -8,14 +8,22 @@ from .cookies import (
 )
 from .security import (
     COOKIE_SECURE,
+    CurrentDbUserDep,
     CurrentUserDep,
+    RequireAdminDep,
+    RequireDbUserDep,
+    RequireStaffDep,
     RequireUserDep,
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE,
     create_session,
     delete_session,
+    get_current_db_user,
     get_current_user,
     read_session,
+    read_session_token,
+    require_authenticated_user,
+    require_roles,
     require_user,
 )
 from .templates import TEMPLATES_DIR, templates
@@ -24,7 +32,11 @@ __all__ = [
     "CART_COOKIE_MAX_AGE",
     "CART_COOKIE_NAME",
     "COOKIE_SECURE",
+    "CurrentDbUserDep",
     "CurrentUserDep",
+    "RequireAdminDep",
+    "RequireDbUserDep",
+    "RequireStaffDep",
     "RequireUserDep",
     "SESSION_COOKIE_NAME",
     "SESSION_MAX_AGE",
@@ -33,9 +45,12 @@ __all__ = [
     "delete_cart_cookie",
     "delete_session",
     "ensure_cart_id",
+    "get_current_db_user",
     "get_current_user",
     "read_session",
+    "read_session_token",
+    "require_authenticated_user",
+    "require_roles",
     "require_user",
     "templates",
 ]
-

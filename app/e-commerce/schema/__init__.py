@@ -25,6 +25,12 @@ from .product import (
     ProductStatus,
     ProductUpdate,
 )
+from .user import (
+    SessionRead,
+    UserBase,
+    UserProfileUpdate,
+    UserRead,
+)
 
 __all__ = [
     "Dimensions",
@@ -38,4 +44,8 @@ __all__ = [
     "ProductCreate",
     "ProductStatus",
     "ProductUpdate",
+    "SessionRead",
+    "UserBase",
+    "UserProfileUpdate",
+    "UserRead",
 ]

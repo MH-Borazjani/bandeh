@@ -37,9 +37,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Install project dependencies without installing the project itself (--no-install-project).
-# - --frozen / --locked: Ensures strict lockfile adherence and prevents accidental mutations.
 # - --no-dev: Excludes test runners, linters, and other developer tools from production images.
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project
 
 # -----------------------------------------------------------------------------
 # Application Source Code Phase
@@ -48,7 +47,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 
 # Finalize the installation to register the root package/editable links if configured
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 # -----------------------------------------------------------------------------
 # Security Hardening: Non-Root Execution

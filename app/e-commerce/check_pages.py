@@ -5,10 +5,9 @@
 No server, no database: TestClient drives the real app in-process.
 """
 
+from auth import SESSION_COOKIE_NAME, create_session, reset_auth_state
 from fastapi import Response
 from fastapi.testclient import TestClient
-
-from auth import SESSION_COOKIE_NAME, create_session, reset_auth_state
 from main import app
 
 
