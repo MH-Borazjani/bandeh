@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
 import uuid
 
+from db.models.user import User, UserRole
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from db.models.user import User, UserRole
-
-if TYPE_CHECKING:
-    pass
 
 
 async def get_user_by_phone(db: AsyncSession, phone: str) -> User | None:

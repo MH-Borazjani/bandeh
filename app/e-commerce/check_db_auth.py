@@ -162,8 +162,8 @@ def test_session_cookies_and_tokens() -> None:
     # Extract Set-Cookie header
     cookie_header = response.headers.get("set-cookie")
     assert cookie_header is not None, "Set-Cookie header missing"
-    assert "HttpOnly" in cookie_header, "HttpOnly flag missing"
-    assert "SameSite=lax" in cookie_header.lower(), "SameSite=Lax flag missing"
+    assert "httponly" in cookie_header.lower(), "HttpOnly flag missing"
+    assert "samesite=lax" in cookie_header.lower(), "SameSite=Lax flag missing"
 
     # Parse cookie value
     raw_cookie_val = cookie_header.split(";")[0].split("=", 1)[1]

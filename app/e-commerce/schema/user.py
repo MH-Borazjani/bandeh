@@ -13,7 +13,7 @@ from db.models.user import UserRole
 class UserBase(BaseModel):
     """Base user data attributes."""
 
-    phone: str = Field(..., pattern=r"^09\d{9}$", description="Canonical Iranian mobile number (09xxxxxxxxx)")
+    phone: str = Field(pattern=r"^09\d{9}$", description="Canonical Iranian mobile number (09xxxxxxxxx)")
     first_name: str | None = Field(default=None, max_length=100)
     last_name: str | None = Field(default=None, max_length=100)
 

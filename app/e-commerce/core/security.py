@@ -10,14 +10,13 @@ from __future__ import annotations
 import os
 import re
 import time
-from typing import Annotated, Callable
-
-from fastapi import Depends, HTTPException, Request, Response
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from sqlalchemy.ext.asyncio import AsyncSession
+from collections.abc import Callable
+from typing import Annotated
 
 from db.models.user import User, UserRole
-from db.session import get_db
+from db.session import DbSessionDep
+from fastapi import Depends, HTTPException, Request, Response
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 # Normalized Iranian phone pattern: 09 followed by 9 digits
 _PHONE_RE = re.compile(r"^09\d{9}$")
@@ -137,7 +136,7 @@ RequireUserDep = Annotated[str, Depends(require_user)]
 
 async def get_current_db_user(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DbSessionDep,
 ) -> User | None:
     """Full DB-backed dependency: verifies session token against PostgreSQL."""
     session_token = read_session_token(request)
@@ -198,14 +197,15 @@ RequireStaffDep = Annotated[User, Depends(require_roles(UserRole.STAFF, UserRole
 
 __all__ = [
     "COOKIE_SECURE",
+    "SESSION_COOKIE_NAME",
+    "SESSION_MAX_AGE",
     "CurrentDbUserDep",
     "CurrentUserDep",
+    "DbSessionDep",
     "RequireAdminDep",
     "RequireDbUserDep",
     "RequireStaffDep",
     "RequireUserDep",
-    "SESSION_COOKIE_NAME",
-    "SESSION_MAX_AGE",
     "create_session",
     "delete_session",
     "get_current_db_user",

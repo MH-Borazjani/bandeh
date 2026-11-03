@@ -12,10 +12,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from core.security import (
     CurrentUserDep,
     RequireUserDep,
@@ -24,7 +20,9 @@ from core.security import (
     read_session_token,
 )
 from core.templates import templates
-from db.session import get_db
+from db.session import DbSessionDep
+from fastapi import APIRouter, Form, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from services.auth_service import (
     OtpError,
     mask_phone,
@@ -73,7 +71,7 @@ async def otp_verify(
     request: Request,
     phone: Annotated[str, Form()],
     code: Annotated[str, Form()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DbSessionDep,
 ) -> Response:
     """HTMX endpoint: validates OTP code.
 
@@ -114,7 +112,7 @@ async def otp_verify(
 @router.post("/logout")
 async def logout(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DbSessionDep,
 ) -> RedirectResponse:
     """Revoke database session and instruct browser to drop the session cookie."""
     token = read_session_token(request)

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
 import sys
-from typing import Any
+from collections.abc import AsyncGenerator
+from typing import Annotated, Any
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -72,6 +73,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+# Reusable FastAPI dependency alias for transaction-scoped database session
+DbSessionDep = Annotated[AsyncSession, Depends(get_db)]
+
+
 async def init_db() -> None:
     """Create all registered database tables (used for tests and dev setup)."""
     engine = get_engine()
@@ -79,4 +84,4 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-__all__ = ["get_db", "get_engine", "get_session_factory", "init_db"]
+__all__ = ["DbSessionDep", "get_db", "get_engine", "get_session_factory", "init_db"]

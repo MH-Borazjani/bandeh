@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import datetime
 import secrets
-from typing import TYPE_CHECKING
+from typing import Any, cast
 import uuid
-
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from db.models.session import UserSession
 from db.models.user import User
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 # 30 days session persistence
 SESSION_LIFETIME = datetime.timedelta(days=30)
@@ -80,8 +80,8 @@ async def revoke_session(db: AsyncSession, session_token: str) -> bool:
         .where(UserSession.session_token == session_token)
         .values(is_revoked=True)
     )
-    result = await db.execute(stmt)
-    return result.rowcount > 0
+    result = cast(CursorResult[Any], await db.execute(stmt))
+    return (result.rowcount or 0) > 0
 
 
 async def revoke_all_user_sessions(db: AsyncSession, user_id: uuid.UUID) -> int:
@@ -91,8 +91,8 @@ async def revoke_all_user_sessions(db: AsyncSession, user_id: uuid.UUID) -> int:
         .where(UserSession.user_id == user_id, UserSession.is_revoked.is_(False))
         .values(is_revoked=True)
     )
-    result = await db.execute(stmt)
-    return result.rowcount
+    result = cast(CursorResult[Any], await db.execute(stmt))
+    return result.rowcount or 0
 
 
 __all__ = [
