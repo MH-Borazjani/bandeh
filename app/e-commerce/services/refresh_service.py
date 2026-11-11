@@ -73,15 +73,20 @@ async def issue_refresh_token(
     return token, record
 
 
-async def find_refresh_token(db: AsyncSession, token: str) -> RefreshToken | None:
+async def find_refresh_token(
+    db: AsyncSession, token: str, *, for_update: bool = False
+) -> RefreshToken | None:
     """Look a token up by hash, whatever its state (valid, revoked, expired).
 
     The route needs the record itself — not just "valid or not" — because
     a revoked token presented again is a theft signal, not a plain miss.
     """
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(token))
+    stmt = select(RefreshToken).where(
+        RefreshToken.token_hash == hash_refresh_token(token)
     )
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
@@ -118,7 +123,7 @@ async def revoke_all_refresh_tokens(db: AsyncSession, user_id) -> int:
     result = await db.execute(
         select(RefreshToken).where(
             RefreshToken.user_id == user_id,
-            RefreshToken.is_revoked == False,  # noqa: E712 — SQLAlchemy needs == False here
+            RefreshToken.is_revoked.is_(False),
         )
     )
     count = 0

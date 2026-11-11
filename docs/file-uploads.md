@@ -40,6 +40,6 @@
 
 ## Tests
 
-`python check_uploads.py` — in-memory SQLite + temp dir. Covers the
+`python tests/check_uploads.py` — in-memory SQLite + temp dir. Covers the
 staff gate, the PNG round-trip, server-made names, 413 with no partial
 file, 415/400 rejections, traversal 404s, and the queued resize job.

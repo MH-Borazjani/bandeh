@@ -30,8 +30,18 @@ import uuid
 
 from core.security import RequireStaffDep
 from db.session import DbSessionDep
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Path as FastAPIPath,
+    Query,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import FileResponse
 from schema.product_api import ProductCreate, ProductRead
 from services import product_service, search_service
 from services.image_tasks import schedule_image_variants
@@ -42,26 +52,31 @@ router = APIRouter(tags=["products"])
 UploadDirDep = Annotated[Path, Depends(get_upload_dir)]
 
 
-@router.get("/products", response_model=list[ProductRead])
+@router.get("/products")
 async def list_products_endpoint(
     db: DbSessionDep,
-    limit: int = Query(default=search_service.DEFAULT_LIMIT, ge=1, le=search_service.MAX_LIMIT),
-) -> JSONResponse:
+    response: Response,
+    limit: Annotated[
+        int, Query(ge=1, le=search_service.MAX_LIMIT)
+    ] = search_service.DEFAULT_LIMIT,
+) -> list[ProductRead]:
     """Public: active products, newest first.
 
     Public cache header: the list is the same for every visitor, so
     browsers and CDNs may cache it for 60 seconds.
     """
     products = await search_service.list_products(db, limit)
-    content = [ProductRead.model_validate(p).model_dump(mode="json") for p in products]
-    return JSONResponse(content=content, headers={"Cache-Control": "public, max-age=60"})
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return [ProductRead.model_validate(p) for p in products]
 
 
-@router.get("/search", response_model=list[ProductRead])
+@router.get("/search")
 async def search_products_endpoint(
     db: DbSessionDep,
-    q: str = Query(default="", max_length=search_service.MAX_QUERY_LENGTH),
-    limit: int = Query(default=search_service.DEFAULT_LIMIT, ge=1, le=search_service.MAX_LIMIT),
+    q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
+    limit: Annotated[
+        int, Query(ge=1, le=search_service.MAX_LIMIT)
+    ] = search_service.DEFAULT_LIMIT,
 ) -> list[ProductRead]:
     """Public: search products by name or description.
 
@@ -72,7 +87,7 @@ async def search_products_endpoint(
     return [ProductRead.model_validate(p) for p in products]
 
 
-@router.post("/products", status_code=201, response_model=ProductRead)
+@router.post("/products", status_code=201)
 async def create_product_endpoint(
     data: ProductCreate,
     staff: RequireStaffDep,
@@ -83,9 +98,9 @@ async def create_product_endpoint(
     return ProductRead.model_validate(product)
 
 
-@router.get("/products/{product_id}", response_model=ProductRead)
+@router.get("/products/{product_id}")
 async def read_product(
-    product_id: uuid.UUID,
+    product_id: Annotated[uuid.UUID, FastAPIPath()],
     db: DbSessionDep,
 ) -> ProductRead:
     """Public: one product, with its image URL when it has a photo."""
@@ -95,15 +110,15 @@ async def read_product(
     return ProductRead.model_validate(product)
 
 
-@router.post("/products/{product_id}/photo", response_model=dict)
+@router.post("/products/{product_id}/photo")
 async def upload_product_photo(
-    product_id: uuid.UUID,
+    product_id: Annotated[uuid.UUID, FastAPIPath()],
     file: Annotated[UploadFile, File()],
     background_tasks: BackgroundTasks,
     staff: RequireStaffDep,
     db: DbSessionDep,
     upload_dir: UploadDirDep,
-) -> dict:
+) -> dict[str, str]:
     """Upload a product photo (staff/admin). Returns the public image URL.
 
     Validation (type, content, size) lives in the upload service. The
@@ -116,14 +131,17 @@ async def upload_product_photo(
     try:
         filename = await save_upload(file, upload_dir)
     except UploadError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     await product_service.set_product_image(db, product, filename)
     background_tasks.add_task(schedule_image_variants, filename, upload_dir)
     return {"image_url": f"/uploads/{filename}", "filename": filename}
 
 
 @router.get("/uploads/{filename}")
-async def serve_upload(filename: str, upload_dir: UploadDirDep) -> FileResponse:
+def serve_upload(
+    filename: Annotated[str, FastAPIPath()],
+    upload_dir: UploadDirDep,
+) -> FileResponse:
     """Serve one uploaded file. The path check stops ``../`` escapes."""
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise HTTPException(status_code=404, detail="file not found")

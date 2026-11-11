@@ -30,11 +30,12 @@ In production it must be a public URL Zibal can reach.
 from __future__ import annotations
 
 import os
+from typing import Annotated
 import uuid
 
 from core.security import RequireDbUserDep
 from db.session import DbSessionDep
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from integrations.zibal_client import ZibalClientDep, ZibalError
 from services import payment_service
 from services.order_service import OrderError, load_order_for_user
@@ -54,19 +55,24 @@ def _callback_url(request: Request) -> str:
 async def payment_callback(
     db: DbSessionDep,
     zibal: ZibalClientDep,
-    trackId: int,
-    success: str = "0",
-    status: str = "-1",
-    orderId: str = "",
+    trackId: Annotated[int, Query()],
+    success: Annotated[str, Query()] = "0",
+    status: Annotated[str, Query()] = "-1",
+    orderId: Annotated[str, Query()] = "",
 ) -> dict:
     """Zibal's redirect after payment. Verifies; never trusts the params.
 
     ``success``/``status`` arrive here but are ignored for the decision
     — they are only what the browser claims. The verify call is the truth.
     """
-    result = await payment_service.handle_callback(
-        db, track_id=trackId, order_id=orderId, zibal=zibal
-    )
+    try:
+        result = await payment_service.handle_callback(
+            db, track_id=trackId, order_id=orderId, zibal=zibal
+        )
+    except ZibalError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"payment gateway error: {exc.message or exc.result}"
+        ) from exc
     if result["status"] == "unknown":
         raise HTTPException(status_code=404, detail="unknown payment")
     return result
@@ -74,7 +80,7 @@ async def payment_callback(
 
 @router.post("/payments/{order_id}/start")
 async def start_payment_endpoint(
-    order_id: uuid.UUID,
+    order_id: Annotated[uuid.UUID, Path()],
     request: Request,
     user: RequireDbUserDep,
     db: DbSessionDep,
@@ -87,14 +93,14 @@ async def start_payment_endpoint(
         )
     except OrderError as exc:
         if exc.detail == "order not found":
-            raise HTTPException(status_code=404, detail="order not found")
-        raise HTTPException(status_code=409, detail=exc.detail)
+            raise HTTPException(status_code=404, detail="order not found") from exc
+        raise HTTPException(status_code=409, detail=exc.detail) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ZibalError as exc:
         raise HTTPException(
             status_code=502, detail=f"payment gateway error: {exc.message or exc.result}"
-        )
+        ) from exc
     assert attempt.track_id is not None  # start only returns waiting attempts
     return {
         "payment_url": zibal.start_url(attempt.track_id),

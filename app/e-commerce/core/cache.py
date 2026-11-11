@@ -127,6 +127,7 @@ class RedisCache:
 
 
 _cache: Cache | None = None
+_cache_lock: asyncio.Lock | None = None
 
 
 async def _build_cache() -> Cache:
@@ -136,6 +137,7 @@ async def _build_cache() -> Cache:
     speed, never correctness.
     """
     url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    client = None
     try:
         import redis.asyncio
 
@@ -149,22 +151,33 @@ async def _build_cache() -> Cache:
         logger.info("Cache backend: Redis at %s", url)
         return RedisCache(client)
     except Exception as exc:  # noqa: BLE001 - any Redis failure means fallback
+        if client is not None:
+            try:
+                await client.aclose()
+            except Exception:  # noqa: BLE001
+                pass
         logger.warning("Redis unavailable (%s), using in-memory cache", exc)
         return MemoryCache()
 
 
 async def get_cache() -> Cache:
     """Dependency: return the process-wide cache (built once, lazily)."""
-    global _cache
-    if _cache is None:
-        _cache = await _build_cache()
+    global _cache, _cache_lock
+    if _cache is not None:
+        return _cache
+    if _cache_lock is None:
+        _cache_lock = asyncio.Lock()
+    async with _cache_lock:
+        if _cache is None:
+            _cache = await _build_cache()
     return _cache
 
 
 def reset_cache_for_tests() -> None:
     """Drop the cached backend (tests only) so the next get_cache rebuilds."""
-    global _cache
+    global _cache, _cache_lock
     _cache = None
+    _cache_lock = None
 
 
 # Reusable FastAPI dependency alias for the cache

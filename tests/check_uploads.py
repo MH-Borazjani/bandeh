@@ -12,9 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for file uploads. Run from app/e-commerce:
+"""Runnable self-check for file uploads. Run from repo root:
 
-    python check_uploads.py
+    python tests/check_uploads.py
 
 In-memory SQLite + a temp upload dir — no server, no live Postgres.
 Covers: staff-only upload (401/403), valid PNG round-trip, server-made
@@ -27,7 +27,10 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from fastapi import Response
 from fastapi.testclient import TestClient

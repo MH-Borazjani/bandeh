@@ -12,9 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for product search. Run from app/e-commerce:
+"""Runnable self-check for product search. Run from repo root:
 
-    python check_search.py
+    python tests/check_search.py
 
 In-memory SQLite only — no server, no live Postgres. Covers: ILIKE
 substring search (name + description), inactive products excluded,
@@ -27,6 +27,10 @@ full-text SQL compiled (not run) against the Postgres dialect.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql

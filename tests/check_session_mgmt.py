@@ -12,9 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for session management & authorization. Run from app/e-commerce:
+"""Runnable self-check for session management & authorization. Run from repo root:
 
-    python check_session_mgmt.py
+    python tests/check_session_mgmt.py
 
 In-memory SQLite only — no server, no live Postgres, no live Redis.
 Covers: admin gate (401/403/200 over HTTP), refresh rotation, reuse
@@ -27,6 +27,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from fastapi import Response
 from fastapi.testclient import TestClient

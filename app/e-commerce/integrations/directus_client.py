@@ -79,7 +79,7 @@ def format_toman_price(value: int | str | None) -> str:
     string as-is, so integers are formatted here. Strings pass through
     unchanged (they are already formatted).
     """
-    if isinstance(value, int):
+    if isinstance(value, int) and not isinstance(value, bool):
         grouped = f"{value:,}".replace(",", "٬")
         return grouped.translate(_FA_DIGITS)
     if isinstance(value, str):
@@ -161,9 +161,12 @@ class DirectusClient:
         are not cached, so the next request retries Directus right away.
         """
         if self._cache is not None:
-            cached = await self._cache.get(LANDING_CONTENT_KEY)
-            if cached is not None:
-                return json.loads(cached)
+            try:
+                cached = await self._cache.get(LANDING_CONTENT_KEY)
+                if cached is not None:
+                    return json.loads(cached)
+            except Exception as exc:  # noqa: BLE001 - cache failure never breaks landing
+                logger.warning("Landing cache read failed, bypassing cache: %s", exc)
         try:
             content = await self._fetch_landing_content()
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
@@ -173,9 +176,12 @@ class DirectusClient:
                 "products": list(FALLBACK_PRODUCTS),
             }
         if self._cache is not None:
-            await self._cache.set(
-                LANDING_CONTENT_KEY, json.dumps(content), LANDING_CONTENT_TTL
-            )
+            try:
+                await self._cache.set(
+                    LANDING_CONTENT_KEY, json.dumps(content), LANDING_CONTENT_TTL
+                )
+            except Exception as exc:  # noqa: BLE001 - cache failure never breaks landing
+                logger.warning("Landing cache write failed: %s", exc)
         return content
 
 

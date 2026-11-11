@@ -13,15 +13,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Runnable self-check for integrations/http_client.py and
-integrations/directus_client.py. Run from app/e-commerce:
+integrations/directus_client.py. Run from repo root:
 
-    python check_httpx.py
+    python tests/check_httpx.py
 
 No server, no live Directus, no database: httpx.MockTransport stands in
 for the network, and TestClient drives the real app in-process.
 """
 
 import asyncio
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import httpx
 from core.cache import reset_cache_for_tests

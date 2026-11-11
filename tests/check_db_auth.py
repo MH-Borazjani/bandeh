@@ -14,18 +14,21 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Self-check verification script for database models, user schemas, sessions, and RBAC authorization.
 
-Run from app/e-commerce:
+Run from repo root:
 
-    python check_db_auth.py
+    python tests/check_db_auth.py
 or
-    docker compose exec web python app/e-commerce/check_db_auth.py
+    docker compose exec web python tests/check_db_auth.py
 """
 
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 import sys
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 # Graceful import of FastAPI components
 try:

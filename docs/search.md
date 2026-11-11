@@ -36,7 +36,7 @@ the query switches to `Product.search_vector.op("@@")(...)`.
 
 ## Tests
 
-`python check_search.py` — in-memory SQLite. Covers name/description
+`python tests/check_search.py` — in-memory SQLite. Covers name/description
 search, inactive exclusion, literal `%`/`_`, empty query, the 50 cap,
 an injection attempt (table intact afterwards), the list + cache
 header, and the full-text SQL compiled for Postgres with the query text

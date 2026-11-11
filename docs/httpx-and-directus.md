@@ -37,7 +37,7 @@ The landing route (`GET /`) is async and reads its content through the
 
 ## Tests
 
-`python check_httpx.py` — factory timeout, price formatting, healthy
+`python tests/check_httpx.py` — factory timeout, price formatting, healthy
 Directus mapping, fallback on dead/sick/confused Directus, and the
 landing page rendering both Directus rows and fallback content. No
 server, no live Directus, no database.

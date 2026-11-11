@@ -33,6 +33,6 @@ add it in the matching position.
 
 ## Tests
 
-`python check_middleware.py` — checks the security headers, the timing
+`python tests/check_middleware.py` — checks the security headers, the timing
 header, one access-log line, a CORS preflight, an allowed cross-origin
 request, and a rejected origin. No server, no database.

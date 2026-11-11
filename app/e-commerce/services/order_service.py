@@ -83,15 +83,21 @@ async def create_order(
     if not items:
         raise OrderError("an order needs at least one item")
 
-    total_toman = 0
-    order_items: list[OrderItem] = []
+    # Aggregate quantities per product_id so duplicate lines cannot bypass stock checks
+    merged_quantities: dict[uuid.UUID, int] = {}
     for item in items:
-        product = await db.get(Product, item["product_id"])
-        if product is None or not product.is_active:
-            raise OrderError(f"product {item['product_id']} is not available")
+        pid = item["product_id"]
         quantity = int(item["quantity"])
         if quantity < 1:
             raise OrderError("quantity must be at least 1")
+        merged_quantities[pid] = merged_quantities.get(pid, 0) + quantity
+
+    total_toman = 0
+    order_items: list[OrderItem] = []
+    for pid, quantity in merged_quantities.items():
+        product = await db.get(Product, pid)
+        if product is None or not product.is_active:
+            raise OrderError(f"product {pid} is not available")
         if quantity > product.available:
             raise OrderError(
                 f"only {product.available} of {product.name} available"

@@ -14,9 +14,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Runnable self-check for auth.py + sms.py + the auth routes.
 
-Run from app/e-commerce:
+Run from repo root:
 
-    python check_auth.py
+    python tests/check_auth.py
 
 No server, no database, no real SMS: OTP records live in memory, the
 dev SMS backend keeps the last code in-process, and the HTTP flow is
@@ -36,7 +36,11 @@ What is checked, in order:
         strangers are bounced to /auth/login -> logout ends it.
 """
 
+from pathlib import Path
+import sys
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import auth
 import sms

@@ -12,15 +12,19 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for cookies.py. Run from app/e-commerce:
+"""Runnable self-check for cookies.py. Run from repo root:
 
-    python check_cookies.py
+    python tests/check_cookies.py
 
 No server, no database: it calls the helpers directly with plain
 Response objects and inspects the Set-Cookie headers they produce.
 """
 
+from pathlib import Path
+import sys
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from cookies import (
     CART_COOKIE_NAME,

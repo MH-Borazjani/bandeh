@@ -78,7 +78,7 @@ time, or call the function from the future background worker.
 
 ## Tests
 
-`python check_payments.py` — in-memory SQLite + httpx MockTransport
+`python tests/check_payments.py` — in-memory SQLite + httpx MockTransport
 (a fake Zibal). Covers order totals, reservation, idempotent start,
 paid exactly once on double callback, the ignored hint, verify-201,
 amount mismatch, verify-202, ownership (404), insufficient stock,

@@ -94,19 +94,21 @@ async def _live_attempt(db: AsyncSession, order_id: uuid.UUID) -> PaymentAttempt
 
 async def _release_reservation(db: AsyncSession, order: Order) -> None:
     """Give reserved units back (reserved -= quantity). No commit here."""
+    products = await _lock_order_products(db, order)
     for item in order.items:
-        product = await db.get(Product, item.product_id)
+        product = products.get(item.product_id)
         if product is not None:
-            product.reserved -= item.quantity
+            product.reserved = max(0, product.reserved - item.quantity)
 
 
 async def _move_reserved_to_sold(db: AsyncSession, order: Order) -> None:
     """Payment confirmed: reserved units become sold (stock -= qty too)."""
+    products = await _lock_order_products(db, order)
     for item in order.items:
-        product = await db.get(Product, item.product_id)
+        product = products.get(item.product_id)
         if product is not None:
             product.stock -= item.quantity
-            product.reserved -= item.quantity
+            product.reserved = max(0, product.reserved - item.quantity)
 
 
 def _parse_paid_at(value: str | None) -> datetime.datetime | None:
@@ -149,15 +151,20 @@ async def start_payment(
         raise OrderError(f"order is {order.status}, not payable")
 
     products = await _lock_order_products(db, order)
+    required_by_product: dict[uuid.UUID, tuple[int, str]] = {}
     for item in order.items:
-        product = products.get(item.product_id)
-        if product is None or item.quantity > product.available:
+        prev_qty, _ = required_by_product.get(item.product_id, (0, item.product_name))
+        required_by_product[item.product_id] = (prev_qty + item.quantity, item.product_name)
+
+    for product_id, (needed, product_name) in required_by_product.items():
+        product = products.get(product_id)
+        if product is None or needed > product.available:
             raise OrderError(
                 f"only {product.available if product else 0} of "
-                f"{item.product_name} available"
+                f"{product_name} available"
             )
-    for item in order.items:
-        products[item.product_id].reserved += item.quantity
+    for product_id, (needed, _) in required_by_product.items():
+        products[product_id].reserved += needed
 
     attempt = PaymentAttempt(
         order_id=order.id,

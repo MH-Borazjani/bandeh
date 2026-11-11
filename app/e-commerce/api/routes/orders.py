@@ -21,18 +21,19 @@ route answers 404 either way.
 
 from __future__ import annotations
 
+from typing import Annotated
 import uuid
 
 from core.security import RequireDbUserDep
 from db.session import DbSessionDep
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from schema.order_api import OrderCreate, OrderRead
 from services.order_service import OrderError, create_order, load_order_for_user
 
 router = APIRouter(tags=["orders"])
 
 
-@router.post("/orders", status_code=201, response_model=OrderRead)
+@router.post("/orders", status_code=201)
 async def create_order_endpoint(
     data: OrderCreate,
     user: RequireDbUserDep,
@@ -44,13 +45,13 @@ async def create_order_endpoint(
             db, user, [item.model_dump() for item in data.items]
         )
     except OrderError as exc:
-        raise HTTPException(status_code=400, detail=exc.detail)
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
     return OrderRead.model_validate(order)
 
 
-@router.get("/orders/{order_id}", response_model=OrderRead)
+@router.get("/orders/{order_id}")
 async def read_order(
-    order_id: uuid.UUID,
+    order_id: Annotated[uuid.UUID, Path()],
     user: RequireDbUserDep,
     db: DbSessionDep,
 ) -> OrderRead:

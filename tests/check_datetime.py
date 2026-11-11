@@ -12,14 +12,18 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for core/datetime_utils.py. Run from app/e-commerce:
+"""Runnable self-check for core/datetime_utils.py. Run from repo root:
 
-    python check_datetime.py
+    python tests/check_datetime.py
 
 No server, no database: pure functions, fixed instants.
 """
 
 import datetime
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from core.datetime_utils import (
     OTP_EXPIRY_SECONDS,

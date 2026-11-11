@@ -24,7 +24,7 @@
 
 ## Tests
 
-`python check_localstorage.py` — no browser here, so it checks what
+`python tests/check_localstorage.py` — no browser here, so it checks what
 can be checked without one: the landing wires the toggle/badge/
 buttons, `shop.js` is served and is valid JavaScript (`node
 --check`), the allowlist holds, no login-related word appears in the

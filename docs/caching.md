@@ -38,7 +38,7 @@ never know which backend they use.
 
 ## Tests
 
-`python check_cache.py` — key names, memory cache round-trip/expiry/
+`python tests/check_cache.py` — key names, memory cache round-trip/expiry/
 prefix delete, the Redis wrapper against a fake client, `get_cache`
 falling back to memory when Redis is down, landing content served from
 cache on the second call and re-fetched after invalidation, and the

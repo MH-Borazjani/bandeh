@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Runnable self-check for core/cache.py and cached landing content.
-Run from app/e-commerce:
+Run from repo root:
 
-    python check_cache.py
+    python tests/check_cache.py
 
 No server, no live Redis, no live Directus, no database: the in-memory
 cache and httpx.MockTransport stand in for the real services.
@@ -23,7 +23,11 @@ cache and httpx.MockTransport stand in for the real services.
 
 import asyncio
 import os
+from pathlib import Path
+import sys
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import httpx
 from core.cache import (

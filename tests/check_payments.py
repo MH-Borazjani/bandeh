@@ -12,9 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for Zibal payments. Run from app/e-commerce:
+"""Runnable self-check for Zibal payments. Run from repo root:
 
-    python check_payments.py
+    python tests/check_payments.py
 
 In-memory SQLite + httpx MockTransport (no real Zibal, no live
 Postgres). Covers: order totals (Toman x10 = Rial), stock reservation,
@@ -30,7 +30,11 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+from pathlib import Path
+import sys
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import httpx
 from fastapi import Response

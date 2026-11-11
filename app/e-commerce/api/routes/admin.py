@@ -40,7 +40,7 @@ async def admin_overview(admin: RequireAdminDep, db: DbSessionDep) -> dict:
     live_sessions = await db.scalar(
         select(func.count())
         .select_from(UserSession)
-        .where(UserSession.is_revoked == False)  # noqa: E712 — SQLAlchemy needs == False here
+        .where(UserSession.is_revoked.is_(False))
     )
     return {
         "admin": admin.phone,

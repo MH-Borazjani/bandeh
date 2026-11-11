@@ -38,7 +38,9 @@ import os
 from typing import Annotated
 
 import httpx
-from fastapi import Depends, Request
+from fastapi import Depends
+
+from integrations.http_client import HttpClientDep
 
 BASE_URL = "https://gateway.zibal.ir"
 MIN_AMOUNT_RIAL = 1_000
@@ -101,35 +103,44 @@ class ZibalClient:
                 f"amount {amount_rial} Rial is outside Zibal's range "
                 f"({MIN_AMOUNT_RIAL:,}–{MAX_AMOUNT_RIAL:,} Rial)"
             )
-        response = await self._client.post(
-            f"{BASE_URL}/v1/request",
-            json={
-                "merchant": self.merchant,
-                "amount": amount_rial,
-                "callbackUrl": callback_url,
-                "orderId": order_id,
-                "description": description,
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = await self._client.post(
+                f"{BASE_URL}/v1/request",
+                json={
+                    "merchant": self.merchant,
+                    "amount": amount_rial,
+                    "callbackUrl": callback_url,
+                    "orderId": order_id,
+                    "description": description,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise ZibalError(None, f"gateway transport error: {exc}") from exc
         result = data.get("result")
         if result != RESULT_OK:
             raise ZibalError(result, str(data.get("message", "")))
-        return int(data["trackId"])
+        try:
+            return int(data["trackId"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ZibalError(result, "missing or invalid trackId") from exc
 
     async def verify_payment(self, track_id: int) -> VerifyResult:
         """Verify a payment server-to-server. The result is the truth.
 
         100/201/202/203 are all returned normally — the caller decides
-        what each means. Only transport errors raise.
+        what each means. Transport/HTTP errors raise ZibalError.
         """
-        response = await self._client.post(
-            f"{BASE_URL}/v1/verify",
-            json={"merchant": self.merchant, "trackId": track_id},
-        )
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = await self._client.post(
+                f"{BASE_URL}/v1/verify",
+                json={"merchant": self.merchant, "trackId": track_id},
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise ZibalError(None, f"gateway transport error: {exc}") from exc
         ref_number = data.get("refNumber")
         return VerifyResult(
             result=int(data.get("result", 0)),
@@ -142,15 +153,12 @@ class ZibalClient:
         )
 
 
-def get_zibal_client(request: Request) -> ZibalClient:
+def get_zibal_client(http_client: HttpClientDep) -> ZibalClient:
     """Build the client from the app's shared httpx client.
 
     Merchant comes from ``ZIBAL_MERCHANT`` (default "zibal", the test
     merchant). Override this dependency in tests with a MockTransport.
     """
-    http_client = getattr(request.app.state, "http_client", None)
-    if http_client is None:  # lifespan did not run (should not happen)
-        http_client = httpx.AsyncClient(timeout=10.0)
     return ZibalClient(http_client, merchant=os.environ.get("ZIBAL_MERCHANT", "zibal"))
 
 

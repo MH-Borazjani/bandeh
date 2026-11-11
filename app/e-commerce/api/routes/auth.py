@@ -167,15 +167,16 @@ async def refresh_session(request: Request, db: DbSessionDep) -> JSONResponse:
     if not token:
         return _unauthorized()
 
-    record = await find_refresh_token(db, token)
+    record = await find_refresh_token(db, token, for_update=True)
     if record is None:
         return _unauthorized()
     if record.is_revoked:
         # Reuse of a dead token: someone may hold a stolen copy.
-        # Kill every refresh token of this user at once.
+        # Kill every refresh token and active session of this user at once.
         await revoke_all_refresh_tokens(db, record.user_id)
+        await revoke_all_user_sessions(db, record.user_id)
         return _unauthorized()
-    if not record.is_valid:  # expired
+    if not record.is_valid or not record.user.is_active:
         return _unauthorized()
 
     new_token, _ = await rotate_refresh_token(db, record)

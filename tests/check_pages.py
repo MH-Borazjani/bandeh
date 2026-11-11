@@ -12,12 +12,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for pages.py + landing.html. Run from app/e-commerce:
+"""Runnable self-check for pages.py + landing.html. Run from repo root:
 
-    python check_pages.py
+    python tests/check_pages.py
 
 No server, no database: TestClient drives the real app in-process.
 """
+
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from auth import SESSION_COOKIE_NAME, create_session, reset_auth_state
 from fastapi import Response

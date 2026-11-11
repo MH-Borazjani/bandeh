@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
@@ -84,7 +84,7 @@ SECURITY_HEADERS: dict[str, str] = {
 
 async def logging_middleware(
     request: Request,
-    call_next: Callable[[Request], Response],
+    call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     """Log one line per request (method, path, status, milliseconds).
 
@@ -108,7 +108,7 @@ async def logging_middleware(
 
 async def security_headers_middleware(
     request: Request,
-    call_next: Callable[[Request], Response],
+    call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     """Attach the security headers to every response."""
     response = await call_next(request)

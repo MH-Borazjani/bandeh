@@ -31,7 +31,7 @@
 | `app/e-commerce/api/routes/auth.py` | روت‌های وب و HTMX: ورود، درخواست و تایید کد، خروج و داشبورد حساب کاربری |
 | `app/e-commerce/api/routes/pages.py` | روت‌های عمومی و صفحه لندینگ فروشگاه |
 | `app/e-commerce/templates/` | قالب‌های Jinja: `base.html` (تیره، راست‌به‌چپ)، فرم‌های تعاملی HTMX و صفحات |
-| `app/e-commerce/check_auth.py` | تست‌های خودکار: `python check_auth.py` — بدون نیاز به دیتابیس |
+| `tests/check_auth.py` | تست‌های خودکار: `python tests/check_auth.py` — بدون نیاز به دیتابیس |
 
 ## سه تصمیم امنیتی که باید بدانی چرا گرفته شدند
 

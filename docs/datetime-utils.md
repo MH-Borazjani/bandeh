@@ -23,6 +23,6 @@ instead of in production.
 
 ## Tests
 
-`python check_datetime.py` — UTC awareness, Tehran conversion
+`python tests/check_datetime.py` — UTC awareness, Tehran conversion
 (UTC+03:30), expiry math and boundaries, and naive rejection. Pure
 functions, no server, no database.

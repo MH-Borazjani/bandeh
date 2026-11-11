@@ -12,9 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for localStorage (templates only). Run from app/e-commerce:
+"""Runnable self-check for localStorage (templates only). Run from repo root:
 
-    python check_localstorage.py
+    python tests/check_localstorage.py
 
 No browser here, so this checks what CAN be checked without one:
 the landing page wires the toggle/badge/buttons, the JS file is
@@ -30,13 +30,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+APP_DIR = Path(__file__).resolve().parent.parent / "app" / "e-commerce"
+sys.path.insert(0, str(APP_DIR))
+
 from fastapi.testclient import TestClient
 
 from main import app
 
-HERE = Path(__file__).parent
-JS_PATH = HERE / "static" / "js" / "shop.js"
-BASE_PATH = HERE / "templates" / "base.html"
+JS_PATH = APP_DIR / "static" / "js" / "shop.js"
+BASE_PATH = APP_DIR / "templates" / "base.html"
 
 # Keys that may ever be written to browser storage. Nothing else.
 ALLOWED_KEYS = ["bandeh-cart-draft", "bandeh-theme"]

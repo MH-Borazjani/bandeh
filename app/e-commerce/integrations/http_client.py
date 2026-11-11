@@ -38,7 +38,7 @@ DEFAULT_TIMEOUT = 10.0
 
 
 def create_http_client(
-    transport: httpx.AsyncHTTPTransport | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> httpx.AsyncClient:
     """Build an AsyncClient with the project's timeout and pool limits.

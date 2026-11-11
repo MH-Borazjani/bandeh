@@ -12,14 +12,18 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Runnable self-check for core/middleware.py. Run from app/e-commerce:
+"""Runnable self-check for core/middleware.py. Run from repo root:
 
-    python check_middleware.py
+    python tests/check_middleware.py
 
 No server, no database: TestClient drives the real app in-process.
 """
 
 import logging
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from fastapi.testclient import TestClient
 from main import app

@@ -52,7 +52,7 @@ expired. That made revocation toothless: a logged-out user was
 re-identified by the same cookie. Now the rule is: **a token present
 but dead means None, no fallback**. The fallback survives only for
 cookies with no token at all (login while the DB was down) — tested in
-`check_session_mgmt.py`.
+`tests/check_session_mgmt.py`.
 
 ## What is NOT here yet (honest note)
 
@@ -65,7 +65,7 @@ does not exist yet.
 
 ## Tests
 
-`python check_session_mgmt.py` — in-memory SQLite, no server, no live
+`python tests/check_session_mgmt.py` — in-memory SQLite, no server, no live
 Postgres. Covers the admin gate (401/403/200), rotation, reuse
 detection, expired tokens, logout, logout-everywhere, and the no-token
 fallback.

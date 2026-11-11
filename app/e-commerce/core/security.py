@@ -207,7 +207,9 @@ async def get_current_db_user(
     if phone:
         from services.user_service import get_user_by_phone
 
-        return await get_user_by_phone(db, phone)
+        user = await get_user_by_phone(db, phone)
+        if user and user.is_active:
+            return user
 
     return None
 
