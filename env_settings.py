@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Cryptographic secrets
     # SecretStr masks raw values in logs, tracebacks, and string representations
     secret_key: SecretStr = Field(
-        ..., min_length=32, description="Cryptographic secret key for signing tokens"
+        min_length=32, description="Cryptographic secret key for signing tokens"
     )
 
     # PostgreSQL configuration

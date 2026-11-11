@@ -24,13 +24,14 @@ from __future__ import annotations
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, Response
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from db.models.user import User, UserRole
 from db.session import DbSessionDep
-from fastapi import Depends, HTTPException, Request, Response
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 # Normalized Iranian phone pattern: 09 followed by 9 digits
 _PHONE_RE = re.compile(r"^09\d{9}$")
@@ -234,14 +235,15 @@ async def require_authenticated_user(
 RequireDbUserDep = Annotated[User, Depends(require_authenticated_user)]
 
 
-def require_roles(*allowed_roles: UserRole) -> Callable:
+def require_roles(*allowed_roles: UserRole) -> Callable[[User], Awaitable[User]]:
     """Role-based authorization dependency factory (RBAC)."""
 
     async def _role_guard(user: RequireDbUserDep) -> User:
         if user.role not in allowed_roles:
+            roles_list = [r.value for r in allowed_roles]
             raise HTTPException(
                 status_code=403,
-                detail=f"شما دسترسی مجاز ندارید. نقش‌های مجاز: {[r.value for r in allowed_roles]}",
+                detail=f"شما دسترسی مجاز ندارید. نقش‌های مجاز: {roles_list}",
             )
         return user
 

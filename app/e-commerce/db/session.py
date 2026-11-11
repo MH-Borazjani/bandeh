@@ -16,9 +16,8 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import AsyncGenerator
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import (

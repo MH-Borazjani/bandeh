@@ -62,4 +62,11 @@ class ProductRead(BaseModel):
         return f"/uploads/{self.image_path}" if self.image_path else None
 
 
-__all__ = ["ProductCreate", "ProductRead"]
+class ProductPhotoRead(BaseModel):
+    """Response returned after uploading a product photo."""
+
+    image_url: str
+    filename: str
+
+
+__all__ = ["ProductCreate", "ProductPhotoRead", "ProductRead"]

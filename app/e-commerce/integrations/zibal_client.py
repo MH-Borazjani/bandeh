@@ -33,8 +33,8 @@ Verified facts (from Zibal's own OpenAPI doc):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from typing import Annotated
 
 import httpx
@@ -118,7 +118,14 @@ class ZibalClient:
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise ZibalError(None, f"gateway transport error: {exc}") from exc
-        result = data.get("result")
+        if not isinstance(data, dict):
+            raise ZibalError(None, "unexpected gateway response")
+        raw_result = data.get("result")
+        result = (
+            raw_result
+            if isinstance(raw_result, int) and not isinstance(raw_result, bool)
+            else None
+        )
         if result != RESULT_OK:
             raise ZibalError(result, str(data.get("message", "")))
         try:
@@ -141,15 +148,36 @@ class ZibalClient:
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise ZibalError(None, f"gateway transport error: {exc}") from exc
-        ref_number = data.get("refNumber")
+        if not isinstance(data, dict):
+            raise ZibalError(None, "unexpected gateway verify response")
+        raw_result = data.get("result", 0)
+        result = (
+            raw_result
+            if isinstance(raw_result, int) and not isinstance(raw_result, bool)
+            else 0
+        )
+        raw_paid_at = data.get("paidAt")
+        raw_card_number = data.get("cardNumber")
+        raw_status = data.get("status")
+        raw_order_id = data.get("orderId")
+        raw_ref = data.get("refNumber")
+        raw_amount = data.get("amount")
         return VerifyResult(
-            result=int(data.get("result", 0)),
-            paid_at=data.get("paidAt"),
-            card_number=data.get("cardNumber"),
-            status=data.get("status"),
-            order_id=data.get("orderId"),
-            ref_number=str(ref_number) if ref_number is not None else None,
-            amount=data.get("amount"),
+            result=result,
+            paid_at=raw_paid_at if isinstance(raw_paid_at, str) else None,
+            card_number=raw_card_number if isinstance(raw_card_number, str) else None,
+            status=(
+                raw_status
+                if isinstance(raw_status, int) and not isinstance(raw_status, bool)
+                else None
+            ),
+            order_id=str(raw_order_id) if raw_order_id is not None else None,
+            ref_number=str(raw_ref) if raw_ref is not None else None,
+            amount=(
+                raw_amount
+                if isinstance(raw_amount, int) and not isinstance(raw_amount, bool)
+                else None
+            ),
         )
 
 

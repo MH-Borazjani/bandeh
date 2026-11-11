@@ -22,12 +22,13 @@ for the network, and TestClient drives the real app in-process.
 """
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import httpx
+
 from core.cache import reset_cache_for_tests
 from integrations.directus_client import (
     FALLBACK_CATEGORIES,

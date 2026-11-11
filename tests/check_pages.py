@@ -19,14 +19,15 @@
 No server, no database: TestClient drives the real app in-process.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from auth import SESSION_COOKIE_NAME, create_session, reset_auth_state
 from fastapi import Response
 from fastapi.testclient import TestClient
+
 from main import app
 
 

@@ -21,12 +21,13 @@ route answers 404 either way.
 
 from __future__ import annotations
 
-from typing import Annotated
 import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path
 
 from core.security import RequireDbUserDep
 from db.session import DbSessionDep
-from fastapi import APIRouter, HTTPException, Path
 from schema.order_api import OrderCreate, OrderRead
 from services.order_service import OrderError, create_order, load_order_for_user
 
@@ -41,9 +42,7 @@ async def create_order_endpoint(
 ) -> OrderRead:
     """Checkout: freeze the cart into an order (prices fixed at this moment)."""
     try:
-        order = await create_order(
-            db, user, [item.model_dump() for item in data.items]
-        )
+        order = await create_order(db, user, data.items)
     except OrderError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
     return OrderRead.model_validate(order)

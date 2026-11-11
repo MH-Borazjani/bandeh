@@ -17,9 +17,9 @@
 All auth URLs are prefixed with /auth:
 - GET  /auth/login             The login page (phone-number form)
 - POST /auth/otp/request       HTMX: generate and dispatch OTP, swap in code form
-- POST /auth/otp/verify        HTMX: verify code, persist user/session in DB, set cookies
+- POST /auth/otp/verify        HTMX: verify code, save user/session in DB, set cookies
 - POST /auth/refresh           Mint a fresh session from a refresh token (rotation)
-- POST /auth/logout            Log out user (revoke DB session + refresh token, clear cookies), redirect to /
+- POST /auth/logout            Log out user (revoke session/refresh token, clear cookies) -> /
 - POST /auth/logout-everywhere Revoke every session + refresh token of the user, on all devices
 - GET  /auth/account           Protected account page
 """
@@ -27,6 +27,9 @@ All auth URLs are prefixed with /auth:
 from __future__ import annotations
 
 from typing import Annotated
+
+from fastapi import APIRouter, Form, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from core.security import (
     CurrentUserDep,
@@ -41,8 +44,6 @@ from core.security import (
 )
 from core.templates import templates
 from db.session import DbSessionDep
-from fastapi import APIRouter, Form, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from services.auth_service import (
     OtpError,
     mask_phone,

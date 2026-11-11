@@ -22,6 +22,8 @@ from .cookies import (
 )
 from .security import (
     COOKIE_SECURE,
+    SESSION_COOKIE_NAME,
+    SESSION_MAX_AGE,
     CurrentDbUserDep,
     CurrentUserDep,
     DbSessionDep,
@@ -29,8 +31,6 @@ from .security import (
     RequireDbUserDep,
     RequireStaffDep,
     RequireUserDep,
-    SESSION_COOKIE_NAME,
-    SESSION_MAX_AGE,
     create_session,
     delete_session,
     get_current_db_user,

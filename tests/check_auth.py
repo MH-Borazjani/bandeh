@@ -36,9 +36,9 @@ What is checked, in order:
         strangers are bounced to /auth/login -> logout ends it.
 """
 
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 

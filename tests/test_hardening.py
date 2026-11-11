@@ -22,13 +22,14 @@ Run from the repository root:
 from __future__ import annotations
 
 import asyncio
-from io import BytesIO
 import os
-from pathlib import Path
 import sys
 import tempfile
 import unittest
 import uuid
+from collections.abc import AsyncGenerator
+from io import BytesIO
+from pathlib import Path
 
 import httpx
 from fastapi import Response, UploadFile
@@ -41,40 +42,47 @@ E_COMMERCE_DIR = Path(__file__).resolve().parent.parent / "app" / "e-commerce"
 if str(E_COMMERCE_DIR) not in sys.path:
     sys.path.insert(0, str(E_COMMERCE_DIR))
 
-from core.cache import get_cache, reset_cache_for_tests  # noqa: E402
-from core.money import toman_to_rial  # noqa: E402
-from core.security import (  # noqa: E402
+from core.cache import get_cache, reset_cache_for_tests
+from core.money import toman_to_rial
+from core.security import (
     REFRESH_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     create_session,
-    set_refresh_cookie,
 )
-from db.base import Base  # noqa: E402
-from db.models.order import OrderStatus  # noqa: E402
-from db.models.payment_attempt import PaymentAttempt, PaymentStatus  # noqa: E402
-from db.models.product import Product  # noqa: E402
-from db.models.refresh_token import RefreshToken  # noqa: E402
-from db.models.session import UserSession  # noqa: E402
-from db.models.user import User, UserRole  # noqa: E402
-from db.session import get_db  # noqa: E402
-from integrations.directus_client import (  # noqa: E402
+from db.base import Base
+from db.models.order import OrderStatus
+from db.models.payment_attempt import PaymentAttempt, PaymentStatus
+from db.models.product import Product
+from db.models.refresh_token import RefreshToken
+from db.models.session import UserSession
+from db.models.user import User, UserRole
+from db.session import get_db
+from integrations.directus_client import (
     FALLBACK_CATEGORIES,
     DirectusClient,
     format_toman_price,
 )
-from integrations.zibal_client import ZibalClient, ZibalError, get_zibal_client  # noqa: E402
-from main import app  # noqa: E402
-from services.order_service import OrderError, create_order  # noqa: E402
-from services.refresh_service import issue_refresh_token  # noqa: E402
-from services.search_service import search_products_ilike  # noqa: E402
-from services.session_service import create_database_session  # noqa: E402
-from services.upload_service import UploadError, save_upload  # noqa: E402
+from integrations.zibal_client import ZibalClient, ZibalError, get_zibal_client
+from main import app
+from schema.admin import AdminOverviewRead
+from schema.order_api import OrderItemCreate
+from schema.payment_api import (
+    PaymentCancelRead,
+    PaymentStartRead,
+    PaymentStatusRead,
+)
+from services.order_service import OrderError, create_order
+from services.refresh_service import issue_refresh_token
+from services.search_service import search_products_ilike
+from services.session_service import create_database_session
+from services.upload_service import UploadError, save_upload
 
 
 def _extract_cookie(response: Response, name: str) -> str:
     getlist = getattr(response.headers, "getlist", None) or getattr(
-        response.headers, "get_list"
+        response.headers, "get_list", None
     )
+    assert callable(getlist)
     for header in getlist("set-cookie"):
         if header.startswith(name + "="):
             return header.split(";", 1)[0].split("=", 1)[1]
@@ -131,8 +139,12 @@ class HardeningUnitTests(unittest.IsolatedAsyncioTestCase):
     async def test_directus_client_survives_cache_errors_and_corrupt_json(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             if "categories" in str(request.url):
-                return httpx.Response(200, json={"data": [{"name": "Cat", "description": "Desc"}]})
-            return httpx.Response(200, json={"data": [{"name": "Prod", "price": 1000, "tag": None}]})
+                return httpx.Response(
+                    200, json={"data": [{"name": "Cat", "description": "Desc"}]}
+                )
+            return httpx.Response(
+                200, json={"data": [{"name": "Prod", "price": 1000, "tag": None}]}
+            )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
             client_failing = DirectusClient(http, cache=_FailingCache())
@@ -213,7 +225,9 @@ class HardeningUnitTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ctx2.exception.status_code, 400)
 
             # Valid uppercase .JPG
-            valid_jpg = UploadFile(filename="CAM_01.JPG", file=BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF"))
+            valid_jpg = UploadFile(
+                filename="CAM_01.JPG", file=BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF")
+            )
             saved_jpg = await save_upload(valid_jpg, upload_dir)
             self.assertTrue(saved_jpg.endswith(".jpg"))
 
@@ -229,7 +243,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.engine, expire_on_commit=False, class_=AsyncSession
         )
 
-        async def override_get_db():
+        async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             async with self.Session() as session:
                 try:
                     yield session
@@ -440,7 +454,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             client = TestClient(app)
             client.cookies.set(SESSION_COOKIE_NAME, cookie)
 
-            # Create normal order -> start payment when gateway is unreachable -> 502 + hold released
+            # Create normal order -> start payment when gateway is unreachable -> 502 + free hold
             r_order = client.post(
                 "/orders",
                 json={"items": [{"product_id": str(product.id), "quantity": 2}]},
@@ -453,6 +467,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
             async with self.Session() as s:
                 prod = await s.get(Product, product.id)
+                assert prod is not None
                 self.assertEqual(prod.reserved, 0)
                 self.assertEqual(prod.stock, 4)
                 attempts = (
@@ -501,7 +516,118 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(r_low_start.status_code, 400)
             async with self.Session() as s:
                 lp = await s.get(Product, low_product.id)
+                assert lp is not None
                 self.assertEqual(lp.reserved, 0)
+        finally:
+            await async_client.aclose()
+
+    async def test_create_order_accepts_typed_order_item_create_models(self) -> None:
+        async with self.Session() as s:
+            user = User(phone="09120000007", role=UserRole.CUSTOMER, is_active=True)
+            product = Product(
+                name="Tea Maker",
+                price_toman=350_000,
+                stock=5,
+                reserved=0,
+                is_active=True,
+            )
+            s.add_all([user, product])
+            await s.commit()
+            await s.refresh(user)
+            await s.refresh(product)
+
+        async with self.Session() as s:
+            order = await create_order(
+                s,
+                user,
+                [
+                    OrderItemCreate(product_id=product.id, quantity=1),
+                    OrderItemCreate(product_id=product.id, quantity=2),
+                ],
+            )
+            self.assertEqual(len(order.items), 1)
+            self.assertEqual(order.items[0].quantity, 3)
+            self.assertEqual(order.total_toman, 1_050_000)
+
+    def test_openapi_documents_strict_response_schemas(self) -> None:
+        spec = app.openapi()
+        schemas = spec["components"]["schemas"]
+        for schema_name in (
+            "AdminOverviewRead",
+            "HealthCheckRead",
+            "PaymentCancelRead",
+            "PaymentStartRead",
+            "PaymentStatusRead",
+            "ProductPhotoRead",
+        ):
+            self.assertIn(schema_name, schemas)
+
+        admin_schema = (
+            spec["paths"]["/admin/overview"]["get"]["responses"]["200"]["content"][
+                "application/json"
+            ]["schema"]
+        )
+        self.assertEqual(admin_schema.get("$ref"), "#/components/schemas/AdminOverviewRead")
+
+        callback_schema = (
+            spec["paths"]["/payments/callback"]["get"]["responses"]["200"]["content"][
+                "application/json"
+            ]["schema"]
+        )
+        self.assertIn("anyOf", callback_schema)
+
+    async def test_typed_payment_and_admin_response_models_validate_live_json(self) -> None:
+        async with self.Session() as s:
+            admin = User(phone="09120000008", role=UserRole.ADMIN, is_active=True)
+            product = Product(
+                name="Air Fryer", price_toman=400_000, stock=4, reserved=0, is_active=True
+            )
+            s.add_all([admin, product])
+            await s.commit()
+            await s.refresh(admin)
+            await s.refresh(product)
+
+        def ok_handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/v1/request":
+                return httpx.Response(
+                    200, json={"result": 100, "message": "ok", "trackId": 555001}
+                )
+            return httpx.Response(404, json={})
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(ok_handler))
+        app.dependency_overrides[get_zibal_client] = lambda: ZibalClient(async_client)
+        try:
+            cookie = await self._mint_cookie(admin, with_db_session=True)
+            client = TestClient(app)
+            client.cookies.set(SESSION_COOKIE_NAME, cookie)
+
+            overview = AdminOverviewRead.model_validate(client.get("/admin/overview").json())
+            self.assertEqual(overview.admin, admin.phone)
+
+            order_resp = client.post(
+                "/orders",
+                json={"items": [{"product_id": str(product.id), "quantity": 1}]},
+            )
+            order_id = uuid.UUID(order_resp.json()["id"])
+
+            start = PaymentStartRead.model_validate(
+                client.post(f"/payments/{order_id}/start").json()
+            )
+            self.assertEqual(start.order_id, order_id)
+            self.assertEqual(start.track_id, 555001)
+
+            status = PaymentStatusRead.model_validate(
+                client.get(f"/payments/{order_id}/status").json()
+            )
+            self.assertEqual(status.order_id, order_id)
+            assert status.payment is not None
+            self.assertEqual(status.payment.track_id, 555001)
+
+            cancelled = PaymentCancelRead.model_validate(
+                client.post(f"/payments/{order_id}/cancel").json()
+            )
+            self.assertEqual(cancelled.status, "failed")
+            self.assertEqual(cancelled.order_id, order_id)
         finally:
             await async_client.aclose()
 

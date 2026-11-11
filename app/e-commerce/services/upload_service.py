@@ -33,8 +33,8 @@ checks the path — not by the static file server.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 from fastapi import UploadFile
 

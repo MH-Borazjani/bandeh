@@ -19,9 +19,10 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from db.models.user import User, UserRole
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.user import User, UserRole
 
 
 async def get_user_by_phone(db: AsyncSession, phone: str) -> User | None:
@@ -60,7 +61,7 @@ async def get_or_create_user_by_phone(db: AsyncSession, phone: str) -> tuple[Use
 
 async def record_user_login(db: AsyncSession, user: User) -> None:
     """Update last login timestamp."""
-    user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
+    user.last_login_at = datetime.datetime.now(datetime.UTC)
     await db.flush()
 
 

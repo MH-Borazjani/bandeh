@@ -32,6 +32,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import secrets
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,7 +67,7 @@ async def issue_refresh_token(
     record = RefreshToken(
         token_hash=hash_refresh_token(token),
         user_id=user.id,
-        expires_at=datetime.datetime.now(datetime.timezone.utc) + REFRESH_TOKEN_LIFETIME,
+        expires_at=datetime.datetime.now(datetime.UTC) + REFRESH_TOKEN_LIFETIME,
     )
     db.add(record)
     await db.flush()
@@ -101,7 +102,7 @@ async def rotate_refresh_token(
     window where both tokens work.
     """
     record.is_revoked = True
-    record.last_used_at = datetime.datetime.now(datetime.timezone.utc)
+    record.last_used_at = datetime.datetime.now(datetime.UTC)
     return await issue_refresh_token(db, record.user)
 
 
@@ -115,7 +116,7 @@ async def revoke_refresh_token(db: AsyncSession, token: str) -> bool:
     return True
 
 
-async def revoke_all_refresh_tokens(db: AsyncSession, user_id) -> int:
+async def revoke_all_refresh_tokens(db: AsyncSession, user_id: uuid.UUID) -> int:
     """Revoke every live refresh token of one user (logout-everywhere / theft).
 
     Returns how many tokens were revoked.

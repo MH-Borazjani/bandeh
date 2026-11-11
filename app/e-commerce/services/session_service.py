@@ -18,15 +18,16 @@ from __future__ import annotations
 
 import datetime
 import secrets
-from typing import Any, cast
 import uuid
+from typing import Any, cast
 
-from db.models.session import UserSession
-from db.models.user import User
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+
+from db.models.session import UserSession
+from db.models.user import User
 
 # 30 days session persistence
 SESSION_LIFETIME = datetime.timedelta(days=30)
@@ -44,7 +45,7 @@ async def create_database_session(
     ip_address: str | None = None,
 ) -> UserSession:
     """Create and persist a new session record in PostgreSQL."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     token = generate_session_token()
 
     session = UserSession(
@@ -69,7 +70,7 @@ async def get_valid_session(db: AsyncSession, session_token: str) -> UserSession
     3. Expiration date is in the future
     4. Attached user account is active
     """
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     stmt = (
         select(UserSession)
         .options(joinedload(UserSession.user))

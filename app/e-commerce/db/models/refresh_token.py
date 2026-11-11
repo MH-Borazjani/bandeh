@@ -32,8 +32,8 @@ Security rules, all enforced in services/refresh_service.py:
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -89,11 +89,11 @@ class RefreshToken(Base, TimestampMixin):
     @property
     def is_valid(self) -> bool:
         """True when the token is neither revoked nor expired."""
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         expires_at = self.expires_at
         if expires_at.tzinfo is None:
             # SQLite stores no timezone; values were written as UTC.
-            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+            expires_at = expires_at.replace(tzinfo=datetime.UTC)
         return not self.is_revoked and expires_at > now
 
     def __repr__(self) -> str:

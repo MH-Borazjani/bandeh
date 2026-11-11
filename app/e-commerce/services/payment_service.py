@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Literal, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +59,60 @@ from integrations.zibal_client import (
     ZibalError,
 )
 from services.order_service import OrderError, load_order, load_order_for_user
+
+
+class CallbackUnknownResult(TypedDict):
+    status: Literal["unknown"]
+    track_id: int
+
+
+class CallbackAlreadyPaidResult(TypedDict):
+    status: Literal["already_paid"]
+    order_id: str
+    ref_number: str | None
+
+
+class CallbackOrderMissingResult(TypedDict):
+    status: Literal["error"]
+    track_id: int
+    reason: Literal["order_missing"]
+
+
+class CallbackAmountMismatchResult(TypedDict):
+    status: Literal["failed"]
+    order_id: str
+    reason: Literal["amount_mismatch"]
+    expected_rial: int
+    received_rial: int
+
+
+class CallbackPaidResult(TypedDict):
+    status: Literal["paid"]
+    order_id: str
+    ref_number: str | None
+
+
+class CallbackNotPaidResult(TypedDict):
+    status: Literal["failed"]
+    order_id: str
+    reason: Literal["not_paid"]
+
+
+class CallbackGatewayErrorResult(TypedDict):
+    status: Literal["error"]
+    track_id: int
+    result: int
+
+
+CallbackResult = (
+    CallbackUnknownResult
+    | CallbackAlreadyPaidResult
+    | CallbackOrderMissingResult
+    | CallbackAmountMismatchResult
+    | CallbackPaidResult
+    | CallbackNotPaidResult
+    | CallbackGatewayErrorResult
+)
 
 # How long a stock hold lives before the release job frees it.
 HOLD_MINUTES = 15
@@ -120,7 +175,7 @@ def _parse_paid_at(value: str | None) -> datetime.datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        parsed = parsed.replace(tzinfo=datetime.UTC)
     return parsed
 
 
@@ -203,7 +258,7 @@ async def handle_callback(
     track_id: int,
     order_id: str,
     zibal: ZibalClient,
-) -> dict:
+) -> CallbackResult:
     """Handle Zibal's callback. Verifies server-to-server; params are hints.
 
     Returns a dict: {"status": paid | already_paid | failed | unknown |
@@ -320,7 +375,7 @@ async def release_expired_reservations(
         created_at = attempt.created_at
         if created_at.tzinfo is None:
             # SQLite stores no timezone; values were written as UTC.
-            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+            created_at = created_at.replace(tzinfo=datetime.UTC)
         if created_at >= cutoff:
             continue
         order = await load_order(db, attempt.order_id)
@@ -337,6 +392,14 @@ async def release_expired_reservations(
 
 __all__ = [
     "HOLD_MINUTES",
+    "CallbackAlreadyPaidResult",
+    "CallbackAmountMismatchResult",
+    "CallbackGatewayErrorResult",
+    "CallbackNotPaidResult",
+    "CallbackOrderMissingResult",
+    "CallbackPaidResult",
+    "CallbackResult",
+    "CallbackUnknownResult",
     "cancel_payment",
     "handle_callback",
     "release_expired_reservations",

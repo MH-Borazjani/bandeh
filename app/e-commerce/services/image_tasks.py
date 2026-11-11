@@ -27,12 +27,22 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Literal, TypedDict
 
 logger = logging.getLogger(__name__)
 
+
+class ImageJob(TypedDict):
+    """Queued thumbnail/webp variant job payload."""
+
+    filename: str
+    dir: str
+    status: Literal["pending"] | str
+
+
 # Jobs waiting for a worker. A real queue replaces this list; the shape
 # (filename + dir + status) is what the worker will consume.
-PENDING_JOBS: list[dict[str, str]] = []
+PENDING_JOBS: list[ImageJob] = []
 
 
 def schedule_image_variants(filename: str, upload_dir: Path) -> None:
@@ -43,4 +53,4 @@ def schedule_image_variants(filename: str, upload_dir: Path) -> None:
     logger.info("image variants queued for %s", filename)
 
 
-__all__ = ["PENDING_JOBS", "schedule_image_variants"]
+__all__ = ["PENDING_JOBS", "ImageJob", "schedule_image_variants"]

@@ -27,9 +27,9 @@ covers the 15-minute stock hold running out.
 
 from __future__ import annotations
 
-import enum
-from typing import TYPE_CHECKING
 import uuid
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from db.models.user import User
 
 
-class OrderStatus(str, enum.Enum):
+class OrderStatus(StrEnum):
     """Where an order is in its life."""
 
     CREATED = "created"

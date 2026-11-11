@@ -20,9 +20,9 @@ No server, no database: it calls the helpers directly with plain
 Response objects and inspects the Set-Cookie headers they produce.
 """
 
-from pathlib import Path
 import sys
 import uuid
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 

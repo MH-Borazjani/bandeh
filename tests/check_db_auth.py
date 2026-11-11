@@ -24,65 +24,13 @@ or
 from __future__ import annotations
 
 import datetime
-from pathlib import Path
 import sys
 import uuid
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
-# Graceful import of FastAPI components
-try:
-    from fastapi import HTTPException, Response
-except ImportError:
-    class HTTPException(Exception):  # type: ignore[no-redef]
-        def __init__(self, status_code: int, detail: str = "") -> None:
-            self.status_code = status_code
-            self.detail = detail
-
-    class Response:  # type: ignore[no-redef]
-        def __init__(self) -> None:
-            self.headers: dict[str, str] = {}
-
-        def set_cookie(
-            self,
-            key: str,
-            value: str,
-            max_age: int | None = None,
-            httponly: bool = False,
-            samesite: str | None = None,
-            secure: bool = False,
-        ) -> None:
-            flags = []
-            if httponly:
-                flags.append("HttpOnly")
-            if samesite:
-                flags.append(f"SameSite={samesite}")
-            if secure:
-                flags.append("Secure")
-            if max_age is not None:
-                flags.append(f"Max-Age={max_age}")
-            self.headers["set-cookie"] = f"{key}={value}; " + "; ".join(flags)
-
-        def delete_cookie(self, key: str) -> None:
-            self.headers["set-cookie"] = f"{key}=; Max-Age=0"
-
-# Graceful import of Pydantic
-try:
-    from pydantic import ValidationError
-    HAS_PYDANTIC = True
-except ImportError:
-    HAS_PYDANTIC = False
-
-# Graceful import of SQLAlchemy
-try:
-    from db.base import Base
-    from db.models.session import UserSession
-    from db.models.user import User, UserRole
-    from schema.user import UserBase, UserProfileUpdate, UserRead
-    HAS_SQLALCHEMY = True
-except ImportError as exc:
-    HAS_SQLALCHEMY = False
-    _IMPORT_ERR = str(exc)
+from fastapi import HTTPException, Request, Response
 
 from core.security import (
     SESSION_COOKIE_NAME,
@@ -92,14 +40,33 @@ from core.security import (
     read_session_token,
     require_roles,
 )
-from services.session_service import SESSION_LIFETIME, generate_session_token
+from services.session_service import generate_session_token
+
+# Graceful import of Pydantic
+try:
+    from pydantic import ValidationError
+
+    HAS_PYDANTIC = True
+except ImportError:
+    HAS_PYDANTIC = False
+
+# Graceful import of SQLAlchemy
+try:
+    from db.base import Base
+    from db.models.user import User, UserRole
+    from schema.user import UserBase, UserRead
+
+    HAS_SQLALCHEMY = True
+except ImportError as exc:
+    HAS_SQLALCHEMY = False
+    _IMPORT_ERR = str(exc)
 
 
-class MockRequest:
-    """Mock HTTP request with cookie dict."""
-
-    def __init__(self, cookies: dict[str, str]) -> None:
-        self.cookies = cookies
+def _request_with_cookies(cookies: dict[str, str]) -> Request:
+    """Build a minimal Starlette Request carrying ``cookies``."""
+    cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items()).encode("latin-1")
+    headers = [(b"cookie", cookie_header)] if cookie_header else []
+    return Request({"type": "http", "method": "GET", "headers": headers})
 
 
 def test_models_metadata() -> None:
@@ -151,7 +118,7 @@ def test_pydantic_schemas() -> None:
         raise AssertionError("UserBase accepted invalid landline phone number!")
 
     # UserRead serialization
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     u_id = uuid.uuid4()
     read_obj = UserRead(
         id=u_id,
@@ -184,7 +151,7 @@ def test_session_cookies_and_tokens() -> None:
 
     # Parse cookie value
     raw_cookie_val = cookie_header.split(";")[0].split("=", 1)[1]
-    req = MockRequest(cookies={SESSION_COOKIE_NAME: raw_cookie_val})
+    req = _request_with_cookies({SESSION_COOKIE_NAME: raw_cookie_val})
 
     # Read payload
     verified_phone = read_session(req)
@@ -195,7 +162,7 @@ def test_session_cookies_and_tokens() -> None:
 
     # Tampered cookie rejection
     tampered_cookie = raw_cookie_val[:-4] + "abcd"
-    tampered_req = MockRequest(cookies={SESSION_COOKIE_NAME: tampered_cookie})
+    tampered_req = _request_with_cookies({SESSION_COOKIE_NAME: tampered_cookie})
     assert read_session(tampered_req) is None, "Tampered cookie was not rejected!"
     assert read_session_token(tampered_req) is None, "Tampered session token was not rejected!"
 

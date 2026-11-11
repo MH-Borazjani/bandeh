@@ -34,7 +34,7 @@ import datetime
 from zoneinfo import ZoneInfo
 
 TEHRAN = ZoneInfo("Asia/Tehran")
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 # Lifetimes used across the app (single source of truth for the numbers).
 OTP_EXPIRY_SECONDS = 120  # an SMS code lives for 2 minutes

@@ -30,17 +30,29 @@ In production it must be a public URL Zibal can reach.
 from __future__ import annotations
 
 import os
-from typing import Annotated
 import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path, Query, Request
+from pydantic import TypeAdapter
 
 from core.security import RequireDbUserDep
 from db.session import DbSessionDep
-from fastapi import APIRouter, HTTPException, Path, Query, Request
 from integrations.zibal_client import ZibalClientDep, ZibalError
+from schema.payment_api import (
+    PaymentAttemptSummary,
+    PaymentCallbackResponse,
+    PaymentCancelRead,
+    PaymentStartRead,
+    PaymentStatusRead,
+)
 from services import payment_service
 from services.order_service import OrderError, load_order_for_user
 
 router = APIRouter(tags=["payments"])
+_CALLBACK_RESPONSE_ADAPTER: TypeAdapter[PaymentCallbackResponse] = TypeAdapter(
+    PaymentCallbackResponse
+)
 
 
 def _callback_url(request: Request) -> str:
@@ -59,7 +71,7 @@ async def payment_callback(
     success: Annotated[str, Query()] = "0",
     status: Annotated[str, Query()] = "-1",
     orderId: Annotated[str, Query()] = "",
-) -> dict:
+) -> PaymentCallbackResponse:
     """Zibal's redirect after payment. Verifies; never trusts the params.
 
     ``success``/``status`` arrive here but are ignored for the decision
@@ -70,12 +82,11 @@ async def payment_callback(
             db, track_id=trackId, order_id=orderId, zibal=zibal
         )
     except ZibalError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"payment gateway error: {exc.message or exc.result}"
-        ) from exc
+        detail = f"payment gateway error: {exc.message or exc.result}"
+        raise HTTPException(status_code=502, detail=detail) from exc
     if result["status"] == "unknown":
         raise HTTPException(status_code=404, detail="unknown payment")
-    return result
+    return _CALLBACK_RESPONSE_ADAPTER.validate_python(result)
 
 
 @router.post("/payments/{order_id}/start")
@@ -85,7 +96,7 @@ async def start_payment_endpoint(
     user: RequireDbUserDep,
     db: DbSessionDep,
     zibal: ZibalClientDep,
-) -> dict:
+) -> PaymentStartRead:
     """Start paying for my order. Returns the gateway start URL."""
     try:
         attempt = await payment_service.start_payment(
@@ -98,61 +109,50 @@ async def start_payment_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ZibalError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"payment gateway error: {exc.message or exc.result}"
-        ) from exc
+        detail = f"payment gateway error: {exc.message or exc.result}"
+        raise HTTPException(status_code=502, detail=detail) from exc
     assert attempt.track_id is not None  # start only returns waiting attempts
-    return {
-        "payment_url": zibal.start_url(attempt.track_id),
-        "track_id": attempt.track_id,
-        "order_id": str(order_id),
-    }
+    return PaymentStartRead(
+        payment_url=zibal.start_url(attempt.track_id),
+        track_id=attempt.track_id,
+        order_id=order_id,
+    )
 
 
 @router.get("/payments/{order_id}/status")
 async def payment_status(
-    order_id: uuid.UUID,
+    order_id: Annotated[uuid.UUID, Path()],
     user: RequireDbUserDep,
     db: DbSessionDep,
-) -> dict:
+) -> PaymentStatusRead:
     """My order's payment status: order state + latest attempt."""
     order = await load_order_for_user(db, order_id, user.id)
     if order is None:
         raise HTTPException(status_code=404, detail="order not found")
-    latest = None
-    if order.attempts:
-        latest = max(order.attempts, key=lambda a: a.created_at)
-    return {
-        "order_id": str(order.id),
-        "order_status": order.status,
-        "total_toman": order.total_toman,
-        "total_rial": order.total_rial,
-        "payment": (
-            {
-                "status": latest.status,
-                "track_id": latest.track_id,
-                "ref_number": latest.ref_number,
-            }
-            if latest is not None
-            else None
-        ),
-    }
+    latest = max(order.attempts, key=lambda a: a.created_at) if order.attempts else None
+    return PaymentStatusRead(
+        order_id=order.id,
+        order_status=order.status,
+        total_toman=order.total_toman,
+        total_rial=order.total_rial,
+        payment=PaymentAttemptSummary.model_validate(latest) if latest is not None else None,
+    )
 
 
 @router.post("/payments/{order_id}/cancel")
 async def cancel_payment_endpoint(
-    order_id: uuid.UUID,
+    order_id: Annotated[uuid.UUID, Path()],
     user: RequireDbUserDep,
     db: DbSessionDep,
-) -> dict:
+) -> PaymentCancelRead:
     """Cancel my unpaid order: free the stock hold, fail the order."""
     try:
         cancelled = await payment_service.cancel_payment(db, order_id, user.id)
-    except OrderError:
-        raise HTTPException(status_code=404, detail="order not found")
+    except OrderError as exc:
+        raise HTTPException(status_code=404, detail="order not found") from exc
     if not cancelled:
         raise HTTPException(status_code=409, detail="order cannot be cancelled")
-    return {"status": "failed", "order_id": str(order_id)}
+    return PaymentCancelRead(order_id=order_id)
 
 
 __all__ = ["router"]

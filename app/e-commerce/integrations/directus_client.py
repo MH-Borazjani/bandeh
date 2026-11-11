@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Annotated, Any
+from typing import Annotated, TypedDict, cast
 
 import httpx
 from fastapi import Depends
@@ -50,9 +50,32 @@ logger = logging.getLogger("bandeh.directus")
 LANDING_CONTENT_KEY = "bandeh:landing:content"
 LANDING_CONTENT_TTL = 60
 
+
+class CategoryContent(TypedDict):
+    """Rendered category card data on the landing page."""
+
+    name: str
+    desc: str
+
+
+class ProductContent(TypedDict):
+    """Rendered product card data on the landing page."""
+
+    name: str
+    price: str
+    tag: str | None
+
+
+class LandingContent(TypedDict):
+    """Combined landing page categories and products payload."""
+
+    categories: list[CategoryContent]
+    products: list[ProductContent]
+
+
 # Hardcoded landing content, used ONLY when Directus cannot answer.
 # Same data the shop showed before the Directus integration.
-FALLBACK_CATEGORIES: list[dict[str, str]] = [
+FALLBACK_CATEGORIES: list[CategoryContent] = [
     {"name": "یخچال و فریزر", "desc": "ساید، دوقلو، معمولی"},
     {"name": "ماشین لباسشویی", "desc": "۷ تا ۱۰ کیلویی"},
     {"name": "ماشین ظرفشویی", "desc": "رومیزی و ایستاده"},
@@ -61,7 +84,7 @@ FALLBACK_CATEGORIES: list[dict[str, str]] = [
     {"name": "لوازم کوچک", "desc": "آشپزخانه و خانه"},
 ]
 
-FALLBACK_PRODUCTS: list[dict[str, str | None]] = [
+FALLBACK_PRODUCTS: list[ProductContent] = [
     {"name": "یخچال فریزر دوقلو", "price": "۴۵٬۰۰۰٬۰۰۰", "tag": "پرفروش"},
     {"name": "ماشین لباسشویی ۸ کیلویی", "price": "۲۸٬۵۰۰٬۰۰۰", "tag": None},
     {"name": "جاروبرقی ۲۰۰۰ وات", "price": "۹٬۸۰۰٬۰۰۰", "tag": "تخفیف‌دار"},
@@ -112,7 +135,7 @@ class DirectusClient:
 
     async def _get_items(
         self, collection: str, fields: list[str]
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, object]]:
         """Fetch one published collection from Directus, or raise.
 
         Raises ``httpx.HTTPError`` on network/HTTP failure and ``ValueError``
@@ -120,7 +143,7 @@ class DirectusClient:
         what a failure means (for landing content: fall back).
         """
         url = f"{self._base_url}/items/{collection}"
-        params = {
+        params: dict[str, str | int] = {
             "fields": ",".join(fields),
             "filter[status][_eq]": "published",
             "limit": 50,
@@ -128,31 +151,52 @@ class DirectusClient:
         response = await self._http.get(url, headers=self._headers(), params=params)
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError(f"Directus {collection} returned non-object JSON")
         rows = data.get("data")
-        if not isinstance(rows, list):
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
             raise ValueError(f"Directus {collection} returned no 'data' list")
         return rows
 
-    async def _fetch_landing_content(self) -> dict[str, list[dict[str, str | None]]]:
+    async def _fetch_landing_content(self) -> LandingContent:
         """Fetch and map the landing content from Directus (no cache, no fallback)."""
         categories = await self._get_items("categories", ["name", "description"])
         products = await self._get_items("products", ["name", "price", "tag"])
-        return {
-            "categories": [
-                {"name": row["name"], "desc": row.get("description") or ""}
-                for row in categories
-            ],
-            "products": [
-                {
-                    "name": row["name"],
-                    "price": format_toman_price(row.get("price")),
-                    "tag": row.get("tag"),
-                }
-                for row in products
-            ],
-        }
 
-    async def get_landing_content(self) -> dict[str, list[dict[str, str | None]]]:
+        mapped_categories: list[CategoryContent] = []
+        for row in categories:
+            name = row["name"]
+            if not isinstance(name, str):
+                raise ValueError("Directus category name must be a string")
+            raw_desc = row.get("description") or ""
+            if not isinstance(raw_desc, str):
+                raise ValueError("Directus category description must be a string")
+            mapped_categories.append({"name": name, "desc": raw_desc})
+
+        mapped_products: list[ProductContent] = []
+        for row in products:
+            name = row["name"]
+            if not isinstance(name, str):
+                raise ValueError("Directus product name must be a string")
+            raw_price = row.get("price")
+            price_val: int | str | None = (
+                raw_price
+                if isinstance(raw_price, int | str) and not isinstance(raw_price, bool)
+                else None
+            )
+            raw_tag = row.get("tag")
+            tag_val: str | None = raw_tag if isinstance(raw_tag, str) else None
+            mapped_products.append(
+                {
+                    "name": name,
+                    "price": format_toman_price(price_val),
+                    "tag": tag_val,
+                }
+            )
+
+        return {"categories": mapped_categories, "products": mapped_products}
+
+    async def get_landing_content(self) -> LandingContent:
         """Return landing content: cache first, then Directus, then fallback.
 
         Any failure — Directus down, timeout, HTTP error, unexpected body —
@@ -164,13 +208,21 @@ class DirectusClient:
             try:
                 cached = await self._cache.get(LANDING_CONTENT_KEY)
                 if cached is not None:
-                    return json.loads(cached)
+                    parsed = json.loads(cached)
+                    if (
+                        isinstance(parsed, dict)
+                        and isinstance(parsed.get("categories"), list)
+                        and isinstance(parsed.get("products"), list)
+                    ):
+                        return cast(LandingContent, parsed)
             except Exception as exc:  # noqa: BLE001 - cache failure never breaks landing
                 logger.warning("Landing cache read failed, bypassing cache: %s", exc)
         try:
             content = await self._fetch_landing_content()
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-            logger.warning("Directus unavailable, using hardcoded landing content: %s", exc)
+            logger.warning(
+                "Directus unavailable, using hardcoded landing content: %s", exc
+            )
             return {
                 "categories": list(FALLBACK_CATEGORIES),
                 "products": list(FALLBACK_PRODUCTS),
@@ -204,12 +256,15 @@ DirectusClientDep = Annotated[DirectusClient, Depends(get_directus_client)]
 
 
 __all__ = [
+    "CategoryContent",
     "DirectusClient",
     "DirectusClientDep",
     "FALLBACK_CATEGORIES",
     "FALLBACK_PRODUCTS",
     "LANDING_CONTENT_KEY",
     "LANDING_CONTENT_TTL",
+    "LandingContent",
+    "ProductContent",
     "format_toman_price",
     "get_directus_client",
     "invalidate_landing_content",

@@ -27,6 +27,8 @@ the route never has to.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
+from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +38,14 @@ from core.money import toman_to_rial
 from db.models.order import Order, OrderItem, OrderStatus
 from db.models.product import Product
 from db.models.user import User
+from schema.order_api import OrderItemCreate
+
+
+class OrderItemInput(TypedDict):
+    """Dictionary representation of a cart item line for internal callers/tests."""
+
+    product_id: uuid.UUID
+    quantity: int
 
 
 class OrderError(Exception):
@@ -73,9 +83,9 @@ async def load_order_for_user(
 async def create_order(
     db: AsyncSession,
     user: User,
-    items: list[dict],
+    items: Sequence[OrderItemCreate] | Sequence[OrderItemInput],
 ) -> Order:
-    """Create a frozen order from ``[{product_id, quantity}]``.
+    """Create a frozen order from cart items.
 
     Raises OrderError when a product is missing, inactive, or short on
     stock. Prices are frozen from the product rows at this moment.
@@ -86,8 +96,12 @@ async def create_order(
     # Aggregate quantities per product_id so duplicate lines cannot bypass stock checks
     merged_quantities: dict[uuid.UUID, int] = {}
     for item in items:
-        pid = item["product_id"]
-        quantity = int(item["quantity"])
+        if isinstance(item, OrderItemCreate):
+            pid = item.product_id
+            quantity = item.quantity
+        else:
+            pid = item["product_id"]
+            quantity = int(item["quantity"])
         if quantity < 1:
             raise OrderError("quantity must be at least 1")
         merged_quantities[pid] = merged_quantities.get(pid, 0) + quantity
@@ -136,4 +150,10 @@ async def create_order(
     return reloaded
 
 
-__all__ = ["OrderError", "create_order", "load_order", "load_order_for_user"]
+__all__ = [
+    "OrderError",
+    "OrderItemInput",
+    "create_order",
+    "load_order",
+    "load_order_for_user",
+]

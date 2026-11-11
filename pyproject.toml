@@ -24,4 +24,37 @@ dependencies = [
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
+    "ruff>=0.17.4",
+    "ty>=0.0.100",
 ]
+
+[tool.ty.environment]
+extra-paths = ["app/e-commerce"]
+
+[tool.ty.src]
+include = ["app/e-commerce", "tests", "env_settings.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+include = ["app/e-commerce/**/*.py", "tests/**/*.py", "env_settings.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "FAST", "ANN"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "api",
+    "core",
+    "db",
+    "env_settings",
+    "integrations",
+    "main",
+    "schema",
+    "services",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/e-commerce/schema/check_models.py" = ["E402"]
+"tests/check_*.py" = ["E402", "E501", "ANN"]
+"tests/test_hardening.py" = ["E402"]

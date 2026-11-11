@@ -27,8 +27,8 @@ full-text SQL compiled (not run) against the Postgres dialect.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 

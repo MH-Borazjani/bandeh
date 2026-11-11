@@ -22,19 +22,20 @@ purpose — a first admin page that proves the gate works over HTTP.
 
 from __future__ import annotations
 
-from core.security import RequireAdminDep
-from db.session import DbSessionDep
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
+from core.security import RequireAdminDep
 from db.models.session import UserSession
 from db.models.user import User
+from db.session import DbSessionDep
+from schema.admin import AdminOverviewRead
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/overview")
-async def admin_overview(admin: RequireAdminDep, db: DbSessionDep) -> dict:
+async def admin_overview(admin: RequireAdminDep, db: DbSessionDep) -> AdminOverviewRead:
     """Admin dashboard numbers: total users and live (unrevoked) sessions."""
     total_users = await db.scalar(select(func.count()).select_from(User))
     live_sessions = await db.scalar(
@@ -42,11 +43,11 @@ async def admin_overview(admin: RequireAdminDep, db: DbSessionDep) -> dict:
         .select_from(UserSession)
         .where(UserSession.is_revoked.is_(False))
     )
-    return {
-        "admin": admin.phone,
-        "total_users": total_users or 0,
-        "live_sessions": live_sessions or 0,
-    }
+    return AdminOverviewRead(
+        admin=admin.phone,
+        total_users=total_users or 0,
+        live_sessions=live_sessions or 0,
+    )
 
 
 __all__ = ["router"]

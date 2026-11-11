@@ -23,13 +23,16 @@ cache and httpx.MockTransport stand in for the real services.
 
 import asyncio
 import os
-from pathlib import Path
 import sys
 import time
+from collections.abc import AsyncIterator
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 import httpx
+from fastapi.testclient import TestClient
+
 from core.cache import (
     MemoryCache,
     RedisCache,
@@ -37,7 +40,6 @@ from core.cache import (
     make_key,
     reset_cache_for_tests,
 )
-from fastapi.testclient import TestClient
 from integrations.directus_client import (
     DirectusClient,
     invalidate_landing_content,
@@ -66,16 +68,17 @@ class _FakeRedis:
     async def set(self, key: str, value: str, ex: int | None = None) -> None:
         self._store[key] = (value, time.monotonic() + ex if ex else None)
 
-    async def delete(self, *keys: str) -> int:
+    async def delete(self, *keys: str | bytes) -> int:
         removed = 0
         for key in keys:
-            if key in self._store:
-                del self._store[key]
+            key_str = key.decode("utf-8") if isinstance(key, bytes) else key
+            if key_str in self._store:
+                del self._store[key_str]
                 removed += 1
-            self.deleted.append(key)
+            self.deleted.append(key_str)
         return removed
 
-    async def scan_iter(self, match: str):
+    async def scan_iter(self, match: str) -> AsyncIterator[str]:
         import fnmatch
 
         for key in list(self._store):

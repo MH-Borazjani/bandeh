@@ -24,7 +24,6 @@ the database level, not just in Python.
 
 from __future__ import annotations
 
-import datetime
 import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text

@@ -34,6 +34,7 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import AsyncIterator, Awaitable
 from typing import Annotated, Protocol
 
 from fastapi import Depends
@@ -87,7 +88,7 @@ class MemoryCache:
             return None
         return value
 
-    async def set(self, key: str, value: str, ttl_seconds: int) -> None:
+    async def set(self, key: str, value: str, ttl_seconds: float) -> None:
         self._store[key] = (value, time.monotonic() + ttl_seconds)
 
     async def delete(self, key: str) -> None:
@@ -100,16 +101,39 @@ class MemoryCache:
         return len(doomed)
 
 
+class RedisClientProtocol(Protocol):
+    """Minimal async Redis client interface used by RedisCache."""
+
+    def get(self, key: str, /) -> Awaitable[str | bytes | None]:
+        """Return a cached value or None."""
+        ...
+
+    def set(self, key: str, value: str, /, ex: int | None = None) -> Awaitable[object]:
+        """Store a cached string value with an optional TTL in seconds."""
+        ...
+
+    def delete(self, key: str | bytes, /) -> Awaitable[object]:
+        """Delete a cached key."""
+        ...
+
+    def scan_iter(self, *, match: str) -> AsyncIterator[str | bytes]:
+        """Iterate keys matching ``match``."""
+        ...
+
+
 class RedisCache:
     """Redis-backed cache (``redis.asyncio``). Production backend."""
 
-    def __init__(self, client) -> None:
-        # The client type is redis.asyncio.Redis; kept untyped here so this
-        # module imports cleanly even when the redis package is absent.
+    def __init__(self, client: RedisClientProtocol) -> None:
+        # Structural Protocol avoids importing redis at module load time so
+        # MemoryCache and tests work even when the redis package is absent.
         self._client = client
 
     async def get(self, key: str) -> str | None:
-        return await self._client.get(key)
+        value = await self._client.get(key)
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return value
 
     async def set(self, key: str, value: str, ttl_seconds: int) -> None:
         await self._client.set(key, value, ex=ttl_seconds)
@@ -189,6 +213,7 @@ __all__ = [
     "CacheDep",
     "MemoryCache",
     "RedisCache",
+    "RedisClientProtocol",
     "get_cache",
     "make_key",
     "reset_cache_for_tests",

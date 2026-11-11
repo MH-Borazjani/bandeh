@@ -30,7 +30,7 @@ Concepts shown here, and where to find them:
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Self
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -70,7 +70,7 @@ class ProductBase(BaseModel):
 
     @field_validator("sku", mode="before")
     @classmethod
-    def normalise_sku(cls, value: Any) -> Any:
+    def normalise_sku(cls, value: object) -> object:
         """Upper-case (and strip) the SKU before pattern validation."""
         if isinstance(value, str):
             return value.strip().upper()

@@ -28,6 +28,7 @@ try:
     from services.auth_service import mask_phone
 except ImportError:
     from auth import CurrentUserDep, mask_phone
+
     from core.templates import templates
     from integrations.directus_client import (
         FALLBACK_CATEGORIES,

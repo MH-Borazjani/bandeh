@@ -30,9 +30,9 @@ server-to-server verification — never from the callback parameters.
 from __future__ import annotations
 
 import datetime
-import enum
-from typing import TYPE_CHECKING
 import uuid
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from db.models.order import Order
 
 
-class PaymentStatus(str, enum.Enum):
+class PaymentStatus(StrEnum):
     """Where one payment try is."""
 
     CREATED = "created"
@@ -122,7 +122,10 @@ class PaymentAttempt(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<PaymentAttempt order={self.order_id} status={self.status} track_id={self.track_id}>"
+        return (
+            f"<PaymentAttempt order={self.order_id} "
+            f"status={self.status} track_id={self.track_id}>"
+        )
 
 
 __all__ = ["PaymentAttempt", "PaymentStatus"]

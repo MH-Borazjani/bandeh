@@ -20,6 +20,7 @@ Provides helpers to read, create, and delete the guest cart cookie.
 from __future__ import annotations
 
 import uuid
+from typing import TypeGuard
 
 from fastapi import Response
 
@@ -28,7 +29,7 @@ CART_COOKIE_NAME = "bandeh_cart_id"
 CART_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 
-def _is_valid_cart_id(value: str | None) -> bool:
+def _is_valid_cart_id(value: str | None) -> TypeGuard[str]:
     """Validate whether the value is a valid UUID string."""
     if not value:
         return False
@@ -44,7 +45,7 @@ def ensure_cart_id(
 ) -> str:
     """Return the visitor's cart id, creating a new cookie if missing or invalid."""
     if _is_valid_cart_id(cookie_value):
-        return cookie_value  # type: ignore[return-value]
+        return cookie_value
 
     cart_id = str(uuid.uuid4())
     response.set_cookie(

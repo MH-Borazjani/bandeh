@@ -30,9 +30,9 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
-from pathlib import Path
 import sys
 import uuid
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
@@ -59,8 +59,9 @@ from services.session_service import create_database_session
 def cookie_value(response: Response, name: str) -> str:
     """Pull one cookie's value out of a response's Set-Cookie headers."""
     getlist = getattr(response.headers, "getlist", None) or getattr(
-        response.headers, "get_list"
+        response.headers, "get_list", None
     )
+    assert callable(getlist)
     for header in getlist("set-cookie"):
         if header.startswith(name + "="):
             return header.split(";", 1)[0].split("=", 1)[1]
@@ -170,9 +171,10 @@ async def main_async() -> None:
         if cookie:
             client.cookies.set(SESSION_COOKIE_NAME, cookie)
 
-    async def product_state(product_id):
+    async def product_state(product_id: uuid.UUID) -> tuple[int, int]:
         async with Session() as s:
             p = await s.get(Product, product_id)
+            assert p is not None
             return p.stock, p.reserved
 
     async def order_state(order_id):
@@ -331,6 +333,7 @@ async def main_async() -> None:
     order6 = make_order(customer_cookie, fridge.id, 2)  # stock 3, ok at creation
     async with Session() as s:
         p = await s.get(Product, fridge.id)
+        assert p is not None
         p.stock = 1  # stock drops before payment starts
         await s.commit()
     resp = start_order(customer_cookie, order6)
@@ -341,6 +344,7 @@ async def main_async() -> None:
     assert attempts == []
     async with Session() as s:  # restore stock for the tests below
         p = await s.get(Product, fridge.id)
+        assert p is not None
         p.stock = 3
         await s.commit()
     print("   [OK] insufficient stock at start: 409, nothing reserved")
@@ -361,7 +365,7 @@ async def main_async() -> None:
     order8 = make_order(customer_cookie, fridge.id, 1)
     state["verify_amount"] = 100_000
     resp = start_order(customer_cookie, order8)
-    track8 = resp.json()["track_id"]
+    assert isinstance(resp.json()["track_id"], int)
     order9 = make_order(customer_cookie, tv.id, 1)
     state["verify_amount"] = 500_000
     start_order(customer_cookie, order9)

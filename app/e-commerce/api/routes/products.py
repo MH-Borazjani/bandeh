@@ -24,25 +24,28 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Annotated
-import uuid
 
-from core.security import RequireStaffDep
-from db.session import DbSessionDep
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
     File,
     HTTPException,
-    Path as FastAPIPath,
     Query,
     Response,
     UploadFile,
 )
+from fastapi import (
+    Path as FastAPIPath,
+)
 from fastapi.responses import FileResponse
-from schema.product_api import ProductCreate, ProductRead
+
+from core.security import RequireStaffDep
+from db.session import DbSessionDep
+from schema.product_api import ProductCreate, ProductPhotoRead, ProductRead
 from services import product_service, search_service
 from services.image_tasks import schedule_image_variants
 from services.upload_service import UploadError, get_upload_dir, save_upload
@@ -118,7 +121,7 @@ async def upload_product_photo(
     staff: RequireStaffDep,
     db: DbSessionDep,
     upload_dir: UploadDirDep,
-) -> dict[str, str]:
+) -> ProductPhotoRead:
     """Upload a product photo (staff/admin). Returns the public image URL.
 
     Validation (type, content, size) lives in the upload service. The
@@ -134,7 +137,7 @@ async def upload_product_photo(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     await product_service.set_product_image(db, product, filename)
     background_tasks.add_task(schedule_image_variants, filename, upload_dir)
-    return {"image_url": f"/uploads/{filename}", "filename": filename}
+    return ProductPhotoRead(image_url=f"/uploads/{filename}", filename=filename)
 
 
 @router.get("/uploads/{filename}")

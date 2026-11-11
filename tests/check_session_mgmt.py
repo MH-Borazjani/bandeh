@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-from pathlib import Path
 import sys
+import uuid
+from pathlib import Path
+from typing import Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
@@ -41,7 +43,6 @@ from core.security import (
     REFRESH_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     create_session,
-    set_refresh_cookie,
 )
 from db.base import Base
 from db.models.refresh_token import RefreshToken
@@ -53,15 +54,21 @@ from services.refresh_service import issue_refresh_token
 from services.session_service import create_database_session
 
 
-def _set_cookie_headers(response) -> list[str]:
+class _HasHeaders(Protocol):
+    @property
+    def headers(self) -> object: ...
+
+
+def _set_cookie_headers(response: _HasHeaders) -> list[str]:
     """All Set-Cookie headers. Starlette uses getlist, httpx uses get_list."""
     getlist = getattr(response.headers, "getlist", None) or getattr(
-        response.headers, "get_list"
+        response.headers, "get_list", None
     )
-    return getlist("set-cookie")
+    assert callable(getlist)
+    return list(getlist("set-cookie"))
 
 
-def cookie_value(response: Response, name: str) -> str:
+def cookie_value(response: _HasHeaders, name: str) -> str:
     """Pull one cookie's value out of a response's Set-Cookie headers."""
     for header in _set_cookie_headers(response):
         if header.startswith(name + "="):
@@ -69,7 +76,7 @@ def cookie_value(response: Response, name: str) -> str:
     raise AssertionError(f"cookie {name} was not set")
 
 
-def cookie_is_cleared(response: Response, name: str) -> bool:
+def cookie_is_cleared(response: _HasHeaders, name: str) -> bool:
     """True when a response tells the browser to delete ``name``."""
     for header in _set_cookie_headers(response):
         if header.startswith(name + "=") and "Max-Age=0" in header:
@@ -128,7 +135,7 @@ async def main_async() -> None:
         if refresh_cookie:
             client.cookies.set(REFRESH_COOKIE_NAME, refresh_cookie)
 
-    async def live_refresh_count(user_id) -> int:
+    async def live_refresh_count(user_id: uuid.UUID) -> int:
         async with Session() as s:
             result = await s.execute(
                 select(RefreshToken).where(
@@ -138,7 +145,7 @@ async def main_async() -> None:
             )
             return len(result.scalars().all())
 
-    async def live_session_count(user_id) -> int:
+    async def live_session_count(user_id: uuid.UUID) -> int:
         async with Session() as s:
             result = await s.execute(
                 select(UserSession).where(
@@ -177,6 +184,7 @@ async def main_async() -> None:
     resp = client.post("/auth/refresh")
     assert resp.status_code == 200, resp.status_code
     third_refresh = cookie_value(resp, REFRESH_COOKIE_NAME)
+    assert third_refresh != second_refresh
     assert await live_refresh_count(customer.id) == 1
     print("   [OK] refresh rotates: one live token at a time")
 
@@ -192,7 +200,9 @@ async def main_async() -> None:
     # 4. Expired token: 401, but the family is NOT nuked -------------------
     async with Session() as s:
         expired_token, record = await issue_refresh_token(s, customer)
-        record.expires_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)
+        record.expires_at = datetime.datetime.now(datetime.UTC) - datetime.timedelta(
+            seconds=1
+        )
         await s.commit()
     good_token = await mint_refresh(customer)
     before = await live_refresh_count(customer.id)

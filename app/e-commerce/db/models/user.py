@@ -17,9 +17,9 @@
 from __future__ import annotations
 
 import datetime
-import enum
-from typing import TYPE_CHECKING
 import uuid
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from db.models.session import UserSession
 
 
-class UserRole(str, enum.Enum):
+class UserRole(StrEnum):
     """Role-based authorization levels."""
 
     CUSTOMER = "customer"
@@ -55,7 +55,12 @@ class User(Base, TimestampMixin):
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role_enum", native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        Enum(
+            UserRole,
+            name="user_role_enum",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=UserRole.CUSTOMER,
         nullable=False,
     )

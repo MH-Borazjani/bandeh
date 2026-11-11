@@ -21,10 +21,10 @@ Allows running every check script and unit/integration test via:
 
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parent

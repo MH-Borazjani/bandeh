@@ -20,8 +20,8 @@ No server, no database: pure functions, fixed instants.
 """
 
 import datetime
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 

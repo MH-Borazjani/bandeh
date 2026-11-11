@@ -26,9 +26,9 @@ background resize job being scheduled.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
 import tempfile
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
@@ -54,8 +54,9 @@ TINY_JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 100
 def cookie_value(response: Response, name: str) -> str:
     """Pull one cookie's value out of a response's Set-Cookie headers."""
     getlist = getattr(response.headers, "getlist", None) or getattr(
-        response.headers, "get_list"
+        response.headers, "get_list", None
     )
+    assert callable(getlist)
     for header in getlist("set-cookie"):
         if header.startswith(name + "="):
             return header.split(";", 1)[0].split("=", 1)[1]

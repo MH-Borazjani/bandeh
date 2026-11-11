@@ -17,6 +17,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from api.routes import (
     admin_router,
@@ -27,9 +32,13 @@ from api.routes import (
     products_router,
 )
 from core.middleware import register_middleware
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from integrations.http_client import create_http_client
+
+
+class HealthCheckRead(BaseModel):
+    """Health check response payload."""
+
+    status: Literal["ok"] = "ok"
 
 
 @asynccontextmanager
@@ -65,6 +74,6 @@ app.include_router(payments_router)
 
 
 @app.get("/health", tags=["system"])
-def health_check() -> dict[str, str]:
+def health_check() -> HealthCheckRead:
     """Health check endpoint for Docker and monitoring."""
-    return {"status": "ok"}
+    return HealthCheckRead()

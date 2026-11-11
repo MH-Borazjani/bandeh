@@ -33,7 +33,7 @@ search is a full-table scan handed to strangers.
 
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.product import Product
@@ -88,7 +88,9 @@ async def search_products_ilike(
     return list(result.scalars().all())
 
 
-def build_fulltext_statement(query: str, limit: int = DEFAULT_LIMIT):
+def build_fulltext_statement(
+    query: str, limit: int = DEFAULT_LIMIT
+) -> Select[Product, float]:
     """Postgres full-text statement (built, not run — see below).
 
     Separated from execution so tests can compile it against the
