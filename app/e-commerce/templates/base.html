@@ -15,10 +15,29 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- HTMX: form posts without page reloads, zero hand-written JS. -->
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+    /* Warm theme: still dark, just warmer. */
+    [data-theme="warm"] body { background-color: #1c1917; }
+    [data-theme="warm"] .bg-neutral-900 { background-color: #1c1917; }
+    [data-theme="warm"] .bg-neutral-800 { background-color: #292524; }
+    [data-theme="warm"] .bg-neutral-700 { background-color: #44403c; }
+    [data-theme="warm"] .border-neutral-700 { border-color: #57534e; }
+    [data-theme="warm"] .border-neutral-800 { border-color: #44403c; }
+  </style>
+  <script>
+    /* Apply the saved theme before first paint (no flash of the wrong dark). */
+    try {
+      var __bandehTheme = window.localStorage.getItem("bandeh-theme");
+      if (__bandehTheme === "warm" || __bandehTheme === "dark") {
+        document.documentElement.setAttribute("data-theme", __bandehTheme);
+      }
+    } catch (e) { /* storage unavailable: stay dark */ }
+  </script>
 </head>
 <body class="bg-neutral-900 text-neutral-100 min-h-screen">
   <main class="max-w-md mx-auto px-4 py-10">
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/js/shop.js" defer></script>
 </body>
 </html>

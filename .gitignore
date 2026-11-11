@@ -14,3 +14,6 @@ wheels/
 data/
 volumes/
 
+# User-uploaded files (product photos live here, never committed)
+uploads/
+

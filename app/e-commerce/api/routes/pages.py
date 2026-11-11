@@ -1,3 +1,17 @@
+# Copyright (C) 2026 Mohammadhossein Borazjani
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Public web routes for shop storefront."""
 
 from fastapi import APIRouter, Request
@@ -6,43 +20,57 @@ from fastapi.responses import HTMLResponse
 try:
     from core.security import CurrentUserDep
     from core.templates import templates
+    from integrations.directus_client import (
+        FALLBACK_CATEGORIES,
+        FALLBACK_PRODUCTS,
+        DirectusClientDep,
+    )
     from services.auth_service import mask_phone
 except ImportError:
     from auth import CurrentUserDep, mask_phone
     from core.templates import templates
+    from integrations.directus_client import (
+        FALLBACK_CATEGORIES,
+        FALLBACK_PRODUCTS,
+        DirectusClientDep,
+    )
 
 router = APIRouter(tags=["pages"])
 
-CATEGORIES = [
-    {"name": "یخچال و فریزر", "desc": "ساید، دوقلو، معمولی"},
-    {"name": "ماشین لباسشویی", "desc": "۷ تا ۱۰ کیلویی"},
-    {"name": "ماشین ظرفشویی", "desc": "رومیزی و ایستاده"},
-    {"name": "اجاق گاز و فر", "desc": "صفحه‌ای و مبله"},
-    {"name": "جاروبرقی", "desc": "کیسه‌ای و مخزن‌دار"},
-    {"name": "لوازم کوچک", "desc": "آشپزخانه و خانه"},
-]
-
-SAMPLE_PRODUCTS = [
-    {"name": "یخچال فریزر دوقلو", "price": "۴۵٬۰۰۰٬۰۰۰", "tag": "پرفروش"},
-    {"name": "ماشین لباسشویی ۸ کیلویی", "price": "۲۸٬۵۰۰٬۰۰۰", "tag": None},
-    {"name": "جاروبرقی ۲۰۰۰ وات", "price": "۹٬۸۰۰٬۰۰۰", "tag": "تخفیف‌دار"},
-    {"name": "اجاق گاز ۵ شعله", "price": "۱۹٬۰۰۰٬۰۰۰", "tag": None},
-]
+# Hardcoded landing content (used when Directus is down). The single source
+# of truth lives in integrations/directus_client.py; these names stay here
+# so older imports keep working.
+CATEGORIES = FALLBACK_CATEGORIES
+SAMPLE_PRODUCTS = FALLBACK_PRODUCTS
 
 
 @router.get("/", response_class=HTMLResponse)
-def landing(request: Request, phone: CurrentUserDep) -> HTMLResponse:
-    """Render shop landing page with dynamic login/account header."""
-    return templates.TemplateResponse(
+async def landing(
+    request: Request,
+    phone: CurrentUserDep,
+    directus: DirectusClientDep,
+) -> HTMLResponse:
+    """Render shop landing page with dynamic login/account header.
+
+    Content comes from Directus (cached 60s); when Directus is down, the
+    client returns the hardcoded fallback, so the page renders exactly the
+    same. ``private`` Cache-Control: the page header depends on login
+    state, so only the visitor's own browser may cache it, never a shared
+    proxy.
+    """
+    content = await directus.get_landing_content()
+    response = templates.TemplateResponse(
         request=request,
         name="landing.html",
         context={
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
-            "categories": CATEGORIES,
-            "products": SAMPLE_PRODUCTS,
+            "categories": content["categories"],
+            "products": content["products"],
         },
     )
+    response.headers["Cache-Control"] = "private, max-age=60"
+    return response
 
 
 __all__ = ["CATEGORIES", "SAMPLE_PRODUCTS", "router"]

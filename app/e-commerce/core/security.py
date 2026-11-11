@@ -1,3 +1,17 @@
+# Copyright (C) 2026 Mohammadhossein Borazjani
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Security utilities: signed session cookies, DB session validation, and RBAC authorization.
 
 Session cookies are cryptographically signed using itsdangerous (HMAC-SHA256).
@@ -114,6 +128,37 @@ def delete_session(response: Response) -> None:
     response.delete_cookie(key=SESSION_COOKIE_NAME)
 
 
+# --- Refresh-token cookie -------------------------------------------------
+# The refresh token lives in its own HttpOnly cookie, sent only to /auth/*
+# endpoints (path restriction) so the shop pages never carry it. Same
+# lifetime as the session: 30 days. Rotation, not expiry, bounds theft.
+REFRESH_COOKIE_NAME = "bandeh_refresh"
+REFRESH_MAX_AGE = 30 * 24 * 3600  # 30 days, in seconds
+
+
+def set_refresh_cookie(response: Response, token: str) -> None:
+    """Store a refresh token in an HttpOnly cookie (path /auth only)."""
+    response.set_cookie(
+        REFRESH_COOKIE_NAME,
+        token,
+        max_age=REFRESH_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/auth",
+    )
+
+
+def read_refresh_token(request: Request) -> str | None:
+    """Return the refresh token from the request cookie, or None."""
+    return request.cookies.get(REFRESH_COOKIE_NAME)
+
+
+def delete_refresh_cookie(response: Response) -> None:
+    """Remove the refresh cookie from the browser (logout)."""
+    response.delete_cookie(REFRESH_COOKIE_NAME, path="/auth")
+
+
 def get_current_user(request: Request) -> str | None:
     """Fast dependency: returns the verified phone number from signed cookie or None."""
     return read_session(request)
@@ -138,7 +183,16 @@ async def get_current_db_user(
     request: Request,
     db: DbSessionDep,
 ) -> User | None:
-    """Full DB-backed dependency: verifies session token against PostgreSQL."""
+    """Full DB-backed dependency: verifies session token against PostgreSQL.
+
+    Two paths, and the distinction matters for logout:
+    - The cookie carries a session token: the token IS the credential.
+      If it is revoked or expired, the answer is None — no fallback.
+      Otherwise logout-everywhere could never log anyone out, because
+      the phone inside the same cookie would re-identify them.
+    - The cookie carries no token (login while the DB was down): fall
+      back to the phone lookup, so that login still works.
+    """
     session_token = read_session_token(request)
     if session_token:
         from services.session_service import get_valid_session
@@ -146,6 +200,7 @@ async def get_current_db_user(
         session_record = await get_valid_session(db, session_token)
         if session_record and session_record.user:
             return session_record.user
+        return None
 
     # Fallback to phone lookup in DB if no session token stored yet
     phone = read_session(request)
@@ -197,6 +252,8 @@ RequireStaffDep = Annotated[User, Depends(require_roles(UserRole.STAFF, UserRole
 
 __all__ = [
     "COOKIE_SECURE",
+    "REFRESH_COOKIE_NAME",
+    "REFRESH_MAX_AGE",
     "SESSION_COOKIE_NAME",
     "SESSION_MAX_AGE",
     "CurrentDbUserDep",
@@ -207,13 +264,16 @@ __all__ = [
     "RequireStaffDep",
     "RequireUserDep",
     "create_session",
+    "delete_refresh_cookie",
     "delete_session",
     "get_current_db_user",
     "get_current_user",
+    "read_refresh_token",
     "read_session",
     "read_session_payload",
     "read_session_token",
     "require_authenticated_user",
     "require_roles",
     "require_user",
+    "set_refresh_cookie",
 ]

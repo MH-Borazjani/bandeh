@@ -1,3 +1,17 @@
+# Copyright (C) 2026 Mohammadhossein Borazjani
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Server-side user session model."""
 
 from __future__ import annotations
@@ -65,7 +79,11 @@ class UserSession(Base, TimestampMixin):
     def is_valid(self) -> bool:
         """Check if session is neither revoked nor expired."""
         now = datetime.datetime.now(datetime.timezone.utc)
-        return not self.is_revoked and self.expires_at > now
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            # SQLite stores no timezone; values were written as UTC.
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        return not self.is_revoked and expires_at > now
 
     def __repr__(self) -> str:
         return f"<UserSession user_id={self.user_id} revoked={self.is_revoked}>"

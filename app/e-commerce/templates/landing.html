@@ -10,13 +10,23 @@
 <!-- Header -->
 <header class="flex items-center justify-between mb-8">
   <a href="/" class="text-xl font-bold">بنده</a>
-  {% if phone %}
-  <a href="/auth/account"
-     class="bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-sm">حساب من</a>
-  {% else %}
-  <a href="/auth/login"
-     class="bg-teal-600 text-white font-bold rounded-lg px-4 py-2 text-sm">ورود</a>
-  {% endif %}
+  <div class="flex items-center gap-2">
+    <!-- Theme toggle (dark <-> warm). Choice lives in localStorage. -->
+    <button id="theme-toggle"
+            class="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm">گرم</button>
+    <!-- Cart badge: counts the localStorage cart DRAFT (not the real cart). -->
+    <a href="#products"
+       class="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm">سبد
+      <span id="cart-count" style="display:none"
+            class="bg-teal-600 text-white rounded-full px-2 py-0.5 text-xs"></span></a>
+    {% if phone %}
+    <a href="/auth/account"
+       class="bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-sm">حساب من</a>
+    {% else %}
+    <a href="/auth/login"
+       class="bg-teal-600 text-white font-bold rounded-lg px-4 py-2 text-sm">ورود</a>
+    {% endif %}
+  </div>
 </header>
 
 <!-- Hero -->
@@ -57,8 +67,14 @@
       </div>
       <div class="flex items-center justify-between">
         <span class="text-teal-400 font-bold">{{ p.price }} تومان</span>
-        <!-- TODO(cart topic): wire this to the cart endpoints -->
-        <button class="bg-neutral-700 rounded-lg px-4 py-2 text-sm">افزودن به سبد</button>
+        <!-- Draft only: tapping this stores the item in the localStorage
+             cart draft (see static/js/shop.js). The real cart lives on
+             the server (cart topic). Sample products have no UUID yet,
+             so the draft id is the sample index for now. -->
+        <button class="bg-neutral-700 rounded-lg px-4 py-2 text-sm"
+                data-add-to-cart
+                data-product-id="sample-{{ loop.index }}"
+                data-product-name="{{ p.name }}">افزودن به سبد</button>
       </div>
     </div>
     {% endfor %}
