@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}تسویه حساب | بنده{% endblock %}
+
+{% block content %}
+<!-- Checkout Page (Bandeh Shop - Stage 2)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<!-- Back to cart navigation -->
+<div class="mb-4">
+  <a href="/cart"
+     class="inline-flex items-center gap-1.5 text-sm theme-text-muted hover:theme-text-main font-medium min-h-[44px] py-2">
+    <span class="text-base leading-none">→</span>
+    <span>بازگشت به سبد خرید</span>
+  </a>
+</div>
+
+<h1 class="text-2xl font-extrabold theme-text-main mb-2">اطلاعات ارسال و پرداخت</h1>
+<p class="text-xs theme-text-muted mb-5 leading-relaxed">
+  مشخصات تحویل‌گیرنده را با دقت وارد کنید تا سفارش مستقیماً به نشانی شما ارسال شود.
+</p>
+
+<!-- Order summary brief -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 mb-4">
+  <div class="flex items-center justify-between text-sm mb-2">
+    <span class="font-medium theme-text-muted">تعداد اقلام سفارش:</span>
+    <span id="checkout-item-count" class="font-bold theme-text-main">۰ کالا</span>
+  </div>
+  <div class="flex items-baseline justify-between pt-2 border-t theme-border">
+    <span class="text-sm font-semibold theme-text-main">مبلغ قابل پرداخت:</span>
+    <div class="flex items-baseline gap-1">
+      <span id="checkout-total-price" class="theme-accent font-black text-xl sm:text-2xl">۰</span>
+      <span class="text-xs theme-text-muted">تومان</span>
+    </div>
+  </div>
+</div>
+
+<!-- Alert / Error message container -->
+<div id="checkout-error" class="hidden mb-4 p-3.5 rounded-xl theme-badge-danger text-xs font-semibold leading-relaxed border border-red-500/20">
+</div>
+
+<!-- Checkout Form -->
+<form id="checkout-form" class="space-y-4">
+  <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 space-y-4">
+    <!-- Recipient Name -->
+    <div>
+      <label for="recipient-name" class="block text-xs font-bold theme-text-main mb-1.5">
+        نام و نام خانوادگی تحویل‌گیرنده <span class="theme-accent">*</span>
+      </label>
+      <input type="text"
+             id="recipient-name"
+             name="recipient_name"
+             required
+             placeholder="مثلاً: علیرضا محمدی"
+             class="w-full theme-input rounded-xl px-3.5 py-3 text-sm min-h-[44px] transition-none"
+             autocomplete="name">
+    </div>
+
+    <!-- Recipient Phone -->
+    <div>
+      <label for="recipient-phone" class="block text-xs font-bold theme-text-main mb-1.5">
+        شماره موبایل تحویل‌گیرنده <span class="theme-accent">*</span>
+      </label>
+      <input type="tel"
+             id="recipient-phone"
+             name="recipient_phone"
+             required
+             pattern="09[0-9]{9}"
+             placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+             value="{% if phone %}{{ phone }}{% endif %}"
+             class="w-full theme-input rounded-xl px-3.5 py-3 text-sm min-h-[44px] text-right"
+             autocomplete="tel">
+      <p class="text-[11px] theme-text-muted mt-1">هماهنگی ارسال از طریق این شماره انجام خواهد شد.</p>
+    </div>
+
+    <!-- Delivery Address -->
+    <div>
+      <label for="delivery-address" class="block text-xs font-bold theme-text-main mb-1.5">
+        آدرس دقیق پستی <span class="theme-accent">*</span>
+      </label>
+      <textarea id="delivery-address"
+                name="delivery_address"
+                rows="3"
+                required
+                placeholder="استان، شهر، خیابان اصلی، کوچه، پلاک، طبقه و واحد..."
+                class="w-full theme-input rounded-xl px-3.5 py-3 text-sm min-h-[80px]"
+                autocomplete="street-address"></textarea>
+    </div>
+  </div>
+
+  <!-- Gateway selection notice -->
+  <div class="theme-bg-card theme-border border rounded-2xl p-4 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl theme-bg-card-subtle flex items-center justify-center theme-accent font-bold text-sm">
+        💳
+      </div>
+      <div>
+        <div class="text-xs font-bold theme-text-main">درگاه پرداخت الکترونیک زیبال</div>
+        <div class="text-[10px] theme-text-muted">پرداخت امن با کلیه کارت‌های عضو شتاب</div>
+      </div>
+    </div>
+    <span class="theme-badge-success text-[10px] font-semibold px-2 py-0.5 rounded-full">فعال</span>
+  </div>
+
+  <!-- Submit Button -->
+  <button type="submit"
+          id="btn-submit-order"
+          class="w-full theme-btn-accent font-bold py-3.5 px-6 rounded-xl text-base flex items-center justify-center gap-2 min-h-[48px] select-none">
+    <span id="btn-text">پرداخت و ثبت نهایی سفارش</span>
+    <span class="text-base leading-none">🔒</span>
+  </button>
+</form>
+
+<script>
+(function() {
+  var SAMPLE_PRICES = {
+    "sample-1": 45000000,
+    "sample-2": 28500000,
+    "sample-3": 9800000,
+    "sample-4": 19000000
+  };
+
+  function formatPrice(num) {
+    if (typeof num !== "number" || isNaN(num)) return "۰";
+    return num.toLocaleString("fa-IR");
+  }
+
+  function initSummary() {
+    var draft = window.BandehStore ? window.BandehStore.getCartDraft() : [];
+    var countEl = document.getElementById("checkout-item-count");
+    var totalEl = document.getElementById("checkout-total-price");
+    var errorBox = document.getElementById("checkout-error");
+
+    if (!draft || draft.length === 0) {
+      if (errorBox) {
+        errorBox.textContent = "سبد خرید شما خالی است. لطفاً ابتدا کالایی به سبد اضافه کنید.";
+        errorBox.classList.remove("hidden");
+      }
+      var submitBtn = document.getElementById("btn-submit-order");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+      return;
+    }
+
+    var totalQty = 0;
+    draft.forEach(function(i) { totalQty += (i.qty || 1); });
+    if (countEl) countEl.textContent = totalQty + " کالا";
+
+    var promises = draft.map(function(item) {
+      if (SAMPLE_PRICES[item.id]) {
+        return Promise.resolve(SAMPLE_PRICES[item.id]);
+      }
+      return fetch("/products/" + item.id, { credentials: "same-origin" })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(p) { return p ? (p.price_toman || 0) : 0; })
+        .catch(function() { return 0; });
+    });
+
+    Promise.all(promises).then(function(prices) {
+      var grandTotal = 0;
+      draft.forEach(function(item, idx) {
+        grandTotal += (prices[idx] || 0) * (item.qty || 1);
+      });
+      if (totalEl) totalEl.textContent = formatPrice(grandTotal);
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    initSummary();
+
+    var form = document.getElementById("checkout-form");
+    if (!form) return;
+
+    form.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      var errorBox = document.getElementById("checkout-error");
+      var btn = document.getElementById("btn-submit-order");
+      var btnText = document.getElementById("btn-text");
+
+      errorBox.classList.add("hidden");
+      errorBox.textContent = "";
+
+      var draft = window.BandehStore ? window.BandehStore.getCartDraft() : [];
+      if (!draft || draft.length === 0) {
+        errorBox.textContent = "سبد خرید شما خالی است.";
+        errorBox.classList.remove("hidden");
+        return;
+      }
+
+      var name = document.getElementById("recipient-name").value.trim();
+      var phone = document.getElementById("recipient-phone").value.trim();
+      var address = document.getElementById("delivery-address").value.trim();
+
+      if (!name || !phone || !address) {
+        errorBox.textContent = "لطفاً تمامی فیلدهای الزامی را تکمیل نمایید.";
+        errorBox.classList.remove("hidden");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.classList.add("opacity-75");
+      btnText.textContent = "در حال ایجاد سفارش و اتصال به زیبال...";
+
+      var items = draft.map(function(item) {
+        return {
+          product_id: item.id,
+          quantity: item.qty || 1
+        };
+      });
+
+      try {
+        // Step 1: Create order with existing orders API
+        var orderResp = await fetch("/orders", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            items: items,
+            recipient_name: name,
+            recipient_phone: phone,
+            delivery_address: address
+          })
+        });
+
+        if (orderResp.status === 401 || orderResp.status === 303) {
+          // Unauthenticated: redirect to login
+          window.location.href = "/auth/login";
+          return;
+        }
+
+        if (!orderResp.ok) {
+          var errData = await orderResp.json().catch(function() { return {}; });
+          throw new Error(errData.detail || "خطا در ثبت سفارش (کد: " + orderResp.status + ")");
+        }
+
+        var order = await orderResp.json();
+
+        // Step 2: Start Zibal payment with existing payments API
+        var payResp = await fetch("/payments/" + order.id + "/start", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        });
+
+        if (!payResp.ok) {
+          var payErr = await payResp.json().catch(function() { return {}; });
+          throw new Error(payErr.detail || "خطا در اتصال به درگاه پرداخت");
+        }
+
+        var payData = await payResp.json();
+
+        // Step 3: Clear cart draft
+        if (window.BandehStore && window.BandehStore.clearCartDraft) {
+          window.BandehStore.clearCartDraft();
+        }
+
+        // Step 4: Redirect buyer to Zibal
+        if (payData.payment_url) {
+          window.location.href = payData.payment_url;
+        } else {
+          throw new Error("آدرس درگاه پرداخت دریافت نشد.");
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.classList.remove("opacity-75");
+        btnText.textContent = "پرداخت و ثبت نهایی سفارش";
+        errorBox.textContent = err.message || "خطایی در پردازش رخ داد. لطفاً مجدداً امتحان کنید.";
+        errorBox.classList.remove("hidden");
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

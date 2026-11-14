@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}
+{% if is_success %}پرداخت موفق | بنده{% else %}نتیجه پرداخت | بنده{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Payment Result Page (Bandeh Shop - Stage 2)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<div class="theme-bg-card theme-border border rounded-2xl p-5 sm:p-6 text-center mb-4">
+  {% if is_success %}
+  <!-- Success Icon -->
+  <div class="w-16 h-16 rounded-full theme-badge-success mx-auto flex items-center justify-center mb-3">
+    <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+    </svg>
+  </div>
+
+  <!-- Success Badge -->
+  <div class="inline-flex items-center gap-1.5 theme-badge-success px-3 py-1 rounded-full text-xs font-bold mb-2">
+    <span>✓</span>
+    <span>پرداخت با موفقیت انجام شد</span>
+  </div>
+
+  <!-- Title -->
+  <h1 class="text-xl sm:text-2xl font-black theme-text-main mb-2">
+    سفارش شما ثبت شد
+  </h1>
+  <p class="text-xs theme-text-muted mb-5 leading-relaxed">
+    با تشکر از خرید شما از فروشگاه بنده. فرایند پردازش و ارسال سفارش آغاز گردید.
+  </p>
+
+  <!-- Details Card -->
+  <div class="theme-bg-card-subtle theme-border border rounded-xl p-3.5 text-right space-y-2 mb-5 text-xs">
+    {% if order_id %}
+    <div class="flex items-center justify-between">
+      <span class="theme-text-muted">شماره سفارش:</span>
+      <span class="font-mono font-bold theme-text-main text-[11px] sm:text-xs" dir="ltr">{{ order_id }}</span>
+    </div>
+    {% endif %}
+
+    {% if ref_number %}
+    <div class="flex items-center justify-between">
+      <span class="theme-text-muted">شماره پیگیری مرجع (بانک):</span>
+      <span class="font-mono font-bold theme-accent" dir="ltr">{{ ref_number }}</span>
+    </div>
+    {% endif %}
+
+    {% if track_id %}
+    <div class="flex items-center justify-between">
+      <span class="theme-text-muted">کد پیگیری درگاه زیبال:</span>
+      <span class="font-mono font-semibold theme-text-main" dir="ltr">{{ track_id }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <!-- Failure Icon -->
+  <div class="w-16 h-16 rounded-full theme-badge-danger mx-auto flex items-center justify-center mb-3">
+    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+    </svg>
+  </div>
+
+  <!-- Failure Badge -->
+  <div class="inline-flex items-center gap-1.5 theme-badge-danger px-3 py-1 rounded-full text-xs font-bold mb-2">
+    <span>✕</span>
+    <span>پرداخت ناموفق</span>
+  </div>
+
+  <!-- Title -->
+  <h1 class="text-xl sm:text-2xl font-black theme-text-main mb-2">
+    پرداخت سفارش تکمیل نشد
+  </h1>
+  <p class="text-xs theme-text-muted mb-5 leading-relaxed">
+    {{ error_message or "تراکنش پرداخت توسط کاربر لغو شد یا درگاه بانکی تراکنش را تایید نکرد." }}
+  </p>
+
+  <!-- Failure Details Card -->
+  <div class="theme-bg-card-subtle theme-border border rounded-xl p-3.5 text-right space-y-2 mb-5 text-xs">
+    {% if order_id %}
+    <div class="flex items-center justify-between">
+      <span class="theme-text-muted">شماره سفارش:</span>
+      <span class="font-mono font-bold theme-text-main text-[11px] sm:text-xs" dir="ltr">{{ order_id }}</span>
+    </div>
+    {% endif %}
+
+    {% if track_id %}
+    <div class="flex items-center justify-between">
+      <span class="theme-text-muted">کد پیگیری درگاه زیبال:</span>
+      <span class="font-mono font-semibold theme-text-main" dir="ltr">{{ track_id }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Next Steps Card -->
+  <div class="theme-bg-card-subtle theme-border border rounded-xl p-4 text-right mb-5">
+    <h2 class="text-xs font-bold theme-text-main mb-2">
+      {% if is_success %}مراحل بعدی سفارش شما:{% else %}راهنمای مراحل بعدی:{% endif %}
+    </h2>
+    <ul class="text-xs theme-text-muted space-y-1.5 leading-relaxed list-disc list-inside">
+      {% if is_success %}
+      <li>تایید اطلاعات و تخصیص قطعی کالا در انبار مرکزی بنده</li>
+      <li>تماس کارشناس ارسال با شما جهت هماهنگی بازه زمانی تحویل</li>
+      <li>ارسال مستقیم کالا با بسته‌بندی ایمن و ضمانت‌نامه معتبر</li>
+      {% else %}
+      <li>چنانچه مبلغی از حساب شما کسر شده، حداکثر تا ۷۲ ساعت توسط بانک عودت می‌گردد.</li>
+      <li>می‌توانید مجدداً وارد فرایند تسویه حساب شده و پرداخت را انجام دهید.</li>
+      <li>کالاهای سفارش تا ۱۵ دقیقه در وضعیت رزرو برای شما باقی می‌مانند.</li>
+      {% endif %}
+    </ul>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="space-y-2.5">
+    {% if is_success %}
+    <a href="/"
+       class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-1.5 min-h-[48px]">
+      <span>بازگشت به فروشگاه</span>
+    </a>
+    <a href="/auth/account"
+       class="w-full theme-btn-secondary font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 min-h-[44px]">
+      <span>مشاهده سفارش‌ها در حساب کاربری</span>
+    </a>
+    {% else %}
+    <a href="/checkout"
+       class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-1.5 min-h-[48px]">
+      <span>تلاش مجدد برای پرداخت</span>
+    </a>
+    <a href="/cart"
+       class="w-full theme-btn-secondary font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 min-h-[44px]">
+      <span>بازگشت به سبد خرید</span>
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

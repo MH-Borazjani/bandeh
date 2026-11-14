@@ -88,6 +88,20 @@ class Order(Base, TimestampMixin):
         default=0,
     )
 
+    # Delivery address details for the order
+    recipient_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    recipient_phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    delivery_address: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     user: Mapped[User] = relationship(
         "User",
         lazy="joined",

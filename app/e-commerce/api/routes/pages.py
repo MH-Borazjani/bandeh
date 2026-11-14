@@ -74,5 +74,41 @@ async def landing(
     return response
 
 
-__all__ = ["CATEGORIES", "SAMPLE_PRODUCTS", "router"]
+@router.get("/cart", response_class=HTMLResponse)
+async def cart_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render the shopping cart page with draft items from localStorage."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="cart.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "private, no-cache"
+    return response
+
+
+@router.get("/checkout", response_class=HTMLResponse)
+async def checkout_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render the checkout page with recipient address form."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="checkout.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "private, no-cache"
+    return response
+
+
+__all__ = ["CATEGORIES", "SAMPLE_PRODUCTS", "cart_page", "checkout_page", "landing", "router"]
 

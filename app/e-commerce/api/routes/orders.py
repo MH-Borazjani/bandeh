@@ -42,10 +42,27 @@ async def create_order_endpoint(
 ) -> OrderRead:
     """Checkout: freeze the cart into an order (prices fixed at this moment)."""
     try:
-        order = await create_order(db, user, data.items)
+        order = await create_order(
+            db,
+            user,
+            data.items,
+            recipient_name=data.recipient_name,
+            recipient_phone=data.recipient_phone,
+            delivery_address=data.delivery_address,
+        )
     except OrderError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
     return OrderRead.model_validate(order)
+
+
+@router.post("/checkout", status_code=201)
+async def checkout_endpoint(
+    data: OrderCreate,
+    user: RequireDbUserDep,
+    db: DbSessionDep,
+) -> OrderRead:
+    """Checkout: create order with delivery address."""
+    return await create_order_endpoint(data, user, db)
 
 
 @router.get("/orders/{order_id}")

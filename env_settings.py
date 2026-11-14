@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     def sync_database_url(self) -> str:
         """Construct a synchronous PostgreSQL URL for Alembic migrations."""
         return (
-            f"postgresql://{self.postgres_user}:"
+            f"postgresql+psycopg2://{self.postgres_user}:"
             f"{self.postgres_password.get_secret_value()}@"
             f"{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )

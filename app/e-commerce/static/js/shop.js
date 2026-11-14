@@ -79,6 +79,23 @@
     updateCartBadge();
   }
 
+  function setCartDraftQty(id, qty) {
+    var newQty = parseInt(qty, 10);
+    if (isNaN(newQty) || newQty <= 0) {
+      return removeFromCartDraft(id);
+    }
+    var draft = getCartDraft();
+    for (var i = 0; i < draft.length; i++) {
+      if (draft[i].id === id) {
+        draft[i].qty = newQty;
+        break;
+      }
+    }
+    saveCartDraft(draft);
+    updateCartBadge();
+    return draft;
+  }
+
   function cartDraftCount() {
     var total = 0;
     getCartDraft().forEach(function (line) {
@@ -205,8 +222,10 @@
     getCartDraft: getCartDraft,
     addToCartDraft: addToCartDraft,
     removeFromCartDraft: removeFromCartDraft,
+    setCartDraftQty: setCartDraftQty,
     clearCartDraft: clearCartDraft,
     cartDraftCount: cartDraftCount,
+    updateCartBadge: updateCartBadge,
     getTheme: getTheme,
     setTheme: setTheme,
     toggleTheme: toggleTheme,

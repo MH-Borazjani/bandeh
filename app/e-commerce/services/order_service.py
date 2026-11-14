@@ -84,6 +84,9 @@ async def create_order(
     db: AsyncSession,
     user: User,
     items: Sequence[OrderItemCreate] | Sequence[OrderItemInput],
+    recipient_name: str | None = None,
+    recipient_phone: str | None = None,
+    delivery_address: str | None = None,
 ) -> Order:
     """Create a frozen order from cart items.
 
@@ -131,6 +134,9 @@ async def create_order(
         status=OrderStatus.CREATED.value,
         total_toman=total_toman,
         total_rial=toman_to_rial(total_toman),
+        recipient_name=recipient_name,
+        recipient_phone=recipient_phone,
+        delivery_address=delivery_address,
     )
     db.add(order)
     await db.flush()

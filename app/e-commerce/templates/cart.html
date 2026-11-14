@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}سبد خرید | بنده{% endblock %}
+
+{% block content %}
+<!-- Cart Page (Bandeh Shop - Stage 2)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<!-- Back to catalog navigation -->
+<div class="mb-4">
+  <a href="/"
+     class="inline-flex items-center gap-1.5 text-sm theme-text-muted hover:theme-text-main font-medium min-h-[44px] py-2">
+    <span class="text-base leading-none">→</span>
+    <span>بازگشت به فروشگاه</span>
+  </a>
+</div>
+
+<!-- Page Title -->
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-extrabold theme-text-main">سبد خرید</h1>
+  <span id="cart-item-count-badge" class="text-xs theme-badge px-2.5 py-1 rounded-lg font-semibold" style="display:none"></span>
+</div>
+
+<!-- Empty Cart State -->
+<div id="cart-empty-state" class="theme-bg-card theme-border border rounded-2xl p-6 text-center" style="display:none">
+  <div class="w-16 h-16 rounded-2xl theme-bg-card-subtle theme-border border mx-auto flex items-center justify-center mb-4">
+    <svg class="w-8 h-8 theme-accent opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+    </svg>
+  </div>
+  <h2 class="text-lg font-bold theme-text-main mb-1.5">سبد خرید شما خالی است</h2>
+  <p class="text-sm theme-text-muted mb-6">هنوز هیچ محصولی به سبد خرید خود اضافه نکرده‌اید.</p>
+  <a href="/"
+     class="inline-flex items-center justify-center theme-btn-accent font-bold rounded-xl py-3 px-6 min-h-[48px] text-sm w-full">
+    مشاهده محصولات فروشگاه
+  </a>
+</div>
+
+<!-- Filled Cart Content -->
+<div id="cart-content" style="display:none" class="space-y-4">
+  <!-- Cart Items List -->
+  <div id="cart-items" class="space-y-3">
+    <!-- Rendered dynamically by JavaScript from localStorage draft -->
+  </div>
+
+  <!-- Cart Summary Card -->
+  <div id="cart-summary" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5">
+    <div class="flex items-baseline justify-between mb-4 pb-3 border-b theme-border">
+      <span class="text-sm font-semibold theme-text-muted">مبلغ کل خرید:</span>
+      <div class="flex items-baseline gap-1.5">
+        <span id="cart-total-price" class="theme-accent font-black text-2xl sm:text-3xl">۰</span>
+        <span class="text-xs theme-text-muted font-medium">تومان</span>
+      </div>
+    </div>
+
+    <!-- Assurance item -->
+    <div class="flex items-center gap-2 mb-4 text-xs theme-text-muted">
+      <span class="theme-accent text-sm">🚚</span>
+      <span>ارسال سریع و ضمانت اصالت کالا توسط بنده</span>
+    </div>
+
+    <!-- Actions -->
+    <div class="space-y-2.5">
+      <a href="/checkout"
+         id="btn-checkout"
+         class="w-full theme-btn-accent font-bold py-3.5 px-6 rounded-xl text-base flex items-center justify-center gap-2 min-h-[48px] text-center">
+        <span>ادامه فرایند خرید و ثبت آدرس</span>
+        <span class="text-lg leading-none">←</span>
+      </a>
+
+      <button type="button"
+              id="btn-clear-cart"
+              class="w-full theme-btn-secondary font-medium py-2.5 px-4 rounded-xl text-xs min-h-[44px] flex items-center justify-center gap-1.5">
+        <span>خالی کردن سبد خرید</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var SAMPLE_PRICES = {
+    "sample-1": 45000000,
+    "sample-2": 28500000,
+    "sample-3": 9800000,
+    "sample-4": 19000000
+  };
+
+  var productCache = {};
+
+  function formatPrice(num) {
+    if (typeof num !== "number" || isNaN(num)) return "۰";
+    return num.toLocaleString("fa-IR");
+  }
+
+  function getProductPrice(id, fallbackName) {
+    if (productCache[id] !== undefined) {
+      return Promise.resolve(productCache[id]);
+    }
+    if (SAMPLE_PRICES[id]) {
+      productCache[id] = { price: SAMPLE_PRICES[id], name: fallbackName };
+      return Promise.resolve(productCache[id]);
+    }
+    return fetch("/products/" + id, {
+      headers: { "Accept": "application/json" }
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error("not found");
+      return res.json();
+    })
+    .then(function(data) {
+      productCache[id] = {
+        price: data.price_toman || 0,
+        name: data.name || fallbackName,
+        stock: data.stock,
+        available: Math.max(0, (data.stock || 0) - (data.reserved || 0))
+      };
+      return productCache[id];
+    })
+    .catch(function() {
+      productCache[id] = { price: 0, name: fallbackName };
+      return productCache[id];
+    });
+  }
+
+  function renderCart() {
+    var draft = window.BandehStore ? window.BandehStore.getCartDraft() : [];
+    var emptyState = document.getElementById("cart-empty-state");
+    var content = document.getElementById("cart-content");
+    var itemsContainer = document.getElementById("cart-items");
+    var badge = document.getElementById("cart-item-count-badge");
+
+    if (!draft || draft.length === 0) {
+      if (emptyState) emptyState.style.display = "";
+      if (content) content.style.display = "none";
+      if (badge) badge.style.display = "none";
+      return;
+    }
+
+    if (emptyState) emptyState.style.display = "none";
+    if (content) content.style.display = "";
+    if (badge) {
+      var totalItems = draft.reduce(function(acc, cur) { return acc + (cur.qty || 0); }, 0);
+      badge.textContent = totalItems + " کالا";
+      badge.style.display = "";
+    }
+
+    var promises = draft.map(function(item) {
+      return getProductPrice(item.id, item.name);
+    });
+
+    Promise.all(promises).then(function(products) {
+      itemsContainer.innerHTML = "";
+      var grandTotal = 0;
+
+      draft.forEach(function(item, idx) {
+        var prod = products[idx] || { price: 0, name: item.name };
+        var linePrice = prod.price * item.qty;
+        grandTotal += linePrice;
+
+        var card = document.createElement("div");
+        card.className = "theme-bg-card theme-border border rounded-2xl p-4";
+
+        var headerRow = document.createElement("div");
+        headerRow.className = "flex items-start justify-between gap-2 mb-3";
+
+        var nameEl = document.createElement("h3");
+        nameEl.className = "font-bold theme-text-main text-base leading-snug";
+        nameEl.textContent = prod.name || item.name;
+        headerRow.appendChild(nameEl);
+
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "min-h-[44px] min-w-[44px] flex items-center justify-center text-xs theme-text-muted hover:text-red-500 font-medium select-none";
+        removeBtn.setAttribute("aria-label", "حذف " + (prod.name || item.name));
+        removeBtn.textContent = "حذف";
+        removeBtn.addEventListener("click", function() {
+          if (window.BandehStore) {
+            window.BandehStore.removeFromCartDraft(item.id);
+            renderCart();
+          }
+        });
+        headerRow.appendChild(removeBtn);
+        card.appendChild(headerRow);
+
+        var bottomRow = document.createElement("div");
+        bottomRow.className = "flex items-center justify-between pt-2 border-t theme-border";
+
+        // Stepper
+        var stepper = document.createElement("div");
+        stepper.className = "flex items-center theme-bg-card-subtle theme-border border rounded-xl p-0.5 gap-1";
+
+        var minusBtn = document.createElement("button");
+        minusBtn.type = "button";
+        minusBtn.className = "min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
+        minusBtn.textContent = "−";
+        minusBtn.setAttribute("aria-label", "کاهش تعداد");
+        minusBtn.addEventListener("click", function() {
+          if (item.qty > 1) {
+            window.BandehStore.setCartDraftQty(item.id, item.qty - 1);
+          } else {
+            window.BandehStore.removeFromCartDraft(item.id);
+          }
+          renderCart();
+        });
+
+        var qtyInput = document.createElement("span");
+        qtyInput.className = "w-10 text-center font-bold text-sm theme-text-main select-none";
+        qtyInput.textContent = String(item.qty);
+
+        var plusBtn = document.createElement("button");
+        plusBtn.type = "button";
+        plusBtn.className = "min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
+        plusBtn.textContent = "+";
+        plusBtn.setAttribute("aria-label", "افزایش تعداد");
+        plusBtn.addEventListener("click", function() {
+          window.BandehStore.setCartDraftQty(item.id, item.qty + 1);
+          renderCart();
+        });
+
+        stepper.appendChild(minusBtn);
+        stepper.appendChild(qtyInput);
+        stepper.appendChild(plusBtn);
+        bottomRow.appendChild(stepper);
+
+        // Line price
+        var priceDiv = document.createElement("div");
+        priceDiv.className = "flex items-baseline gap-1";
+        var priceVal = document.createElement("span");
+        priceVal.className = "theme-accent font-extrabold text-base sm:text-lg";
+        priceVal.textContent = formatPrice(linePrice);
+        var priceUnit = document.createElement("span");
+        priceUnit.className = "text-xs theme-text-muted";
+        priceUnit.textContent = "تومان";
+        priceDiv.appendChild(priceVal);
+        priceDiv.appendChild(priceUnit);
+        bottomRow.appendChild(priceDiv);
+
+        card.appendChild(bottomRow);
+        itemsContainer.appendChild(card);
+      });
+
+      var totalEl = document.getElementById("cart-total-price");
+      if (totalEl) {
+        totalEl.textContent = formatPrice(grandTotal);
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    renderCart();
+
+    var clearBtn = document.getElementById("btn-clear-cart");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function() {
+        if (window.BandehStore) {
+          window.BandehStore.clearCartDraft();
+          renderCart();
+        }
+      });
+    }
+  });
+})();
+</script>
+{% endblock %}

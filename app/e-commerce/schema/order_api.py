@@ -38,9 +38,14 @@ class OrderItemCreate(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    """What the checkout sends: the cart lines. At least one."""
+    """What the checkout sends: the cart lines and recipient delivery details."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     items: list[OrderItemCreate] = Field(min_length=1)
+    recipient_name: str | None = Field(default=None, max_length=100)
+    recipient_phone: str | None = Field(default=None, max_length=20)
+    delivery_address: str | None = Field(default=None, max_length=500)
 
 
 class OrderItemRead(BaseModel):
@@ -55,7 +60,7 @@ class OrderItemRead(BaseModel):
 
 
 class OrderRead(BaseModel):
-    """What reads return: the frozen order with its lines."""
+    """What reads return: the frozen order with its lines and delivery details."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,6 +69,9 @@ class OrderRead(BaseModel):
     total_toman: int
     total_rial: int
     items: list[OrderItemRead]
+    recipient_name: str | None = None
+    recipient_phone: str | None = None
+    delivery_address: str | None = None
     created_at: datetime.datetime
 
 
