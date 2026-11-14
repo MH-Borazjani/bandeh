@@ -1,43 +1,213 @@
 <!DOCTYPE html>
-<!-- Base layout for every Bandeh page. Hard rules, from Mamad himself:
-     - Dark theme, ALWAYS. The background is never white (it hurts eyes).
-     - dir="rtl" lang="fa": the whole shop speaks Persian.
-     - Mobile-first: content lives in a narrow centered column, big
-       tap targets, readable without zooming on a phone.
-     - No dropdown menus, no animation. Ever. -->
-<html dir="rtl" lang="fa" class="dark">
+<!-- Base layout for every Bandeh page.
+     Design system: mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons.
+     Hard rules:
+     - dir="rtl" lang="fa": Persian throughout.
+     - Mobile-first: centered narrow column, big touch targets (min 44px).
+     - No dropdown menus, no animation.
+     - Choice saved in localStorage and applied before paint (no flash). -->
+<html dir="rtl" lang="fa" class="dark" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}</title>
-  <!-- Tailwind via CDN: fine for learning and v1. Before real launch,
-       switch to compiled Tailwind (smaller, faster, works offline). -->
+  <!-- Tailwind via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- HTMX: form posts without page reloads, zero hand-written JS. -->
+  <!-- HTMX for reactive forms -->
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <style>
-    /* Warm theme: still dark, just warmer. */
-    [data-theme="warm"] body { background-color: #1c1917; }
-    [data-theme="warm"] .bg-neutral-900 { background-color: #1c1917; }
-    [data-theme="warm"] .bg-neutral-800 { background-color: #292524; }
-    [data-theme="warm"] .bg-neutral-700 { background-color: #44403c; }
-    [data-theme="warm"] .border-neutral-700 { border-color: #57534e; }
-    [data-theme="warm"] .border-neutral-800 { border-color: #44403c; }
+    /* Bandeh Design System: CSS Variables for Dark (default) and Light themes */
+    :root, [data-theme="dark"], [data-theme="warm"] {
+      --bg-page: #121110;
+      --bg-card: #1c1a17;
+      --bg-card-subtle: #25221e;
+      --bg-card-hover: #221f1b;
+      --border-color: #2e2b26;
+      --border-focus: #d97706;
+      --text-main: #f5f5f4;
+      --text-muted: #a8a29e;
+      --accent: #d97706;
+      --accent-hover: #b45309;
+      --accent-text: #fefefe;
+      --badge-bg: #2d261e;
+      --badge-text: #f59e0b;
+      --badge-success-bg: #15291e;
+      --badge-success-text: #34d399;
+      --badge-danger-bg: #2d1818;
+      --badge-danger-text: #f87171;
+      --input-bg: #1c1a17;
+      --input-border: #38342f;
+      --input-text: #f5f5f4;
+      --input-placeholder: #78716c;
+      --header-bg: #121110f2;
+    }
+
+    [data-theme="light"] {
+      --bg-page: #faf8f5;
+      --bg-card: #fefefe;
+      --bg-card-subtle: #f4efe6;
+      --bg-card-hover: #eee8dc;
+      --border-color: #e5e0d8;
+      --border-focus: #d97706;
+      --text-main: #1c1917;
+      --text-muted: #78716c;
+      --accent: #d97706;
+      --accent-hover: #b45309;
+      --accent-text: #fefefe;
+      --badge-bg: #fef3c7;
+      --badge-text: #b45309;
+      --badge-success-bg: #ecfdf5;
+      --badge-success-text: #059669;
+      --badge-danger-bg: #fef2f2;
+      --badge-danger-text: #dc2626;
+      --input-bg: #fefefe;
+      --input-border: #d6d0c4;
+      --input-text: #1c1917;
+      --input-placeholder: #a8a29e;
+      --header-bg: #faf8f5f2;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-main);
+    }
+
+    /* Core Design System Classes */
+    .theme-bg-page { background-color: var(--bg-page); }
+    .theme-bg-card { background-color: var(--bg-card); }
+    .theme-bg-card-subtle { background-color: var(--bg-card-subtle); }
+    .theme-border { border-color: var(--border-color); }
+    .theme-text-main { color: var(--text-main); }
+    .theme-text-muted { color: var(--text-muted); }
+    .theme-accent { color: var(--accent); }
+
+    .theme-btn-accent {
+      background-color: var(--accent);
+      color: var(--accent-text);
+      transition: none;
+    }
+    .theme-btn-accent:hover:not(:disabled) {
+      background-color: var(--accent-hover);
+    }
+
+    .theme-btn-secondary {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      transition: none;
+    }
+    .theme-btn-secondary:hover:not(:disabled) {
+      background-color: var(--bg-card-subtle);
+    }
+
+    .theme-badge {
+      background-color: var(--badge-bg);
+      color: var(--badge-text);
+    }
+    .theme-badge-success {
+      background-color: var(--badge-success-bg);
+      color: var(--badge-success-text);
+    }
+    .theme-badge-danger {
+      background-color: var(--badge-danger-bg);
+      color: var(--badge-danger-text);
+    }
+
+    .theme-input {
+      background-color: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--input-text);
+    }
+    .theme-input:focus {
+      outline: none;
+      border-color: var(--border-focus);
+    }
+    .theme-input::placeholder {
+      color: var(--input-placeholder);
+    }
+
+    .theme-header {
+      background-color: var(--header-bg);
+    }
+
+    /* Compatibility aliases */
+    [data-theme="warm"] body { background-color: var(--bg-page); }
+    [data-theme="warm"] .bg-neutral-900 { background-color: var(--bg-page); }
+    [data-theme="warm"] .bg-neutral-800 { background-color: var(--bg-card); }
+    [data-theme="warm"] .bg-neutral-700 { background-color: var(--bg-card-subtle); }
+    [data-theme="warm"] .border-neutral-700 { border-color: var(--border-color); }
+    [data-theme="warm"] .border-neutral-800 { border-color: var(--border-color); }
   </style>
   <script>
-    /* Apply the saved theme before first paint (no flash of the wrong dark). */
+    /* Apply saved theme before first paint (no flash). Dark is default. */
     try {
       var __bandehTheme = window.localStorage.getItem("bandeh-theme");
-      if (__bandehTheme === "warm" || __bandehTheme === "dark") {
-        document.documentElement.setAttribute("data-theme", __bandehTheme);
+      if (__bandehTheme === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.classList.remove("dark");
+      } else if (__bandehTheme === "warm") {
+        document.documentElement.setAttribute("data-theme", "warm");
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.classList.add("dark");
       }
     } catch (e) { /* storage unavailable: stay dark */ }
   </script>
 </head>
-<body class="bg-neutral-900 text-neutral-100 min-h-screen">
-  <main class="max-w-md mx-auto px-4 py-10">
+<body class="min-h-screen theme-bg-page theme-text-main flex flex-col font-sans antialiased">
+  {% block header %}
+  <!-- Shared Header -->
+  <header class="theme-header border-b theme-border sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-xl font-bold tracking-tight theme-text-main flex items-center gap-1.5">
+        <span class="theme-accent font-extrabold text-2xl leading-none">■</span>
+        <span>بنده</span>
+      </a>
+      <div class="flex items-center gap-2">
+        <!-- Theme toggle: dark (default) <-> light. Choice lives in localStorage. -->
+        <button id="theme-toggle"
+                type="button"
+                aria-label="تغییر تم"
+                class="min-h-[44px] min-w-[44px] flex items-center justify-center theme-btn-secondary rounded-xl px-3 py-2 text-sm font-medium">
+          روشن
+        </button>
+        <!-- Cart badge: counts the localStorage cart DRAFT (not the real cart). -->
+        <a href="/#products"
+           aria-label="سبد خرید"
+           class="min-h-[44px] flex items-center gap-1.5 theme-btn-secondary rounded-xl px-3.5 py-2 text-sm font-medium">
+          <span>سبد</span>
+          <span id="cart-count" style="display:none"
+                class="theme-btn-accent rounded-full px-2 py-0.5 text-xs font-bold leading-none"></span>
+        </a>
+        {% if phone %}
+        <a href="/auth/account"
+           class="min-h-[44px] flex items-center theme-btn-secondary rounded-xl px-3.5 py-2 text-sm font-medium">حساب من</a>
+        {% else %}
+        <a href="/auth/login"
+           class="min-h-[44px] flex items-center theme-btn-accent font-bold rounded-xl px-4 py-2 text-sm">ورود</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  {% endblock %}
+
+  <main class="flex-1 max-w-md w-full mx-auto px-4 py-6">
     {% block content %}{% endblock %}
   </main>
+
+  {% block footer %}
+  <!-- Shared Footer -->
+  <footer class="theme-bg-card border-t theme-border mt-auto py-8 text-center theme-text-muted text-sm">
+    <div class="max-w-md mx-auto px-4">
+      <p class="font-bold theme-text-main mb-1">بنده — فروشگاه لوازم خانگی</p>
+      <p class="text-xs theme-text-muted mb-2">ضمانت اصالت و ارسال مستقیم با بهترین قیمت</p>
+      <p class="text-xs theme-text-muted">© ۱۴۰۴</p>
+    </div>
+  </footer>
+  {% endblock %}
+
   <script src="/static/js/shop.js" defer></script>
 </body>
 </html>

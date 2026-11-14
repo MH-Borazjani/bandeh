@@ -39,15 +39,24 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         try:
-            from env_settings import get_settings
+            try:
+                from env_settings import get_settings
+            except ModuleNotFoundError:
+                import sys
+                from pathlib import Path
+
+                repo_root = Path(__file__).resolve().parents[3]
+                if str(repo_root) not in sys.path:
+                    sys.path.insert(0, str(repo_root))
+                from env_settings import get_settings
 
             settings = get_settings()
             db_url = settings.async_database_url
             debug_mode = settings.debug
-        except Exception:
-            # Fallback connection string for local dev if settings not configured
-            db_url = "postgresql+asyncpg://postgres:postgres@localhost:5432/easy_auto"
-            debug_mode = False
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load application settings for database engine: {exc}"
+            ) from exc
 
         _engine = create_async_engine(
             db_url,

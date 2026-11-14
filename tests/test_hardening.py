@@ -164,6 +164,37 @@ class HardeningUnitTests(unittest.IsolatedAsyncioTestCase):
             data3 = await client_both_down.get_landing_content()
             self.assertEqual(data3["categories"], FALLBACK_CATEGORIES)
 
+    async def test_directus_client_resolves_integer_category_id(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "categories" in str(request.url):
+                return httpx.Response(
+                    200, json={"data": [{"id": 1, "name": "[TEST] Kitchen", "is_active": True}]}
+                )
+            if "products" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "id": "ad7d6a7f-3d92-412c-a523-55deb334fa8c",
+                            "name": "Fridge",
+                            "price_toman": 45000000,
+                            "stock": 5,
+                            "reserved": 0,
+                            "is_active": True,
+                            "category": 1,
+                            "created_at": "2026-11-14T12:00:00Z",
+                        }
+                    },
+                )
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            client = DirectusClient(http)
+            row = await client.get_product("ad7d6a7f-3d92-412c-a523-55deb334fa8c")
+            self.assertIsNotNone(row)
+            assert row is not None
+            self.assertEqual(row["category"], "[TEST] Kitchen")
+
     async def test_cache_cold_start_lock_builds_once(self) -> None:
         reset_cache_for_tests()
         old_url = os.environ.get("REDIS_URL")

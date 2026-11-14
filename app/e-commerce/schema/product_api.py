@@ -54,6 +54,8 @@ class ProductRead(BaseModel):
     image_path: str | None
     is_active: bool
     created_at: datetime.datetime
+    category: str | None = None
+    tag: str | None = None
 
     @computed_field
     @property

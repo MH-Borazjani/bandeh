@@ -1,80 +1,85 @@
 {% extends "base.html" %}
 {% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}
 {% block content %}
-<!-- Landing page, v1. Sections, top to bottom:
-     header (logo + login/account), hero, categories, featured products
-     (SAMPLE data -- real catalog comes later), trust badges, footer.
-     Same hard rules as everywhere: dark, RTL, mobile-first,
-     no dropdowns, no animation. -->
-
-<!-- Header -->
-<header class="flex items-center justify-between mb-8">
-  <a href="/" class="text-xl font-bold">بنده</a>
-  <div class="flex items-center gap-2">
-    <!-- Theme toggle (dark <-> warm). Choice lives in localStorage. -->
-    <button id="theme-toggle"
-            class="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm">گرم</button>
-    <!-- Cart badge: counts the localStorage cart DRAFT (not the real cart). -->
-    <a href="#products"
-       class="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm">سبد
-      <span id="cart-count" style="display:none"
-            class="bg-teal-600 text-white rounded-full px-2 py-0.5 text-xs"></span></a>
-    {% if phone %}
-    <a href="/auth/account"
-       class="bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-sm">حساب من</a>
-    {% else %}
-    <a href="/auth/login"
-       class="bg-teal-600 text-white font-bold rounded-lg px-4 py-2 text-sm">ورود</a>
-    {% endif %}
-  </div>
-</header>
+<!-- Landing page.
+     Design system: mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons.
+     Same hard rules as everywhere: dark, RTL, mobile-first, no dropdowns, no animation. -->
 
 <!-- Hero -->
-<section class="mb-10">
-  <h1 class="text-3xl font-bold mb-3 leading-snug">لوازم خانگی،<br>با ضمانت و قیمت منصفانه</h1>
-  <p class="text-neutral-400 mb-6">از یخچال تا جاروبرقی — با ارسال سریع درب منزل.</p>
+<section class="mb-10 text-center sm:text-right">
+  <div class="inline-flex items-center gap-2 theme-badge px-3 py-1 rounded-full text-xs font-semibold mb-4">
+    <span class="w-2 h-2 rounded-full theme-btn-accent"></span>
+    <span>انتخاب اول لوازم خانگی اصل</span>
+  </div>
+  <h1 class="text-3xl font-extrabold mb-3 leading-snug theme-text-main">
+    لوازم خانگی،<br><span class="theme-accent">با ضمانت</span> و قیمت منصفانه
+  </h1>
+  <p class="theme-text-muted mb-6 text-sm leading-relaxed">
+    از یخچال تا جاروبرقی — با ارسال مطمئن و مستقیم درب منزل.
+  </p>
   <a href="#categories"
-     class="block text-center w-full bg-teal-600 text-white font-bold rounded-lg py-3">مشاهده دسته‌بندی‌ها</a>
+     class="block text-center w-full theme-btn-accent font-bold rounded-xl py-3.5 px-6 min-h-[48px] text-base">
+    مشاهده دسته‌بندی‌ها
+  </a>
 </section>
 
 <!-- Categories -->
 <section id="categories" class="mb-10">
-  <h2 class="text-xl font-bold mb-4">دسته‌بندی‌ها</h2>
+  <h2 class="text-xl font-bold mb-4 theme-text-main">دسته‌بندی‌ها</h2>
   <div class="grid grid-cols-2 gap-3">
     {% for cat in categories %}
-    <a href="#products" class="bg-neutral-800 border border-neutral-700 rounded-xl p-4">
-      <div class="font-bold mb-1">{{ cat.name }}</div>
-      <div class="text-neutral-400 text-sm">{{ cat.desc }}</div>
+    <a href="#products" class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between min-h-[90px]">
+      <div class="font-bold mb-1 theme-text-main text-sm sm:text-base">{{ cat.name }}</div>
+      <div class="theme-text-muted text-xs leading-normal">{{ cat.desc }}</div>
     </a>
     {% endfor %}
   </div>
 </section>
 
-<!-- Featured products. SAMPLE DATA: replace with the real catalog later. -->
+<!-- Featured products -->
 <section id="products" class="mb-10">
-  <h2 class="text-xl font-bold mb-4">پیشنهادهای ویژه</h2>
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-bold theme-text-main">پیشنهادهای ویژه</h2>
+    <span class="text-xs theme-text-muted font-medium">بهترین‌های امروز</span>
+  </div>
   <div class="space-y-4">
     {% for p in products %}
-    <div class="bg-neutral-800 border border-neutral-700 rounded-xl p-4">
-      <div class="bg-neutral-700/50 border border-dashed border-neutral-600 rounded-lg h-28 mb-3 flex items-center justify-center">
-        <span class="text-neutral-500 text-sm">تصویر محصول</span>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4">
+      <div class="theme-bg-card-subtle theme-border border border-dashed rounded-xl h-32 mb-3.5 flex flex-col items-center justify-center gap-1.5">
+        <svg class="w-8 h-8 theme-text-muted opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span class="theme-text-muted text-xs">تصویر محصول</span>
       </div>
       <div class="flex items-start justify-between gap-2 mb-2">
-        <h3 class="font-bold">{{ p.name }}</h3>
+        {% if p.id %}
+        <a href="/products/{{ p.id }}" class="hover:underline">
+          <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+        </a>
+        {% else %}
+        <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+        {% endif %}
         {% if p.tag %}
-        <span class="text-xs bg-teal-900 text-teal-300 rounded px-2 py-1 shrink-0">{{ p.tag }}</span>
+        <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
         {% endif %}
       </div>
-      <div class="flex items-center justify-between">
-        <span class="text-teal-400 font-bold">{{ p.price }} تومان</span>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t theme-border">
+        <div class="flex items-baseline gap-1">
+          <span class="theme-accent font-extrabold text-lg sm:text-xl">{{ p.price }}</span>
+          <span class="theme-text-muted text-xs">تومان</span>
+        </div>
         <!-- Draft only: tapping this stores the item in the localStorage
              cart draft (see static/js/shop.js). The real cart lives on
              the server (cart topic). Sample products have no UUID yet,
              so the draft id is the sample index for now. -->
-        <button class="bg-neutral-700 rounded-lg px-4 py-2 text-sm"
+        <button class="theme-btn-secondary min-h-[44px] rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-1"
+                type="button"
                 data-add-to-cart
-                data-product-id="sample-{{ loop.index }}"
-                data-product-name="{{ p.name }}">افزودن به سبد</button>
+                data-product-id="{% if p.id %}{{ p.id }}{% else %}sample-{{ loop.index }}{% endif %}"
+                data-product-name="{{ p.name }}">
+          افزودن به سبد
+        </button>
       </div>
     </div>
     {% endfor %}
@@ -84,28 +89,34 @@
 <!-- Trust badges -->
 <section class="mb-10">
   <div class="grid grid-cols-2 gap-3 text-center">
-    <div class="bg-neutral-800/60 rounded-xl p-4">
-      <div class="font-bold mb-1 text-sm">ضمانت اصالت</div>
-      <div class="text-neutral-400 text-xs">کالا با ضمانت‌نامه‌ی معتبر</div>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
+      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
+        <span class="theme-accent text-sm">✦</span>
+      </div>
+      <div class="font-bold mb-1 text-sm theme-text-main">ضمانت اصالت</div>
+      <div class="theme-text-muted text-xs">کالا با ضمانت‌نامه‌ی معتبر</div>
     </div>
-    <div class="bg-neutral-800/60 rounded-xl p-4">
-      <div class="font-bold mb-1 text-sm">ارسال سریع</div>
-      <div class="text-neutral-400 text-xs">تحویل درب منزل</div>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
+      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
+        <span class="theme-accent text-sm">🚚</span>
+      </div>
+      <div class="font-bold mb-1 text-sm theme-text-main">ارسال سریع</div>
+      <div class="theme-text-muted text-xs">تحویل درب منزل</div>
     </div>
-    <div class="bg-neutral-800/60 rounded-xl p-4">
-      <div class="font-bold mb-1 text-sm">پرداخت امن</div>
-      <div class="text-neutral-400 text-xs">درگاه بانکی معتبر</div>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
+      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
+        <span class="theme-accent text-sm">🔒</span>
+      </div>
+      <div class="font-bold mb-1 text-sm theme-text-main">پرداخت امن</div>
+      <div class="theme-text-muted text-xs">درگاه بانکی معتبر</div>
     </div>
-    <div class="bg-neutral-800/60 rounded-xl p-4">
-      <div class="font-bold mb-1 text-sm">مهلت بازگشت</div>
-      <div class="text-neutral-400 text-xs">۷ روز ضمانت بازگشت</div>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
+      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
+        <span class="theme-accent text-sm">↺</span>
+      </div>
+      <div class="font-bold mb-1 text-sm theme-text-main">مهلت بازگشت</div>
+      <div class="theme-text-muted text-xs">۷ روز ضمانت بازگشت</div>
     </div>
   </div>
 </section>
-
-<!-- Footer -->
-<footer class="border-t border-neutral-800 pt-6 text-center text-neutral-500 text-sm">
-  <p class="mb-1">بنده — فروشگاه لوازم خانگی</p>
-  <p>© ۱۴۰۴</p>
-</footer>
 {% endblock %}

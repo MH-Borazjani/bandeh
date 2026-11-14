@@ -9,6 +9,9 @@ services:
     ports:
       # Expose container port 80 to host machine port 8000
       - "8000:80"
+    user: root
+    environment:
+      - PYTHONPATH=/app:/app/app/e-commerce
     env_file:
       # Inject local application configuration and secrets from .env
       - .env

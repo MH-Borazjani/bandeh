@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} | بنده{% endblock %}
+
+{% block content %}
+<!-- Product Detail Page (Bandeh Shop - Stage 1)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<!-- Back to catalog navigation -->
+<div class="mb-4">
+  <a href="/"
+     class="inline-flex items-center gap-1.5 text-sm theme-text-muted hover:theme-text-main font-medium min-h-[44px] py-2">
+    <span class="text-base leading-none">→</span>
+    <span>بازگشت به فروشگاه</span>
+  </a>
+</div>
+
+<!-- Product photo / illustration card -->
+<div class="theme-bg-card theme-border border rounded-2xl overflow-hidden p-3 mb-4">
+  {% if product.image_url %}
+  <img src="{{ product.image_url }}"
+       alt="{{ product.name }}"
+       class="w-full h-64 sm:h-72 object-cover rounded-xl">
+  {% else %}
+  <div class="theme-bg-card-subtle theme-border border border-dashed rounded-xl h-60 sm:h-72 flex flex-col items-center justify-center gap-2 p-4">
+    <div class="w-16 h-16 rounded-2xl theme-bg-card theme-border border flex items-center justify-center">
+      <svg class="w-8 h-8 theme-accent opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+      </svg>
+    </div>
+    <span class="theme-text-muted text-xs font-medium">تصویر اختصاصی کالا به‌زودی</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Product Information Card -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <!-- Category and Tag Badge -->
+  <div class="flex items-center justify-between gap-2 mb-2.5">
+    <span class="text-xs theme-text-muted font-medium">{{ category }}</span>
+    <span class="text-xs theme-badge px-2.5 py-1 rounded-lg font-semibold">{{ tag }}</span>
+  </div>
+
+  <!-- Product Name -->
+  <h1 class="text-2xl font-extrabold theme-text-main leading-snug mb-3">
+    {{ product.name }}
+  </h1>
+
+  <!-- Stock state indicator -->
+  <div class="mb-5">
+    {% if available > 5 %}
+    <div class="inline-flex items-center gap-2 theme-badge-success px-3 py-1.5 rounded-full text-xs font-semibold">
+      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+      <span>موجود در انبار بنده</span>
+    </div>
+    {% elif available > 0 %}
+    <div class="inline-flex items-center gap-2 theme-badge px-3 py-1.5 rounded-full text-xs font-semibold">
+      <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+      <span>تنها {{ available }} عدد در انبار باقیست</span>
+    </div>
+    {% else %}
+    <div class="inline-flex items-center gap-2 theme-badge-danger px-3 py-1.5 rounded-full text-xs font-semibold">
+      <span class="w-2 h-2 rounded-full bg-red-500"></span>
+      <span>ناموجود در انبار</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Price & Purchase Controls -->
+  <div class="pt-4 border-t theme-border space-y-4">
+    <!-- Price Display -->
+    <div class="flex items-baseline justify-between">
+      <span class="text-sm theme-text-muted">قیمت نقدی:</span>
+      <div class="flex items-baseline gap-1.5">
+        <span class="theme-accent font-black text-2xl sm:text-3xl">{{ formatted_price }}</span>
+        <span class="text-xs theme-text-muted font-medium">تومان</span>
+      </div>
+    </div>
+
+    <!-- Quantity Stepper -->
+    <div class="flex items-center justify-between pt-2">
+      <span class="text-sm font-semibold theme-text-main">تعداد سفارش:</span>
+      <div class="flex items-center theme-bg-card-subtle theme-border border rounded-xl p-1 gap-1">
+        <button type="button"
+                id="stepper-minus"
+                aria-label="کاهش تعداد"
+                class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg theme-btn-secondary text-lg font-bold select-none">
+          −
+        </button>
+        <input type="number"
+               id="product-quantity"
+               name="quantity"
+               value="1"
+               min="1"
+               max="{% if available > 0 %}{{ available }}{% else %}1{% endif %}"
+               {% if available <= 0 %}disabled{% endif %}
+               class="theme-input text-center w-14 min-h-[44px] rounded-lg font-bold text-base bg-transparent border-0"
+               aria-label="تعداد کالا">
+        <button type="button"
+                id="stepper-plus"
+                aria-label="افزایش تعداد"
+                class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg theme-btn-secondary text-lg font-bold select-none">
+          +
+        </button>
+      </div>
+    </div>
+
+    <!-- Add to Cart Button -->
+    <button type="button"
+            data-add-to-cart
+            data-product-id="{{ product.id }}"
+            data-product-name="{{ product.name }}"
+            {% if available <= 0 %}disabled{% endif %}
+            class="w-full theme-btn-accent font-bold py-3.5 px-6 rounded-xl text-base flex items-center justify-center gap-2 min-h-[48px] {% if available <= 0 %}opacity-50 cursor-not-allowed{% endif %}">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+      </svg>
+      <span>{% if available > 0 %}افزودن به سبد خرید{% else %}ناموجود{% endif %}</span>
+    </button>
+  </div>
+</div>
+
+<!-- Product Description Card -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <h2 class="text-sm font-bold theme-text-main mb-2.5">توضیحات و مشخصات کالا</h2>
+  <div class="theme-text-muted text-sm leading-relaxed whitespace-pre-line">
+    {{ product.description or "مشخصات تکمیلی این کالا به زودی توسط کارشناسان بنده ثبت خواهد شد." }}
+  </div>
+</div>
+
+<!-- Quality and Service Guarantee -->
+<div class="grid grid-cols-2 gap-3 text-center mb-4">
+  <div class="theme-bg-card theme-border border rounded-2xl p-3.5 flex flex-col items-center">
+    <span class="theme-accent text-lg mb-1">✦</span>
+    <span class="font-bold text-xs theme-text-main mb-0.5">ضمانت اصالت ۱۰۰٪</span>
+    <span class="text-[10px] theme-text-muted">کالای اورجینال و شرکتی</span>
+  </div>
+  <div class="theme-bg-card theme-border border rounded-2xl p-3.5 flex flex-col items-center">
+    <span class="theme-accent text-lg mb-1">🚚</span>
+    <span class="font-bold text-xs theme-text-main mb-0.5">ارسال مستقیم</span>
+    <span class="text-[10px] theme-text-muted">تحویل سریع درب منزل</span>
+  </div>
+</div>
+{% endblock %}

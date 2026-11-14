@@ -37,17 +37,24 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
 )
 from fastapi import (
     Path as FastAPIPath,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.security import RequireStaffDep
+from core.security import CurrentUserDep, RequireStaffDep
+from core.templates import templates
 from db.session import DbSessionDep
-from integrations.directus_client import DirectusClientDep
+from integrations.directus_client import (
+    DirectusClient,
+    DirectusClientDep,
+    format_toman_price,
+)
 from schema.product_api import ProductCreate, ProductPhotoRead, ProductRead
 from services import product_service, search_service
 from services.image_tasks import schedule_image_variants
@@ -120,17 +127,12 @@ async def create_product_endpoint(
     return ProductRead.model_validate(product)
 
 
-@router.get("/products/{product_id}")
-async def read_product(
-    product_id: Annotated[uuid.UUID, FastAPIPath()],
-    db: DbSessionDep,
-    directus: DirectusClientDep,
+async def _fetch_product_read(
+    db: AsyncSession,
+    directus: DirectusClient,
+    product_id: uuid.UUID,
 ) -> ProductRead:
-    """Public: one product, with its image URL when it has a photo.
-
-    Content comes from Directus. When the CMS is unreachable, the same
-    table is read through SQLAlchemy as a fallback (same rows).
-    """
+    """Read one product from Directus with database fallback."""
     try:
         row = await directus.get_product(product_id)
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
@@ -153,6 +155,61 @@ async def read_product(
             raise HTTPException(status_code=404, detail="product not found")
         return ProductRead.model_validate(product)
     return ProductRead.model_validate(row)
+
+
+def _render_product_page(
+    request: Request,
+    product: ProductRead,
+    phone: str | None,
+) -> HTMLResponse:
+    """Render the HTML product detail page."""
+    available = max(0, product.stock - product.reserved)
+    formatted_price = format_toman_price(product.price_toman)
+    return templates.TemplateResponse(
+        request=request,
+        name="product.html",
+        context={
+            "phone": phone,
+            "product": product,
+            "available": available,
+            "formatted_price": formatted_price,
+            "category": product.category or "لوازم خانگی",
+            "tag": product.tag or "ضمانت اصالت",
+        },
+    )
+
+
+@router.get("/products/{product_id}", response_model=ProductRead)
+async def read_product(
+    request: Request,
+    product_id: Annotated[uuid.UUID, FastAPIPath()],
+    db: DbSessionDep,
+    directus: DirectusClientDep,
+    phone: CurrentUserDep,
+) -> ProductRead | HTMLResponse:
+    """Public: one product, with its image URL when it has a photo.
+
+    When requested with Accept: text/html (e.g. browser navigation) or format=html,
+    renders the HTML product detail page. Otherwise returns JSON ProductRead unchanged.
+    """
+    product = await _fetch_product_read(db, directus, product_id)
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept or request.query_params.get("format") == "html":
+        return _render_product_page(request, product, phone)
+    return product
+
+
+@router.get("/product/{product_id}", response_class=HTMLResponse)
+async def product_page_endpoint(
+    request: Request,
+    product_id: Annotated[uuid.UUID, FastAPIPath()],
+    db: DbSessionDep,
+    directus: DirectusClientDep,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Public: HTML product detail page for one product."""
+    product = await _fetch_product_read(db, directus, product_id)
+    return _render_product_page(request, product, phone)
 
 
 @router.post("/products/{product_id}/photo")

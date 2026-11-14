@@ -39,6 +39,7 @@ retries Directus right away.
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
@@ -56,6 +57,8 @@ logger = logging.getLogger("bandeh.directus")
 # Cache key and lifetime for the landing content (seconds).
 LANDING_CONTENT_KEY = "bandeh:landing:content"
 LANDING_CONTENT_TTL = 60
+CATEGORIES_MAP_KEY = "bandeh:categories:map"
+CATEGORIES_MAP_TTL = 300
 
 
 class CategoryContent(TypedDict):
@@ -133,6 +136,7 @@ class DirectusClient:
         self._token = token or os.environ.get("DIRECTUS_TOKEN")
         # None means "no caching" (callers that do not want it).
         self._cache = cache
+        self._category_map: dict[int | str, str] | None = None
 
     def _headers(self) -> dict[str, str]:
         """Authorization header when a token is configured (public reads need none)."""
@@ -243,6 +247,60 @@ class DirectusClient:
                 logger.warning("Landing cache write failed: %s", exc)
         return content
 
+    async def get_category_map(self) -> dict[int | str, str]:
+        """Fetch categories collection from Directus and return {id: name} mapping.
+
+        Cached in memory and in Redis to avoid redundant network calls.
+        """
+        if self._category_map is not None:
+            return self._category_map
+
+        if self._cache is not None:
+            try:
+                cached = await self._cache.get(CATEGORIES_MAP_KEY)
+                if cached is not None:
+                    parsed = json.loads(cached)
+                    if isinstance(parsed, dict):
+                        mapping: dict[int | str, str] = {}
+                        for k, v in parsed.items():
+                            mapping[k] = str(v)
+                            if k.isdigit():
+                                mapping[int(k)] = str(v)
+                        self._category_map = mapping
+                        return self._category_map
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Category map cache read failed: %s", exc)
+
+        mapping: dict[int | str, str] = {}
+        try:
+            items = await self._get_items("categories", ["id", "name"])
+            for item in items:
+                cid = item.get("id")
+                cname = item.get("name")
+                if isinstance(cname, str):
+                    if isinstance(cid, int) and not isinstance(cid, bool):
+                        mapping[cid] = cname
+                        mapping[str(cid)] = cname
+                    elif isinstance(cid, str):
+                        mapping[cid] = cname
+                        if cid.isdigit():
+                            mapping[int(cid)] = cname
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to fetch categories map from Directus: %s", exc)
+
+        if mapping:
+            self._category_map = mapping
+            if self._cache is not None:
+                try:
+                    to_cache = {str(k): v for k, v in mapping.items()}
+                    await self._cache.set(
+                        CATEGORIES_MAP_KEY, json.dumps(to_cache), CATEGORIES_MAP_TTL
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Category map cache write failed: %s", exc)
+
+        return mapping
+
     async def list_products(self, limit: int = 20) -> list[dict]:
         """Active products, newest first, from Directus.
 
@@ -270,7 +328,8 @@ class DirectusClient:
             isinstance(row, dict) for row in rows
         ):
             raise ValueError("Directus products returned no 'data' list")
-        return [_product_row(row) for row in rows]
+        category_map = await self.get_category_map()
+        return [_product_row(row, category_map=category_map) for row in rows]
 
     async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
         """One product by id from Directus. None when it does not exist.
@@ -295,49 +354,89 @@ class DirectusClient:
         row = data.get("data")
         if not isinstance(row, dict):
             raise ValueError("Directus product returned no 'data' object")
-        return _product_row(row)
+        category_map = await self.get_category_map()
+        return _product_row(row, category_map=category_map)
 
 
-def _product_row(row: dict) -> dict:
+def _product_row(
+    row: dict,
+    category_map: dict[int | str, str] | None = None,
+) -> dict:
     """Validate one Directus product row into the ProductRead shape.
 
     Only the fields ``ProductRead`` needs are kept, so the route can
-    build the response with ``ProductRead.model_validate``. Any row with
-    a missing or wrongly typed field raises ``ValueError`` instead of
-    serving a half-broken product.
+    build the response with ``ProductRead.model_validate``. Defaults
+    gracefully for fields that Directus editors may omit (stock, reserved, is_active).
     """
     pid = row.get("id")
-    if not isinstance(pid, str):
-        raise ValueError("Directus product id must be a string")
+    if pid is None:
+        raise ValueError("Directus product id is missing")
+    pid_str = str(pid)
+
     name = row.get("name")
     if not isinstance(name, str):
         raise ValueError("Directus product name must be a string")
+
     price = row.get("price_toman")
     if not isinstance(price, int) or isinstance(price, bool):
         raise ValueError("Directus product price_toman must be an integer")
+
     stock = row.get("stock")
+    if stock is None:
+        stock = 0
+    elif not isinstance(stock, int) or isinstance(stock, bool):
+        raise ValueError("Directus product stock must be an integer")
+
     reserved = row.get("reserved")
-    if (
-        not isinstance(stock, int)
-        or isinstance(stock, bool)
-        or not isinstance(reserved, int)
-        or isinstance(reserved, bool)
-    ):
-        raise ValueError("Directus product stock/reserved must be integers")
+    if reserved is None:
+        reserved = 0
+    elif not isinstance(reserved, int) or isinstance(reserved, bool):
+        raise ValueError("Directus product reserved must be an integer")
+
     is_active = row.get("is_active")
-    if not isinstance(is_active, bool):
+    if is_active is None:
+        is_active = True
+    elif not isinstance(is_active, bool):
         raise ValueError("Directus product is_active must be a boolean")
+
     description = row.get("description")
     if description is not None and not isinstance(description, str):
         raise ValueError("Directus product description must be a string or null")
+
     image_path = row.get("image_path")
     if image_path is not None and not isinstance(image_path, str):
         raise ValueError("Directus product image_path must be a string or null")
+
     created_at = row.get("created_at")
-    if not isinstance(created_at, str):
+    if created_at is None:
+        created_at = datetime.datetime.now(datetime.UTC).isoformat()
+    elif not isinstance(created_at, str):
         raise ValueError("Directus product created_at must be a string")
+
+    category_val = row.get("category")
+    category: str | None = None
+    if isinstance(category_val, dict):
+        cname = category_val.get("name")
+        category = str(cname) if cname is not None else None
+    elif category_val is not None:
+        if category_map and category_val in category_map:
+            category = category_map[category_val]
+        elif category_map and str(category_val) in category_map:
+            category = category_map[str(category_val)]
+        elif isinstance(category_val, str) and not category_val.isdigit():
+            category = category_val
+        elif category_map and isinstance(category_val, str) and category_val.isdigit():
+            cid = int(category_val)
+            category = category_map.get(cid, category_val)
+        else:
+            category = str(category_val)
+
+    tag = row.get("tag")
+    if tag is not None and not isinstance(tag, str):
+        tag = str(tag)
+
     return {
-        "id": pid,
+        "id": pid_str,
         "name": name,
         "description": description,
         "price_toman": price,
@@ -346,6 +445,8 @@ def _product_row(row: dict) -> dict:
         "image_path": image_path,
         "is_active": is_active,
         "created_at": created_at,
+        "category": category,
+        "tag": tag,
     }
 
 
@@ -361,6 +462,7 @@ PRODUCT_READ_FIELDS = [
     "image_path",
     "is_active",
     "category",
+    "tag",
     "created_at",
 ]
 
@@ -372,6 +474,7 @@ async def invalidate_landing_content(cache: Cache) -> None:
     action) instead of waiting up to 60 seconds for the TTL to expire.
     """
     await cache.delete(LANDING_CONTENT_KEY)
+    await cache.delete(CATEGORIES_MAP_KEY)
 
 
 def get_directus_client(client: HttpClientDep, cache: CacheDep) -> DirectusClient:
