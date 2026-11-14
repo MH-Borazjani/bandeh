@@ -29,6 +29,12 @@
     <span class="theme-text-muted">تاریخ ثبت:</span>
     <span class="theme-text-main font-medium" dir="ltr">{{ order.created_at_formatted }}</span>
   </div>
+  {% if order.tracking_code %}
+  <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
+    <span class="theme-text-muted">کد رهگیری پستی:</span>
+    <span class="theme-accent font-mono font-bold" dir="ltr">{{ order.tracking_code }}</span>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Order Items List -->

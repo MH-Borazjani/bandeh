@@ -12,8 +12,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}</title>
-  <!-- Tailwind via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Compiled Tailwind CSS (built at build time) -->
+  <link rel="stylesheet" href="/static/css/tailwind.css">
   <!-- HTMX for reactive forms -->
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <style>
@@ -221,6 +221,30 @@
         <span class="opacity-30">•</span>
         <a href="/contact" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">تماس با ما</a>
       </nav>
+      <!-- Trust Seal Placeholders (Enamad & Samandehi) -->
+      <div class="flex items-center justify-center gap-3 my-4" aria-label="نمادهای اعتماد الکترونیکی">
+        <div id="enamad-slot"
+             class="theme-bg-card-subtle theme-border border rounded-2xl p-3 w-32 h-28 flex flex-col items-center justify-center text-center">
+          <div class="w-9 h-9 rounded-full theme-bg-card flex items-center justify-center mb-1.5 theme-accent">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+          </div>
+          <span class="text-[11px] font-bold theme-text-main leading-tight">اینماد</span>
+          <span class="text-[9px] theme-text-muted mt-0.5">در حال دریافت</span>
+        </div>
+
+        <div id="samandehi-slot"
+             class="theme-bg-card-subtle theme-border border rounded-2xl p-3 w-32 h-28 flex flex-col items-center justify-center text-center">
+          <div class="w-9 h-9 rounded-full theme-bg-card flex items-center justify-center mb-1.5 theme-accent">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+          </div>
+          <span class="text-[11px] font-bold theme-text-main leading-tight">ساماندهی</span>
+          <span class="text-[9px] theme-text-muted mt-0.5">در حال دریافت</span>
+        </div>
+      </div>
       <p class="font-bold theme-text-main mb-1">بنده — فروشگاه لوازم خانگی</p>
       <p class="text-xs theme-text-muted mb-2">ضمانت اصالت و ارسال مستقیم با بهترین قیمت</p>
       <p class="text-xs theme-text-muted">© ۱۴۰۴</p>

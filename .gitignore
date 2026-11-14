@@ -17,3 +17,8 @@ volumes/
 # User-uploaded files (product photos live here, never committed)
 uploads/
 
+# Backups and node_modules
+backups/
+node_modules/
+package-lock.json
+

@@ -47,6 +47,8 @@ class OrderStatus(StrEnum):
     CREATED = "created"
     WAITING_PAYMENT = "waiting_payment"
     PAID = "paid"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
     FAILED = "failed"
     EXPIRED = "expired"
 
@@ -99,6 +101,10 @@ class Order(Base, TimestampMixin):
     )
     delivery_address: Mapped[str | None] = mapped_column(
         String(500),
+        nullable=True,
+    )
+    tracking_code: Mapped[str | None] = mapped_column(
+        String(100),
         nullable=True,
     )
 

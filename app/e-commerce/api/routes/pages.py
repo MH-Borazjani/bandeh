@@ -14,8 +14,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Public web routes for shop storefront."""
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 try:
     from core.security import CurrentUserDep
@@ -186,6 +186,54 @@ async def contact_page(
     return response
 
 
+@router.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt() -> PlainTextResponse:
+    """Direct web crawlers and indexers to allowed paths and sitemap."""
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /admin/\n"
+        "Disallow: /auth/\n"
+        "Disallow: /payments/\n"
+        "\n"
+        "Sitemap: /sitemap.xml\n"
+    )
+    response = PlainTextResponse(content, media_type="text/plain")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+@router.get("/sitemap.xml", response_class=Response)
+def sitemap_xml() -> Response:
+    """XML sitemap covering public storefront pages."""
+    urls = [
+        ("/", "1.0", "daily"),
+        ("/products", "0.9", "daily"),
+        ("/cart", "0.5", "weekly"),
+        ("/terms", "0.3", "monthly"),
+        ("/privacy", "0.3", "monthly"),
+        ("/returns", "0.3", "monthly"),
+        ("/contact", "0.3", "monthly"),
+    ]
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path, priority, changefreq in urls:
+        xml_lines.append(
+            f"  <url>\n"
+            f"    <loc>{path}</loc>\n"
+            f"    <changefreq>{changefreq}</changefreq>\n"
+            f"    <priority>{priority}</priority>\n"
+            f"  </url>"
+        )
+    xml_lines.append("</urlset>\n")
+    response = Response(content="\n".join(xml_lines), media_type="application/xml")
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
 __all__ = [
     "CATEGORIES",
     "SAMPLE_PRODUCTS",
@@ -195,7 +243,9 @@ __all__ = [
     "landing",
     "privacy_page",
     "returns_page",
+    "robots_txt",
     "router",
+    "sitemap_xml",
     "terms_page",
 ]
 

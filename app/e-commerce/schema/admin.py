@@ -16,7 +16,11 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+import datetime
+import uuid
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AdminOverviewRead(BaseModel):
@@ -27,4 +31,64 @@ class AdminOverviewRead(BaseModel):
     live_sessions: int
 
 
-__all__ = ["AdminOverviewRead"]
+class AdminOrderUpdate(BaseModel):
+    """Admin order fulfillment status and tracking code update."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    status: Literal["shipped", "delivered"] | None = None
+    tracking_code: str | None = Field(default=None, max_length=100)
+
+
+class AdminOrderItemRead(BaseModel):
+    """Order line item snapshot for admin inspection."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    product_id: uuid.UUID
+    product_name: str
+    quantity: int
+    unit_price_toman: int
+
+
+class AdminOrderRead(BaseModel):
+    """Full order detail for admin fulfillment view."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    status: str
+    total_toman: int
+    total_rial: int
+    recipient_name: str | None = None
+    recipient_phone: str | None = None
+    delivery_address: str | None = None
+    tracking_code: str | None = None
+    created_at: datetime.datetime
+    items: list[AdminOrderItemRead] = Field(default_factory=list)
+
+
+class AdminOrderListItem(BaseModel):
+    """Compact order row for admin orders list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    status: str
+    total_toman: int
+    recipient_name: str | None = None
+    recipient_phone: str | None = None
+    tracking_code: str | None = None
+    items_count: int
+    created_at: datetime.datetime
+
+
+__all__ = [
+    "AdminOrderItemRead",
+    "AdminOrderListItem",
+    "AdminOrderRead",
+    "AdminOrderUpdate",
+    "AdminOverviewRead",
+]

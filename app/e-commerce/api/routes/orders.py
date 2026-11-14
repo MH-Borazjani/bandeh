@@ -49,6 +49,8 @@ ORDER_STATUS_META: dict[str, tuple[str, str]] = {
     "created": ("ثبت شده (در انتظار پرداخت)", "theme-badge"),
     "waiting_payment": ("در انتظار پرداخت", "theme-badge"),
     "paid": ("پرداخت شده", "theme-badge-success"),
+    "shipped": ("ارسال شده", "theme-badge"),
+    "delivered": ("تحویل داده شده", "theme-badge-success"),
     "failed": ("ناموفق", "theme-badge-danger"),
     "expired": ("منقضی شده", "theme-badge-danger"),
 }
@@ -147,6 +149,7 @@ def _render_order_detail_page(
         "recipient_name": order.recipient_name,
         "recipient_phone": order.recipient_phone,
         "delivery_address": order.delivery_address,
+        "tracking_code": order.tracking_code,
         "items": items_view,
     }
 

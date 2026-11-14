@@ -1,0 +1,10 @@
+{
+  "name": "easy-auto-frontend",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./app/e-commerce/static/css/input.css -o ./app/e-commerce/static/css/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

@@ -65,7 +65,46 @@ async def record_user_login(db: AsyncSession, user: User) -> None:
     await db.flush()
 
 
+async def create_or_promote_staff_user(
+    db: AsyncSession,
+    phone: str,
+    role: UserRole = UserRole.ADMIN,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> User:
+    """Create a new staff/admin user or promote an existing user.
+
+    Ensures the user exists, is active, and has the specified staff/admin role.
+    Commits changes to the database.
+    """
+    from services.auth_service import normalize_phone
+
+    canonical_phone = normalize_phone(phone)
+    user = await get_user_by_phone(db, canonical_phone)
+    if user is None:
+        user = User(
+            phone=canonical_phone,
+            role=role,
+            is_active=True,
+            first_name=first_name,
+            last_name=last_name,
+        )
+        db.add(user)
+    else:
+        user.role = role
+        user.is_active = True
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
+
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 __all__ = [
+    "create_or_promote_staff_user",
     "get_or_create_user_by_phone",
     "get_user_by_id",
     "get_user_by_phone",

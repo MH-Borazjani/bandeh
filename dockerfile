@@ -27,6 +27,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Pull official uv and uvx binaries from the Astral container registry.
 COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
 
+# Pull standalone Tailwind CSS CLI for compiling stylesheets at build time
+ADD --chmod=755 https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+
 # Set the canonical working directory inside the container
 WORKDIR /app
 
@@ -46,6 +49,9 @@ RUN uv sync --no-dev --no-install-project
 # -----------------------------------------------------------------------------
 # Copy remaining project source code after dependencies are installed
 COPY . .
+
+# Compile Tailwind CSS stylesheet at image build time instead of relying on CDN
+RUN tailwindcss -i app/e-commerce/static/css/input.css -o app/e-commerce/static/css/tailwind.css --minify
 
 # Finalize the installation to register the root package/editable links if configured
 RUN uv sync --no-dev

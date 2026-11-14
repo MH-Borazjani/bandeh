@@ -169,11 +169,75 @@ async def create_order(
     return reloaded
 
 
+async def list_all_orders(
+    db: AsyncSession,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> Sequence[Order]:
+    """Load orders for administrative fulfillment, newest first."""
+    stmt = (
+        select(Order)
+        .order_by(Order.created_at.desc())
+        .options(selectinload(Order.items), selectinload(Order.attempts))
+    )
+    if status:
+        stmt = stmt.where(Order.status == status)
+    if limit:
+        stmt = stmt.limit(limit)
+    if offset:
+        stmt = stmt.offset(offset)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+async def update_order_fulfillment(
+    db: AsyncSession,
+    order_id: uuid.UUID,
+    new_status: str | OrderStatus | None = None,
+    tracking_code: str | None = None,
+) -> Order:
+    """Update order fulfillment status (paid -> shipped -> delivered) and tracking code.
+
+    Raises OrderError if the order is not found, or if transitioning from an ineligible status.
+    """
+    order = await load_order(db, order_id)
+    if order is None:
+        raise OrderError("سفارش یافت نشد")
+
+    if new_status is not None:
+        target_status = str(new_status)
+        if target_status == OrderStatus.SHIPPED.value:
+            if order.status not in (OrderStatus.PAID.value, OrderStatus.SHIPPED.value):
+                raise OrderError(
+                    "تنها سفارش‌های پرداخت شده امکان تغییر به وضعیت ارسال شده را دارند."
+                )
+            order.status = OrderStatus.SHIPPED.value
+        elif target_status == OrderStatus.DELIVERED.value:
+            if order.status not in (OrderStatus.SHIPPED.value, OrderStatus.DELIVERED.value):
+                raise OrderError(
+                    "تنها سفارش‌های ارسال شده امکان تغییر به وضعیت تحویل شده را دارند."
+                )
+            order.status = OrderStatus.DELIVERED.value
+        else:
+            raise OrderError(f"وضعیت {target_status} در چرخه آماده‌سازی سفارش مجاز نیست.")
+
+    if tracking_code is not None:
+        order.tracking_code = tracking_code.strip() or None
+
+    await db.commit()
+    reloaded = await load_order(db, order.id)
+    assert reloaded is not None
+    return reloaded
+
+
 __all__ = [
     "OrderError",
     "OrderItemInput",
     "create_order",
+    "list_all_orders",
     "list_orders_for_user",
     "load_order",
     "load_order_for_user",
+    "update_order_fulfillment",
 ]

@@ -1,0 +1,154 @@
+# ==============================================================================
+# Production Docker Compose Configuration (Bandeh E-Commerce Platform)
+# ==============================================================================
+# Usage:
+#   docker compose -f compose.prod.yaml config   # Verify configuration syntax
+#
+# Key Features:
+#   - Executes FastAPI via production ASGI runner `fastapi run` instead of `dev`
+#   - Integrated Caddy reverse proxy for automated HTTPS (Let's Encrypt / ZeroSSL)
+#   - Internal isolation: only Caddy exposes public ports (80/443); backend is unexposed
+#   - Precompiled Tailwind CSS built directly at container image build time
+#   - Persistent named volumes for database, uploads, and TLS certificates
+
+services:
+  # ---------------------------------------------------------------------------
+  # Reverse Proxy & Automatic HTTPS Service: Caddy
+  # ---------------------------------------------------------------------------
+  caddy:
+    container_name: fastapi-e-commerce-proxy
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 QUIC
+    environment:
+      - DOMAIN=${DOMAIN:-example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+
+  # ---------------------------------------------------------------------------
+  # Web Application: FastAPI Production Server
+  # ---------------------------------------------------------------------------
+  web:
+    container_name: fastapi-e-commerce
+    build:
+      context: .
+      dockerfile: dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - PYTHONPATH=/app:/app/app/e-commerce
+    env_file:
+      - .env
+    # Executes the production server with Uvicorn worker process
+    command:
+      [
+        "fastapi",
+        "run",
+        "app/e-commerce/main.py",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "80",
+      ]
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Database Service: PostgreSQL
+  # ---------------------------------------------------------------------------
+  database:
+    container_name: fastapi-e-commerce-db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - ./data/database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Cache Service: Redis
+  # ---------------------------------------------------------------------------
+  cache:
+    container_name: fastapi-e-commerce-cache
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Headless CMS Service: Directus
+  # ---------------------------------------------------------------------------
+  directus:
+    container_name: fastapi-e-commerce-directus
+    image: directus/directus:12.0.2
+    restart: unless-stopped
+    volumes:
+      - ./volumes/uploads:/directus/uploads
+      - ./volumes/extensions:/directus/extensions
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --spider -q http://127.0.0.1:8055/server/ping || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+    environment:
+      SECRET: ${SECRET_KEY}
+      DB_CLIENT: "pg"
+      DB_HOST: "database"
+      DB_PORT: "5432"
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CACHE_ENABLED: "true"
+      CACHE_AUTO_PURGE: "true"
+      CACHE_STORE: "redis"
+      REDIS: "redis://cache:6379"
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PUBLIC_URL: "https://${DOMAIN:-example.com}/directus"
+
+volumes:
+  caddy_data:
+  caddy_config:

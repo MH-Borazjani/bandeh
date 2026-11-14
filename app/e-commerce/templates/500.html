@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}خطای سرور (۵۰۰) | بنده{% endblock %}
+
+{% block content %}
+<!-- 500 Internal Server Error Page (Bandeh Shop - Stage 1 Design System)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<div class="theme-bg-card theme-border border rounded-3xl p-8 sm:p-10 text-center my-6 max-w-md mx-auto shadow-sm">
+  <div class="mb-4">
+    <span class="text-rose-500 font-black text-6xl sm:text-7xl tracking-tighter" dir="ltr">500</span>
+  </div>
+  
+  <h1 class="text-xl sm:text-2xl font-black theme-text-main mb-2">
+    خطا در پردازش سرور
+  </h1>
+  
+  <p class="text-xs sm:text-sm theme-text-muted mb-8 leading-relaxed">
+    متأسفانه در حال حاضر پردازش درخواست شما با مشکل موقت مواجه شده است. تیم فنی در حال بررسی است. لطفاً لحظاتی دیگر تلاش کنید.
+  </p>
+  
+  <div class="flex flex-col gap-3">
+    <a href="/"
+       class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm flex items-center justify-center min-h-[48px]">
+      بازگشت به صفحه اصلی
+    </a>
+    <a href="/contact"
+       class="w-full theme-btn-secondary font-semibold py-3 px-6 rounded-xl text-sm flex items-center justify-center min-h-[48px]">
+      تماس با پشتیبانی
+    </a>
+  </div>
+</div>
+{% endblock %}

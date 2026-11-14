@@ -72,6 +72,7 @@ class OrderRead(BaseModel):
     recipient_name: str | None = None
     recipient_phone: str | None = None
     delivery_address: str | None = None
+    tracking_code: str | None = None
     created_at: datetime.datetime
 
 

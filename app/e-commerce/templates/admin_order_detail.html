@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}مدیریت سفارش {{ order.id }} | پنل ادمین بنده{% endblock %}
+
+{% block content %}
+<!-- Admin Order Detail & Fulfillment Page (Bandeh Shop)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<div class="mb-5 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl sm:text-2xl font-black theme-text-main">مدیریت سفارش</h1>
+    <p class="text-xs theme-text-muted mt-1 font-mono" dir="ltr">{{ order.id }}</p>
+  </div>
+  <a href="/admin/orders" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
+    <span>بازگشت به لیست</span>
+    <span>←</span>
+  </a>
+</div>
+
+{% if success_message %}
+<div class="theme-bg-card border theme-border theme-badge-success rounded-xl p-3.5 mb-4 text-xs font-bold flex items-center gap-2">
+  <span>✓</span>
+  <span>{{ success_message }}</span>
+</div>
+{% endif %}
+
+{% if error_message %}
+<div class="theme-bg-card border theme-border theme-badge-danger rounded-xl p-3.5 mb-4 text-xs font-bold flex items-center gap-2">
+  <span>✕</span>
+  <span>{{ error_message }}</span>
+</div>
+{% endif %}
+
+<!-- Order Status Banner -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <div class="flex items-center justify-between mb-2">
+    <span class="text-xs theme-text-muted">وضعیت سفارش:</span>
+    <span class="inline-flex items-center text-xs font-bold rounded-lg px-3 py-1 {{ order.status_badge_class }}">
+      {{ order.status_label }}
+    </span>
+  </div>
+  <div class="flex items-center justify-between text-xs">
+    <span class="theme-text-muted">تاریخ ثبت:</span>
+    <span class="theme-text-main font-medium" dir="ltr">{{ order.created_at_formatted }}</span>
+  </div>
+  {% if order.tracking_code %}
+  <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
+    <span class="theme-text-muted">کد رهگیری پستی فعلی:</span>
+    <span class="theme-accent font-mono font-bold" dir="ltr">{{ order.tracking_code }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Fulfillment Action Panel -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <h2 class="text-sm font-bold theme-text-main mb-3 pb-2 border-b theme-border flex items-center gap-2">
+    <svg class="w-4 h-4 theme-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+    </svg>
+    <span>فرآیند آماده‌سازی و ارسال (Fulfillment)</span>
+  </h2>
+
+  {% if order.status == 'paid' %}
+  <!-- Status is PAID: Admin can change to SHIPPED and provide tracking code -->
+  <form method="post" action="/admin/orders/{{ order.id }}/status" class="space-y-4">
+    <input type="hidden" name="status" value="shipped">
+    <div>
+      <label for="tracking_code" class="block text-xs font-semibold theme-text-main mb-1.5">
+        کد رهگیری مرسوله پستی
+      </label>
+      <input type="text"
+             id="tracking_code"
+             name="tracking_code"
+             dir="ltr"
+             required
+             value="{{ order.tracking_code or '' }}"
+             placeholder="مثال: 140301234567890123"
+             class="w-full theme-input rounded-xl px-3.5 py-2.5 text-xs font-mono min-h-[44px]">
+      <p class="text-[11px] theme-text-muted mt-1">با ثبت ارسال، پیامک حاوی کد رهگیری به شماره خریدار ارسال می‌گردد.</p>
+    </div>
+    <button type="submit"
+            class="w-full theme-btn-accent font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center min-h-[44px]">
+      تغییر وضعیت به ارسال شده و ارسال پیامک به خریدار
+    </button>
+  </form>
+
+  {% elif order.status == 'shipped' %}
+  <!-- Status is SHIPPED: Admin can update tracking code OR change to DELIVERED -->
+  <div class="space-y-4">
+    <form method="post" action="/admin/orders/{{ order.id }}/status" class="space-y-3">
+      <input type="hidden" name="status" value="shipped">
+      <div>
+        <label for="tracking_code_update" class="block text-xs font-semibold theme-text-main mb-1.5">
+          ویرایش کد رهگیری پستی
+        </label>
+        <div class="flex gap-2">
+          <input type="text"
+                 id="tracking_code_update"
+                 name="tracking_code"
+                 dir="ltr"
+                 value="{{ order.tracking_code or '' }}"
+                 class="flex-1 theme-input rounded-xl px-3.5 py-2.5 text-xs font-mono min-h-[44px]">
+          <button type="submit"
+                  class="theme-btn-secondary font-bold px-4 py-2 text-xs rounded-xl min-h-[44px]">
+            بروزرسانی کد
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <form method="post" action="/admin/orders/{{ order.id }}/status">
+      <input type="hidden" name="status" value="delivered">
+      <input type="hidden" name="tracking_code" value="{{ order.tracking_code or '' }}">
+      <button type="submit"
+              class="w-full theme-btn-accent font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center min-h-[44px]">
+        تأیید تحویل نهایی به خریدار (Delivered)
+      </button>
+    </form>
+  </div>
+
+  {% elif order.status == 'delivered' %}
+  <div class="p-4 rounded-xl theme-bg-card-subtle text-xs text-center space-y-1">
+    <p class="font-bold theme-text-main">✓ این سفارش با موفقیت تحویل مشتری گردیده است.</p>
+    {% if order.tracking_code %}
+    <p class="theme-text-muted font-mono" dir="ltr">کد رهگیری: {{ order.tracking_code }}</p>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="p-4 rounded-xl theme-bg-card-subtle text-xs text-center">
+    <p class="theme-text-muted">
+      این سفارش در وضعیت «{{ order.status_label }}» قرار دارد. عملیات ارسال و ثبت کد رهگیری تنها برای سفارش‌های پرداخت شده امکان‌پذیر است.
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Customer & Delivery Address Details -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <h2 class="text-sm font-bold theme-text-main mb-3 pb-2 border-b theme-border">اطلاعات خریدار و آدرس تحویل</h2>
+  <div class="space-y-2.5 text-xs">
+    <div class="flex justify-between">
+      <span class="theme-text-muted">نام تحویل‌گیرنده:</span>
+      <span class="font-bold theme-text-main">{{ order.recipient_name or 'ثبت نشده' }}</span>
+    </div>
+    <div class="flex justify-between">
+      <span class="theme-text-muted">شماره تماس تحویل‌گیرنده:</span>
+      <span class="font-bold theme-text-main font-mono" dir="ltr">{{ order.recipient_phone or 'ثبت نشده' }}</span>
+    </div>
+    {% if order.delivery_address %}
+    <div class="pt-2 border-t theme-border">
+      <span class="theme-text-muted block mb-1">نشانی پستی:</span>
+      <p class="theme-text-main leading-relaxed bg-black/10 dark:bg-black/30 p-2.5 rounded-xl">{{ order.delivery_address }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Order Items List -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
+  <h2 class="text-sm font-bold theme-text-main mb-3 pb-2 border-b theme-border flex items-center justify-between">
+    <span>اقلام سفارش</span>
+    <span class="text-xs theme-text-muted font-normal">{{ items|length }} قلم کالا</span>
+  </h2>
+
+  <div class="divide-y theme-border space-y-3">
+    {% for item in items %}
+    <div class="pt-3 first:pt-0 flex items-start justify-between gap-3 text-xs">
+      <div class="flex-1">
+        <a href="/products/{{ item.product_id }}" class="font-bold theme-text-main hover:underline text-sm leading-snug block mb-1">
+          {{ item.product_name }}
+        </a>
+        <div class="text-xs theme-text-muted flex items-center gap-2">
+          <span>تعداد: <strong class="theme-text-main">{{ item.quantity_formatted }}</strong></span>
+          <span>•</span>
+          <span>قیمت واحد: {{ item.unit_price_formatted }} تومان</span>
+        </div>
+      </div>
+      <div class="text-left shrink-0">
+        <span class="theme-accent font-extrabold text-sm sm:text-base">{{ item.line_total_formatted }}</span>
+        <span class="text-[11px] theme-text-muted block">تومان</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between">
+    <span class="text-xs font-semibold theme-text-main">مبلغ کل سفارش:</span>
+    <div class="text-left">
+      <span class="theme-accent font-black text-lg">{{ order.total_toman_formatted }}</span>
+      <span class="text-xs theme-text-muted">تومان</span>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

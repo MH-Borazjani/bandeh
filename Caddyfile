@@ -1,0 +1,44 @@
+# ==============================================================================
+# Caddy Configuration for Bandeh E-Commerce Platform
+# ==============================================================================
+# Automatic HTTPS via Let's Encrypt / ZeroSSL with domain as placeholder variable.
+# Pass the production domain using DOMAIN environment variable (e.g. DOMAIN=bandeh.ir).
+
+{$DOMAIN:localhost} {
+    # Encode responses using modern compression algorithms
+    encode zstd gzip
+
+    # Reverse proxy application traffic to the FastAPI ASGI web service
+    reverse_proxy web:80 {
+        # Transparent proxy headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Health check to ensure traffic is only routed to responsive containers
+        health_uri /health
+        health_interval 10s
+        health_timeout 3s
+    }
+
+    # Security headers for TLS enforcement and cross-site protections
+    header {
+        # Enable HTTP Strict Transport Security (HSTS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent MIME-sniffing
+        X-Content-Type-Options "nosniff"
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # Modern referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Disable server signature identification
+        -Server
+    }
+
+    # Structured JSON access logging for production auditing
+    log {
+        output stdout
+        format json
+    }
+}

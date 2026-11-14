@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
+    # SMS Provider Configuration (Kavenegar)
+    kavenegar_api_key: SecretStr | None = Field(
+        default=None, description="Kavenegar SMS API key"
+    )
+    kavenegar_sender: str | None = Field(
+        default=None, description="Kavenegar SMS sender number"
+    )
+
     # Dynamic database connection URL construction
     @computed_field
     @property

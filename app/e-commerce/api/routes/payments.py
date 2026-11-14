@@ -140,6 +140,21 @@ async def payment_callback(
             )
         raise HTTPException(status_code=404, detail="unknown payment")
 
+    if result["status"] == "paid" and "order_id" in result:
+        try:
+            oid = uuid.UUID(result["order_id"])
+            order_record = await payment_service.load_order(db, oid)
+            if order_record:
+                target_phone = order_record.recipient_phone or (
+                    order_record.user.phone if order_record.user else None
+                )
+                if target_phone:
+                    from integrations.sms import send_order_paid
+
+                    send_order_paid(target_phone, order_record.id, order_record.total_toman)
+        except Exception:
+            pass
+
     if is_html:
         is_success = result["status"] in ("paid", "already_paid")
         order_id_val = result.get("order_id") or orderId or None
