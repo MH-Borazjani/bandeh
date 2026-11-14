@@ -146,14 +146,85 @@
     return setTheme(getTheme() === "light" ? "dark" : "light");
   }
 
+  function toPersianDigits(num) {
+    var fa = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+    return String(num).replace(/[0-9]/g, function (d) {
+      return fa[parseInt(d, 10)];
+    });
+  }
+
   /* --- Page wiring ----------------------------------------------------- */
 
   function updateCartBadge() {
     var badge = document.getElementById("cart-count");
     if (!badge) return;
     var count = cartDraftCount();
-    badge.textContent = count > 0 ? String(count) : "";
+    badge.textContent = count > 0 ? toPersianDigits(count) : "";
     badge.style.display = count > 0 ? "" : "none";
+  }
+
+  /* --- Quantity stepper ------------------------------------------- */
+  /* On listing pages (landing, search, category) an add-to-cart button
+     becomes a small stepper (- qty +) once its product is in the cart
+     draft, so the visitor can choose how many and reduce it. At qty 0
+     the stepper turns back into the original + button. The product page
+     keeps its own stepper input, so its add button is left alone. */
+
+  function getDraftQty(id) {
+    var draft = getCartDraft();
+    for (var i = 0; i < draft.length; i++) {
+      if (draft[i].id === id) return draft[i].qty || 0;
+    }
+    return 0;
+  }
+
+  var stepperOriginals = {};
+
+  function showStepper(button, id, name) {
+    var isRound = button.classList.contains("rounded-full");
+    var wrap = document.createElement("div");
+    wrap.className = isRound
+      ? "flex items-center gap-0.5 rounded-full border border-neutral-700 theme-bg-card-subtle shrink-0 select-none"
+      : "flex items-center gap-0.5 rounded-xl border border-neutral-700 theme-bg-card-subtle shrink-0 select-none";
+    wrap.setAttribute("data-stepper-for", id);
+    var minus = document.createElement("button");
+    minus.type = "button";
+    minus.className =
+      "min-h-[36px] min-w-[36px] flex items-center justify-center rounded-full theme-btn-secondary text-base font-bold";
+    minus.textContent = "−";
+    minus.setAttribute("aria-label", "کاهش تعداد");
+    var label = document.createElement("span");
+    label.className = "min-w-[24px] text-center text-sm font-bold";
+    label.textContent = toPersianDigits(getDraftQty(id));
+    var plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = minus.className;
+    plus.textContent = "+";
+    plus.setAttribute("aria-label", "افزایش تعداد");
+    minus.addEventListener("click", function () {
+      var current = getDraftQty(id);
+      if (current <= 1) {
+        removeFromCartDraft(id);
+        var original = stepperOriginals[id];
+        if (original && wrap.parentNode) {
+          wrap.parentNode.replaceChild(original, wrap);
+        }
+      } else {
+        setCartDraftQty(id, current - 1);
+        label.textContent = toPersianDigits(current - 1);
+      }
+    });
+    plus.addEventListener("click", function () {
+      addToCartDraft({ id: id, name: name, qty: 1 });
+      label.textContent = toPersianDigits(getDraftQty(id));
+    });
+    wrap.appendChild(minus);
+    wrap.appendChild(label);
+    wrap.appendChild(plus);
+    stepperOriginals[id] = button;
+    if (button.parentNode) {
+      button.parentNode.replaceChild(wrap, button);
+    }
   }
 
   function wirePage() {
@@ -195,47 +266,33 @@
       });
     }
 
-    // Add to cart buttons
-    var buttons = document.querySelectorAll("[data-add-to-cart]");
-    buttons.forEach(function (button) {
+    // Add to cart buttons. On listing pages the button becomes a
+    // quantity stepper once the item is in the draft (see showStepper);
+    // the product page has its own stepper input, so its button keeps
+    // the plain checkmark behaviour.
+    var hasPageStepper = !!document.getElementById("product-quantity");
+    var addButtons = document.querySelectorAll("[data-add-to-cart]");
+    addButtons.forEach(function (button) {
+      var productId = button.getAttribute("data-product-id");
+      var productName = button.getAttribute("data-product-name");
       button.addEventListener("click", function () {
         var qtyInput = document.getElementById("product-quantity");
         var qty = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
-        addToCartDraft({
-          id: button.getAttribute("data-product-id"),
-          name: button.getAttribute("data-product-name"),
-          qty: qty,
-        });
-        if (button.classList.contains("rounded-full")) {
-          button.textContent = "✓";
+        addToCartDraft({ id: productId, name: productName, qty: qty });
+        if (hasPageStepper) {
+          if (button.classList.contains("rounded-full")) {
+            button.textContent = "✓";
+          } else {
+            button.textContent = "✓ در سبد";
+          }
         } else {
-          button.textContent = "✓ در سبد";
+          showStepper(button, productId, productName);
         }
       });
+      if (!hasPageStepper && getDraftQty(productId) > 0) {
+        showStepper(button, productId, productName);
+      }
     });
-
-    // Mobile menu drawer
-    var menuBtn = document.getElementById("mobile-menu-btn");
-    var menuClose = document.getElementById("mobile-menu-close");
-    var menuDrawer = document.getElementById("mobile-menu-drawer");
-    if (menuBtn && menuDrawer) {
-      menuBtn.addEventListener("click", function () {
-        var isHidden = menuDrawer.style.display === "none" || !menuDrawer.style.display;
-        menuDrawer.style.display = isHidden ? "flex" : "none";
-      });
-    }
-    if (menuClose && menuDrawer) {
-      menuClose.addEventListener("click", function () {
-        menuDrawer.style.display = "none";
-      });
-    }
-    if (menuDrawer) {
-      menuDrawer.addEventListener("click", function (evt) {
-        if (evt.target === menuDrawer) {
-          menuDrawer.style.display = "none";
-        }
-      });
-    }
   }
 
   if (document.readyState === "loading") {
@@ -256,5 +313,6 @@
     getTheme: getTheme,
     setTheme: setTheme,
     toggleTheme: toggleTheme,
+    toPersianDigits: toPersianDigits,
   };
 })();

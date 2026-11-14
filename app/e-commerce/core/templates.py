@@ -23,5 +23,55 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-__all__ = ["templates", "TEMPLATES_DIR"]
+_FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def to_persian_digits(value: object) -> str:
+    """Convert ASCII digits to Persian digits."""
+    if value is None:
+        return ""
+    return str(value).translate(_FA_DIGITS)
+
+
+def to_persian_item_count(value: object) -> str:
+    """Format an item count in Persian digits followed by 'کالا' (e.g. '۱ کالا')."""
+    if value is None:
+        return "۰ کالا"
+    return f"{str(value).translate(_FA_DIGITS)} کالا"
+
+
+def to_compact_price(value: int | str | None) -> dict[str, str]:
+    """Compact price for product displays: 32,000,000 -> {'value': '۳۲', 'unit': 'میلیون'}.
+
+    28,500,000 -> {'value': '۲۸٫۵', 'unit': 'میلیون'}; 500,000 -> '۵۰۰ هزار'.
+    Display only: cart totals, checkout, orders and payment pages keep the
+    exact full amount, because that is the money that moves.
+    """
+    if value is None:
+        return {"value": "", "unit": ""}
+    try:
+        amount = int(value)
+    except (TypeError, ValueError):
+        return {"value": "", "unit": ""}
+    if amount >= 1_000_000:
+        text = f"{amount / 1_000_000:.1f}".rstrip("0").rstrip(".")
+        return {"value": text.translate(_FA_DIGITS).replace(".", "٫"), "unit": "میلیون"}
+    if amount >= 1_000:
+        text = f"{amount / 1_000:.1f}".rstrip("0").rstrip(".")
+        return {"value": text.translate(_FA_DIGITS).replace(".", "٫"), "unit": "هزار"}
+    return {"value": str(amount).translate(_FA_DIGITS), "unit": ""}
+
+
+templates.env.filters["persian_digits"] = to_persian_digits
+templates.env.filters["item_count"] = to_persian_item_count
+templates.env.filters["compact_price"] = to_compact_price
+
+__all__ = [
+    "TEMPLATES_DIR",
+    "templates",
+    "to_persian_digits",
+    "to_persian_item_count",
+    "to_compact_price",
+]
+
 

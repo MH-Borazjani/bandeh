@@ -9,7 +9,7 @@
 <div class="mb-5 flex items-center justify-between">
   <div>
     <h1 class="text-xl sm:text-2xl font-black theme-text-main">مدیریت سفارش</h1>
-    <p class="text-xs theme-text-muted mt-1 font-mono" dir="ltr">{{ order.id }}</p>
+    <p class="text-xs theme-text-muted mt-1 font-mono">{{ order.id }}</p>
   </div>
   <a href="/admin/orders" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
     <span>بازگشت به لیست</span>
@@ -41,12 +41,12 @@
   </div>
   <div class="flex items-center justify-between text-xs">
     <span class="theme-text-muted">تاریخ ثبت:</span>
-    <span class="theme-text-main font-medium" dir="ltr">{{ order.created_at_formatted }}</span>
+    <span class="theme-text-main font-medium">{{ order.created_at_formatted }}</span>
   </div>
   {% if order.tracking_code %}
   <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
     <span class="theme-text-muted">کد رهگیری پستی فعلی:</span>
-    <span class="theme-accent font-mono font-bold" dir="ltr">{{ order.tracking_code }}</span>
+    <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
   </div>
   {% endif %}
 </div>
@@ -57,7 +57,7 @@
     <svg class="w-4 h-4 theme-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
     </svg>
-    <span>فرآیند آماده‌سازی و ارسال (Fulfillment)</span>
+    <span>فرآیند آماده‌سازی و ارسال</span>
   </h2>
 
   {% if order.status == 'paid' %}
@@ -71,7 +71,6 @@
       <input type="text"
              id="tracking_code"
              name="tracking_code"
-             dir="ltr"
              required
              value="{{ order.tracking_code or '' }}"
              placeholder="مثال: 140301234567890123"
@@ -97,7 +96,6 @@
           <input type="text"
                  id="tracking_code_update"
                  name="tracking_code"
-                 dir="ltr"
                  value="{{ order.tracking_code or '' }}"
                  class="flex-1 theme-input rounded-xl px-3.5 py-2.5 text-xs font-mono min-h-[44px]">
           <button type="submit"
@@ -113,7 +111,7 @@
       <input type="hidden" name="tracking_code" value="{{ order.tracking_code or '' }}">
       <button type="submit"
               class="w-full theme-btn-accent font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center min-h-[44px]">
-        تأیید تحویل نهایی به خریدار (Delivered)
+        تأیید تحویل نهایی به خریدار
       </button>
     </form>
   </div>
@@ -122,7 +120,7 @@
   <div class="p-4 rounded-xl theme-bg-card-subtle text-xs text-center space-y-1">
     <p class="font-bold theme-text-main">✓ این سفارش با موفقیت تحویل مشتری گردیده است.</p>
     {% if order.tracking_code %}
-    <p class="theme-text-muted font-mono" dir="ltr">کد رهگیری: {{ order.tracking_code }}</p>
+    <p class="theme-text-muted font-mono">کد رهگیری: {{ order.tracking_code }}</p>
     {% endif %}
   </div>
 
@@ -145,7 +143,7 @@
     </div>
     <div class="flex justify-between">
       <span class="theme-text-muted">شماره تماس تحویل‌گیرنده:</span>
-      <span class="font-bold theme-text-main font-mono" dir="ltr">{{ order.recipient_phone or 'ثبت نشده' }}</span>
+      <span class="font-bold theme-text-main font-mono">{{ order.recipient_phone or 'ثبت نشده' }}</span>
     </div>
     {% if order.delivery_address %}
     <div class="pt-2 border-t theme-border">
@@ -160,7 +158,7 @@
 <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
   <h2 class="text-sm font-bold theme-text-main mb-3 pb-2 border-b theme-border flex items-center justify-between">
     <span>اقلام سفارش</span>
-    <span class="text-xs theme-text-muted font-normal">{{ items|length }} قلم کالا</span>
+    <span class="text-xs theme-text-muted font-normal">{{ items|length | persian_digits }} کالا</span>
   </h2>
 
   <div class="divide-y theme-border space-y-3">
@@ -176,7 +174,7 @@
           <span>قیمت واحد: {{ item.unit_price_formatted }} تومان</span>
         </div>
       </div>
-      <div class="text-left shrink-0">
+      <div class="text-right shrink-0">
         <span class="theme-accent font-extrabold text-sm sm:text-base">{{ item.line_total_formatted }}</span>
         <span class="text-[11px] theme-text-muted block">تومان</span>
       </div>
@@ -186,7 +184,7 @@
 
   <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between">
     <span class="text-xs font-semibold theme-text-main">مبلغ کل سفارش:</span>
-    <div class="text-left">
+    <div class="text-right">
       <span class="theme-accent font-black text-lg">{{ order.total_toman_formatted }}</span>
       <span class="text-xs theme-text-muted">تومان</span>
     </div>

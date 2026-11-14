@@ -151,6 +151,7 @@ async def search_products_endpoint(
                     "name": p_read.name,
                     "description": p_read.description,
                     "formatted_price": format_toman_price(p_read.price_toman),
+                    "price_toman": p_read.price_toman,
                     "category": p_read.category or "لوازم خانگی",
                     "tag": p_read.tag,
                     "stock": p_read.stock,
@@ -175,6 +176,7 @@ async def search_products_endpoint(
                                 "formatted_price": format_toman_price(
                                     cp.get("price_toman")
                                 ),
+                                "price_toman": cp.get("price_toman"),
                                 "category": cp.get("category") or "لوازم خانگی",
                                 "tag": cp.get("tag"),
                                 "stock": cp.get("stock", 0),
@@ -207,6 +209,7 @@ async def search_products_endpoint(
                         "formatted_price": format_toman_price(
                             cp.get("price_toman")
                         ),
+                        "price_toman": cp.get("price_toman"),
                         "category": cp.get("category") or category,
                         "tag": cp.get("tag"),
                         "stock": cp.get("stock", 0),
@@ -228,6 +231,7 @@ async def search_products_endpoint(
                             "name": p_read.name,
                             "description": p_read.description,
                             "formatted_price": format_toman_price(p_read.price_toman),
+                            "price_toman": p_read.price_toman,
                             "category": p_read.category or category,
                             "tag": p_read.tag,
                             "stock": p_read.stock,
@@ -340,6 +344,7 @@ async def category_page_endpoint(
                 "name": pname,
                 "description": pdesc,
                 "formatted_price": format_toman_price(price),
+                "price_toman": price,
                 "available": avail,
                 "stock": stock,
                 "tag": tag,

@@ -73,6 +73,12 @@ class ProductContent(TypedDict):
 
     name: str
     price: str
+    # Raw Toman integer, for the compact price display (۳۲ میلیون).
+    # None when Directus did not send a price.
+    price_toman: int | None
+    # Directus product id (UUID string). None for rows without one, so the
+    # landing page falls back to a plain name (no product link).
+    id: str | None
     tag: str | None
     # Category name, for the per-category item count on the landing page.
     # Photo file name, for the product thumbnail. Both None when Directus
@@ -102,31 +108,39 @@ FALLBACK_CATEGORIES: list[CategoryContent] = [
 FALLBACK_PRODUCTS: list[ProductContent] = [
     {
         "name": "یخچال فریزر دوقلو",
+        "price_toman": 45000000,
         "price": "۴۵٬۰۰۰٬۰۰۰",
         "tag": "پرفروش",
         "category": None,
         "image_path": None,
+        "id": None,
     },
     {
         "name": "ماشین لباسشویی ۸ کیلویی",
+        "price_toman": 28500000,
         "price": "۲۸٬۵۰۰٬۰۰۰",
         "tag": None,
         "category": None,
         "image_path": None,
+        "id": None,
     },
     {
         "name": "جاروبرقی ۲۰۰۰ وات",
+        "price_toman": 9800000,
         "price": "۹٬۸۰۰٬۰۰۰",
         "tag": "تخفیف‌دار",
         "category": None,
         "image_path": None,
+        "id": None,
     },
     {
         "name": "اجاق گاز ۵ شعله",
+        "price_toman": 19000000,
         "price": "۱۹٬۰۰۰٬۰۰۰",
         "tag": None,
         "category": None,
         "image_path": None,
+        "id": None,
     },
 ]
 
@@ -202,7 +216,8 @@ class DirectusClient:
         """Fetch and map the landing content from Directus (no cache, no fallback)."""
         categories = await self._get_items("categories", ["id", "name", "description"])
         products = await self._get_items(
-            "products", ["name", "price_toman", "tag", "category", "image_path"]
+            "products",
+            ["id", "name", "price_toman", "tag", "category", "image_path"],
         )
 
         # Category id -> name, so each product can carry its category name
@@ -248,10 +263,19 @@ class DirectusClient:
                 )
             raw_image = row.get("image_path")
             image_val: str | None = raw_image if isinstance(raw_image, str) else None
+            raw_id = row.get("id")
+            id_val: str | None = raw_id if isinstance(raw_id, str) else None
+            price_toman_val: int | None = (
+                price_val
+                if isinstance(price_val, int) and not isinstance(price_val, bool)
+                else None
+            )
             mapped_products.append(
                 {
                     "name": name,
                     "price": format_toman_price(price_val),
+                    "price_toman": price_toman_val,
+                    "id": id_val,
                     "tag": tag_val,
                     "category": category_val,
                     "image_path": image_val,

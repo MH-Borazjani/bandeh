@@ -59,7 +59,9 @@ def main() -> None:
     assert 'id="theme-toggle"' in html, "theme toggle button missing"
     assert 'id="cart-count"' in html, "cart badge missing"
     assert "data-add-to-cart" in html, "add-to-cart buttons missing"
-    assert 'data-product-id="sample-' in html, "sample product ids missing"
+    assert re.search(r'data-product-id="[^"]+"', html), (
+        "add-to-cart buttons carry no product id"
+    )
     print("   [OK] landing wires toggle, badge, add-to-cart buttons")
 
     # 2. The JS file is served ----------------------------------------------

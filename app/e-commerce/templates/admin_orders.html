@@ -46,7 +46,7 @@
       <span class="inline-flex items-center text-xs font-bold rounded-lg px-2.5 py-1 {{ order.status_badge_class }}">
         {{ order.status_label }}
       </span>
-      <span class="text-xs theme-text-muted font-medium" dir="ltr">
+      <span class="text-xs theme-text-muted font-medium">
         {{ order.created_at_formatted }}
       </span>
     </div>
@@ -55,7 +55,7 @@
     <div class="space-y-2 mb-4 text-xs">
       <div class="flex items-center justify-between">
         <span class="theme-text-muted">شناسه سفارش:</span>
-        <span class="font-mono font-semibold theme-text-main text-[11px]" dir="ltr">{{ order.id }}</span>
+        <span class="font-mono font-semibold theme-text-main text-[11px]">{{ order.id }}</span>
       </div>
       <div class="flex items-center justify-between">
         <span class="theme-text-muted">خریدار / تحویل‌گیرنده:</span>
@@ -63,12 +63,12 @@
       </div>
       <div class="flex items-center justify-between">
         <span class="theme-text-muted">تعداد اقلام:</span>
-        <span class="font-bold theme-text-main">{{ order.items_count }} کالا</span>
+        <span class="font-bold theme-text-main">{{ order.items_count | persian_digits }} کالا</span>
       </div>
       {% if order.tracking_code %}
       <div class="flex items-center justify-between pt-1">
         <span class="theme-text-muted">کد رهگیری پستی:</span>
-        <span class="theme-accent font-mono font-bold" dir="ltr">{{ order.tracking_code }}</span>
+        <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
       </div>
       {% endif %}
     </div>

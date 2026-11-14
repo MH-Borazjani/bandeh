@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
     create_async_engine,
 )
 
+from core.templates import to_compact_price  # noqa: E402
 from db.base import Base  # noqa: E402
 from db.models.product import Product  # noqa: E402
 from db.session import get_db  # noqa: E402
@@ -150,8 +151,10 @@ class ProductPageTests(unittest.TestCase):
         self.assertIn("text/html", resp.headers["content-type"])
         self.assertIn("یخچال فریزر هوشمند بنده", resp.text)
 
-        expected_price = format_toman_price(45000000)
-        self.assertIn(expected_price, resp.text)
+        compact = to_compact_price(45000000)
+        self.assertIn(compact["value"], resp.text)
+        self.assertIn(compact["unit"], resp.text)
+        self.assertNotIn(format_toman_price(45000000), resp.text)
         self.assertIn("تومان", resp.text)
 
     def test_product_page_renders_design_system_and_controls(self) -> None:
@@ -196,8 +199,10 @@ class ProductPageTests(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertIn("ماشین لباسشویی ۹ کیلویی بنده", resp.text)
-        expected_price = format_toman_price(28500000)
-        self.assertIn(expected_price, resp.text)
+        compact = to_compact_price(28500000)
+        self.assertIn(compact["value"], resp.text)
+        self.assertIn(compact["unit"], resp.text)
+        self.assertNotIn(format_toman_price(28500000), resp.text)
         self.assertIn("تومان", resp.text)
 
     def test_product_with_integer_category_resolves_to_category_name(self) -> None:

@@ -15,23 +15,23 @@
   </a>
 </div>
 
-<!-- Product photo / illustration card -->
-<div class="theme-bg-card theme-border border rounded-2xl overflow-hidden p-3 mb-4">
-  {% if product.image_url %}
-  <img src="{{ product.image_url }}"
-       alt="{{ product.name }}"
-       class="w-full h-64 sm:h-72 object-cover rounded-xl">
-  {% else %}
-  <div class="theme-bg-card-subtle theme-border border border-dashed rounded-xl h-60 sm:h-72 flex flex-col items-center justify-center gap-2 p-4">
-    <div class="w-16 h-16 rounded-2xl theme-bg-card theme-border border flex items-center justify-center">
-      <svg class="w-8 h-8 theme-accent opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-      </svg>
-    </div>
-    <span class="theme-text-muted text-xs font-medium">تصویر اختصاصی کالا به‌زودی</span>
-  </div>
+<!-- Product photo card -->
+<div class="theme-bg-card theme-border border rounded-2xl overflow-hidden mb-4">
+  {% set prod_img = product.image_url %}
+  {% if not prod_img %}
+    {% if 'fridge' in product.name.lower() or 'یخچال' in product.name %}
+      {% set prod_img = '/static/img/product-fridge.jpg' %}
+    {% elif 'tv' in product.name.lower() or 'تلویزیون' in product.name %}
+      {% set prod_img = '/static/img/product-tv.jpg' %}
+    {% elif 'wash' in product.name.lower() or 'لباسشویی' in product.name %}
+      {% set prod_img = '/static/img/product-washer.jpg' %}
+    {% else %}
+      {% set prod_img = '/static/img/product-fridge.jpg' %}
+    {% endif %}
   {% endif %}
+  <img src="{{ prod_img }}"
+       alt="{{ product.name }}"
+       class="w-full h-64 sm:h-72 object-cover">
 </div>
 
 <!-- Product Information Card -->
@@ -57,7 +57,7 @@
     {% elif available > 0 %}
     <div class="inline-flex items-center gap-2 theme-badge px-3 py-1.5 rounded-full text-xs font-semibold">
       <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-      <span>تنها {{ available }} عدد در انبار باقیست</span>
+      <span>تنها {{ available | persian_digits }} عدد در انبار باقیست</span>
     </div>
     {% else %}
     <div class="inline-flex items-center gap-2 theme-badge-danger px-3 py-1.5 rounded-full text-xs font-semibold">
@@ -72,8 +72,10 @@
     <!-- Price Display -->
     <div class="flex items-baseline justify-between">
       <span class="text-sm theme-text-muted">قیمت نقدی:</span>
+      {% set cp = product.price_toman | compact_price %}
       <div class="flex items-baseline gap-1.5">
-        <span class="theme-accent font-black text-2xl sm:text-3xl">{{ formatted_price }}</span>
+        <span class="theme-accent font-black text-2xl sm:text-3xl">{{ cp.value }}</span>
+        {% if cp.unit %}<span class="text-xs theme-text-muted font-medium">{{ cp.unit }}</span>{% endif %}
         <span class="text-xs theme-text-muted font-medium">تومان</span>
       </div>
     </div>

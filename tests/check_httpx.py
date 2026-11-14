@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-comme
 import httpx
 
 from core.cache import reset_cache_for_tests
+from core.templates import to_compact_price
 from integrations.directus_client import (
     FALLBACK_CATEGORIES,
     FALLBACK_PRODUCTS,
@@ -87,6 +88,13 @@ def main() -> None:
     assert format_toman_price(9800000) == "۹٬۸۰۰٬۰۰۰", format_toman_price(9800000)
     assert format_toman_price("۴۵٬۰۰۰٬۰۰۰") == "۴۵٬۰۰۰٬۰۰۰"
 
+    # Compact prices for product displays (۳۲ میلیون, ۲۸٫۵ میلیون).
+    assert to_compact_price(32000000) == {"value": "۳۲", "unit": "میلیون"}
+    assert to_compact_price(28500000) == {"value": "۲۸٫۵", "unit": "میلیون"}
+    assert to_compact_price(500000) == {"value": "۵۰۰", "unit": "هزار"}
+    assert to_compact_price(999) == {"value": "۹۹۹", "unit": ""}
+    assert to_compact_price(None) == {"value": "", "unit": ""}
+
     # 3. Healthy Directus: rows are mapped to the landing shape.
     async def _healthy() -> None:
         async with _mock_client(_directus_ok) as http:
@@ -96,6 +104,8 @@ def main() -> None:
             {
                 "name": "یخچال تست",
                 "price": "۴۵٬۰۰۰٬۰۰۰",
+                "price_toman": 45000000,
+                "id": None,
                 "tag": None,
                 "category": None,
                 "image_path": None,

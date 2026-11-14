@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 )
 
 from core.security import SESSION_COOKIE_NAME, create_session  # noqa: E402
+from core.templates import to_compact_price  # noqa: E402
 from db.base import Base  # noqa: E402
 from db.models.order import Order, OrderItem, OrderStatus  # noqa: E402
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus  # noqa: E402
@@ -321,9 +322,10 @@ class FrontendStage3Tests(unittest.TestCase):
         self.assertIn("text/html", resp.headers["content-type"])
         html = resp.text
 
-        # Search box form and controls
+        # Search box form and category chips (no dropdown anymore)
         self.assertIn('name="q"', html)
-        self.assertIn('name="category"', html)
+        self.assertIn("همه دسته‌ها", html)
+        self.assertIn("/category/", html)
         self.assertIn("جستجو", html)
 
     def test_search_page_with_query_returns_results(self) -> None:
@@ -336,7 +338,10 @@ class FrontendStage3Tests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         html = resp.text
         self.assertIn("یخچال فریزر هوشمند بنده", html)
-        self.assertIn(format_toman_price(42000000), html)
+        compact = to_compact_price(42000000)
+        self.assertIn(compact["value"], html)
+        self.assertIn(compact["unit"], html)
+        self.assertNotIn(format_toman_price(42000000), html)
 
     def test_search_json_api_kept_working(self) -> None:
         """GET /search must continue returning JSON list of ProductRead for API callers."""
@@ -357,7 +362,10 @@ class FrontendStage3Tests(unittest.TestCase):
         # Category title and products
         self.assertIn("یخچال و فریزر", html)
         self.assertIn("یخچال فریزر هوشمند بنده", html)
-        self.assertIn(format_toman_price(42000000), html)
+        compact = to_compact_price(42000000)
+        self.assertIn(compact["value"], html)
+        self.assertIn(compact["unit"], html)
+        self.assertNotIn(format_toman_price(42000000), html)
 
     # --- 3. Trust Pages Tests ---
 

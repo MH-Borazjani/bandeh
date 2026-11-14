@@ -89,6 +89,28 @@
 
   var productCache = {};
 
+  function toPersianDigits(num) {
+    var fa = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+    return String(num).replace(/[0-9]/g, function (d) {
+      return fa[parseInt(d, 10)];
+    });
+  }
+
+  function getProductImage(prodName, imageUrl) {
+    if (imageUrl) return imageUrl;
+    var lower = (prodName || "").toLowerCase();
+    if (lower.indexOf("fridge") !== -1 || lower.indexOf("یخچال") !== -1) {
+      return "/static/img/product-fridge.jpg";
+    }
+    if (lower.indexOf("tv") !== -1 || lower.indexOf("تلویزیون") !== -1) {
+      return "/static/img/product-tv.jpg";
+    }
+    if (lower.indexOf("wash") !== -1 || lower.indexOf("لباسشویی") !== -1) {
+      return "/static/img/product-washer.jpg";
+    }
+    return "/static/img/product-fridge.jpg";
+  }
+
   function formatPrice(num) {
     if (typeof num !== "number" || isNaN(num)) return "۰";
     return num.toLocaleString("fa-IR");
@@ -99,7 +121,7 @@
       return Promise.resolve(productCache[id]);
     }
     if (SAMPLE_PRICES[id]) {
-      productCache[id] = { price: SAMPLE_PRICES[id], name: fallbackName };
+      productCache[id] = { price: SAMPLE_PRICES[id], name: fallbackName, image_url: null };
       return Promise.resolve(productCache[id]);
     }
     return fetch("/products/" + id, {
@@ -113,13 +135,14 @@
       productCache[id] = {
         price: data.price_toman || 0,
         name: data.name || fallbackName,
+        image_url: data.image_url || null,
         stock: data.stock,
         available: Math.max(0, (data.stock || 0) - (data.reserved || 0))
       };
       return productCache[id];
     })
     .catch(function() {
-      productCache[id] = { price: 0, name: fallbackName };
+      productCache[id] = { price: 0, name: fallbackName, image_url: null };
       return productCache[id];
     });
   }
@@ -142,7 +165,7 @@
     if (content) content.style.display = "";
     if (badge) {
       var totalItems = draft.reduce(function(acc, cur) { return acc + (cur.qty || 0); }, 0);
-      badge.textContent = totalItems + " کالا";
+      badge.textContent = toPersianDigits(totalItems) + " کالا";
       badge.style.display = "";
     }
 
@@ -160,19 +183,33 @@
         grandTotal += linePrice;
 
         var card = document.createElement("div");
-        card.className = "theme-bg-card theme-border border rounded-2xl p-4";
+        card.className = "theme-bg-card theme-border border rounded-2xl p-3.5 sm:p-4 flex gap-3 sm:gap-4 items-center";
+
+        // Thumbnail on the right in RTL (fills whole box, object-cover, no inner padding)
+        var thumbDiv = document.createElement("div");
+        thumbDiv.className = "w-16 h-16 sm:w-20 sm:h-20 rounded-xl theme-bg-card-subtle theme-border border shrink-0 overflow-hidden";
+        var imgEl = document.createElement("img");
+        imgEl.className = "w-full h-full object-cover";
+        imgEl.src = getProductImage(prod.name || item.name, prod.image_url);
+        imgEl.alt = prod.name || item.name;
+        thumbDiv.appendChild(imgEl);
+        card.appendChild(thumbDiv);
+
+        // Content on the left in RTL
+        var contentDiv = document.createElement("div");
+        contentDiv.className = "flex-1 min-w-0 flex flex-col justify-between";
 
         var headerRow = document.createElement("div");
-        headerRow.className = "flex items-start justify-between gap-2 mb-3";
+        headerRow.className = "flex items-start justify-between gap-2 mb-2";
 
         var nameEl = document.createElement("h3");
-        nameEl.className = "font-bold theme-text-main text-base leading-snug";
+        nameEl.className = "font-bold theme-text-main text-sm sm:text-base leading-snug truncate";
         nameEl.textContent = prod.name || item.name;
         headerRow.appendChild(nameEl);
 
         var removeBtn = document.createElement("button");
         removeBtn.type = "button";
-        removeBtn.className = "min-h-[44px] min-w-[44px] flex items-center justify-center text-xs theme-text-muted hover:text-red-500 font-medium select-none";
+        removeBtn.className = "min-h-[36px] min-w-[36px] flex items-center justify-center text-xs theme-text-muted hover:text-red-500 font-medium select-none";
         removeBtn.setAttribute("aria-label", "حذف " + (prod.name || item.name));
         removeBtn.textContent = "حذف";
         removeBtn.addEventListener("click", function() {
@@ -182,10 +219,10 @@
           }
         });
         headerRow.appendChild(removeBtn);
-        card.appendChild(headerRow);
+        contentDiv.appendChild(headerRow);
 
         var bottomRow = document.createElement("div");
-        bottomRow.className = "flex items-center justify-between pt-2 border-t theme-border";
+        bottomRow.className = "flex items-center justify-between pt-1";
 
         // Stepper
         var stepper = document.createElement("div");
@@ -193,7 +230,7 @@
 
         var minusBtn = document.createElement("button");
         minusBtn.type = "button";
-        minusBtn.className = "min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
+        minusBtn.className = "min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
         minusBtn.textContent = "−";
         minusBtn.setAttribute("aria-label", "کاهش تعداد");
         minusBtn.addEventListener("click", function() {
@@ -206,12 +243,12 @@
         });
 
         var qtyInput = document.createElement("span");
-        qtyInput.className = "w-10 text-center font-bold text-sm theme-text-main select-none";
-        qtyInput.textContent = String(item.qty);
+        qtyInput.className = "w-8 text-center font-bold text-sm theme-text-main select-none";
+        qtyInput.textContent = toPersianDigits(item.qty);
 
         var plusBtn = document.createElement("button");
         plusBtn.type = "button";
-        plusBtn.className = "min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
+        plusBtn.className = "min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg theme-btn-secondary text-base font-bold select-none";
         plusBtn.textContent = "+";
         plusBtn.setAttribute("aria-label", "افزایش تعداد");
         plusBtn.addEventListener("click", function() {
@@ -228,7 +265,7 @@
         var priceDiv = document.createElement("div");
         priceDiv.className = "flex items-baseline gap-1";
         var priceVal = document.createElement("span");
-        priceVal.className = "theme-accent font-extrabold text-base sm:text-lg";
+        priceVal.className = "theme-accent font-extrabold text-sm sm:text-base";
         priceVal.textContent = formatPrice(linePrice);
         var priceUnit = document.createElement("span");
         priceUnit.className = "text-xs theme-text-muted";
@@ -237,7 +274,8 @@
         priceDiv.appendChild(priceUnit);
         bottomRow.appendChild(priceDiv);
 
-        card.appendChild(bottomRow);
+        contentDiv.appendChild(bottomRow);
+        card.appendChild(contentDiv);
         itemsContainer.appendChild(card);
       });
 

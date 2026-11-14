@@ -9,7 +9,7 @@
 <div class="mb-5 flex items-center justify-between">
   <div>
     <h1 class="text-xl sm:text-2xl font-black theme-text-main">جزئیات سفارش</h1>
-    <p class="text-xs theme-text-muted mt-1 font-mono" dir="ltr">{{ order.id }}</p>
+    <p class="text-xs theme-text-muted mt-1 font-mono">{{ order.id }}</p>
   </div>
   <a href="/orders" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
     <span>بازگشت</span>
@@ -27,12 +27,12 @@
   </div>
   <div class="flex items-center justify-between text-xs">
     <span class="theme-text-muted">تاریخ ثبت:</span>
-    <span class="theme-text-main font-medium" dir="ltr">{{ order.created_at_formatted }}</span>
+    <span class="theme-text-main font-medium">{{ order.created_at_formatted }}</span>
   </div>
   {% if order.tracking_code %}
   <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
     <span class="theme-text-muted">کد رهگیری پستی:</span>
-    <span class="theme-accent font-mono font-bold" dir="ltr">{{ order.tracking_code }}</span>
+    <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
   </div>
   {% endif %}
 </div>
@@ -41,7 +41,7 @@
 <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-4">
   <h2 class="text-sm font-bold theme-text-main mb-3 pb-2 border-b theme-border flex items-center justify-between">
     <span>اقلام سفارش</span>
-    <span class="text-xs theme-text-muted font-normal">{{ order['items']|length }} قلم کالا</span>
+    <span class="text-xs theme-text-muted font-normal">{{ order['items']|length | persian_digits }} کالا</span>
   </h2>
 
   <div class="divide-y theme-border space-y-3">
@@ -57,7 +57,7 @@
           <span>قیمت واحد: {{ item.unit_price_formatted }} تومان</span>
         </div>
       </div>
-      <div class="text-left shrink-0">
+      <div class="text-right shrink-0">
         <span class="theme-accent font-extrabold text-sm sm:text-base">{{ item.line_total_formatted }}</span>
         <span class="text-[11px] theme-text-muted block">تومان</span>
       </div>
@@ -86,7 +86,7 @@
     </div>
     <div class="flex items-start justify-between">
       <span class="theme-text-muted">شماره تماس گیرنده:</span>
-      <span class="font-mono font-semibold theme-text-main" dir="ltr">{{ order.recipient_phone or 'ثبت نشده' }}</span>
+      <span class="font-mono font-semibold theme-text-main">{{ order.recipient_phone or 'ثبت نشده' }}</span>
     </div>
     <div class="flex flex-col gap-1 pt-1 border-t theme-border">
       <span class="theme-text-muted">نشانی ارسال:</span>
@@ -109,7 +109,7 @@
   <div class="space-y-2.5 text-xs mb-4">
     <div class="flex items-center justify-between">
       <span class="theme-text-muted">مبلغ قابل پرداخت:</span>
-      <span class="theme-accent font-bold" dir="ltr">{{ order.total_toman_formatted }} تومان</span>
+      <span class="theme-accent font-bold">{{ order.total_toman_formatted }} تومان</span>
     </div>
     {% if order.payment_attempt %}
     <div class="flex items-center justify-between">
@@ -119,7 +119,7 @@
     {% if order.payment_attempt.track_id %}
     <div class="flex items-center justify-between">
       <span class="theme-text-muted">شناسه پیگیری درگاه:</span>
-      <span class="font-mono font-semibold theme-text-main" dir="ltr">{{ order.payment_attempt.track_id }}</span>
+      <span class="font-mono font-semibold theme-text-main">{{ order.payment_attempt.track_id }}</span>
     </div>
     {% endif %}
     {% endif %}

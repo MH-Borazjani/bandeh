@@ -120,6 +120,13 @@
     "sample-4": 19000000
   };
 
+  function toPersianDigits(num) {
+    var fa = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+    return String(num).replace(/[0-9]/g, function (d) {
+      return fa[parseInt(d, 10)];
+    });
+  }
+
   function formatPrice(num) {
     if (typeof num !== "number" || isNaN(num)) return "۰";
     return num.toLocaleString("fa-IR");
@@ -146,7 +153,7 @@
 
     var totalQty = 0;
     draft.forEach(function(i) { totalQty += (i.qty || 1); });
-    if (countEl) countEl.textContent = totalQty + " کالا";
+    if (countEl) countEl.textContent = toPersianDigits(totalQty) + " کالا";
 
     var promises = draft.map(function(item) {
       if (SAMPLE_PRICES[item.id]) {
