@@ -16,9 +16,19 @@ real network call is ever made.
 ## Directus client (`integrations/directus_client.py`)
 
 `DirectusClient` reads the shop's content — `categories` and `products`
-collections, published rows only — and maps them to the shape the landing
-template expects. Prices stored as Toman integers are formatted to
-Persian digits (`format_toman_price`).
+collections, active rows only (`is_active`) — and maps them to the shape
+the landing template expects. Prices stored as Toman integers
+(`price_toman`) are formatted to Persian digits (`format_toman_price`).
+
+Product content is served through the same client, not the database:
+`DirectusClient.list_products()` feeds `GET /products` and
+`DirectusClient.get_product()` feeds `GET /products/{id}`. Both fall
+back to reading the same `products` table through SQLAlchemy when
+Directus is unreachable — the same rows, not a second source of truth —
+so the shop never goes blank because the CMS is down. Search
+(`GET /search`) still runs on Postgres full-text, and stock/reserved
+stay in SQLAlchemy, because orders and payments need real database
+transactions, which the Directus API has none of.
 
 **The fallback rule:** if Directus is down, slow, returns an error, or
 returns a body with the wrong shape, `get_landing_content()` returns the

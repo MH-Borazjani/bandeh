@@ -92,7 +92,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget --spider -q http://localhost:8055/server/ping || exit 1",
+          "wget --spider -q http://127.0.0.1:8055/server/ping || exit 1",
         ]
       interval: 10s
       timeout: 5s

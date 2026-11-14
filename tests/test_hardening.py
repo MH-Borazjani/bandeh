@@ -143,7 +143,7 @@ class HardeningUnitTests(unittest.IsolatedAsyncioTestCase):
                     200, json={"data": [{"name": "Cat", "description": "Desc"}]}
                 )
             return httpx.Response(
-                200, json={"data": [{"name": "Prod", "price": 1000, "tag": None}]}
+                200, json={"data": [{"name": "Prod", "price_toman": 1000, "tag": None}]}
             )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:

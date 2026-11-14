@@ -55,7 +55,7 @@ def _directus_ok(request: httpx.Request) -> httpx.Response:
     if request.url.path.endswith("/items/products"):
         return httpx.Response(
             200,
-            json={"data": [{"name": "یخچال تست", "price": 45000000, "tag": None}]},
+            json={"data": [{"name": "یخچال تست", "price_toman": 45000000, "tag": None}]},
         )
     return httpx.Response(404, json={"errors": [{"message": "not found"}]})
 

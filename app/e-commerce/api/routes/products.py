@@ -24,10 +24,12 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -45,12 +47,15 @@ from fastapi.responses import FileResponse
 
 from core.security import RequireStaffDep
 from db.session import DbSessionDep
+from integrations.directus_client import DirectusClientDep
 from schema.product_api import ProductCreate, ProductPhotoRead, ProductRead
 from services import product_service, search_service
 from services.image_tasks import schedule_image_variants
 from services.upload_service import UploadError, get_upload_dir, save_upload
 
 router = APIRouter(tags=["products"])
+
+logger = logging.getLogger("bandeh.products")
 
 UploadDirDep = Annotated[Path, Depends(get_upload_dir)]
 
@@ -59,18 +64,32 @@ UploadDirDep = Annotated[Path, Depends(get_upload_dir)]
 async def list_products_endpoint(
     db: DbSessionDep,
     response: Response,
+    directus: DirectusClientDep,
     limit: Annotated[
         int, Query(ge=1, le=search_service.MAX_LIMIT)
     ] = search_service.DEFAULT_LIMIT,
 ) -> list[ProductRead]:
     """Public: active products, newest first.
 
+    Content comes from Directus (the source of truth). If Directus is
+    unreachable, the same table is read through SQLAlchemy as a fallback
+    — the same rows, not a second source of truth — so the shop never
+    goes blank because the CMS is down.
+
     Public cache header: the list is the same for every visitor, so
     browsers and CDNs may cache it for 60 seconds.
     """
-    products = await search_service.list_products(db, limit)
+    try:
+        rows = await directus.list_products(limit)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        logger.warning(
+            "Directus product list failed, falling back to database: %s", exc
+        )
+        products = await search_service.list_products(db, limit)
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return [ProductRead.model_validate(p) for p in products]
     response.headers["Cache-Control"] = "public, max-age=60"
-    return [ProductRead.model_validate(p) for p in products]
+    return [ProductRead.model_validate(row) for row in rows]
 
 
 @router.get("/search")
@@ -105,12 +124,35 @@ async def create_product_endpoint(
 async def read_product(
     product_id: Annotated[uuid.UUID, FastAPIPath()],
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> ProductRead:
-    """Public: one product, with its image URL when it has a photo."""
-    product = await product_service.get_product(db, product_id)
-    if product is None:
-        raise HTTPException(status_code=404, detail="product not found")
-    return ProductRead.model_validate(product)
+    """Public: one product, with its image URL when it has a photo.
+
+    Content comes from Directus. When the CMS is unreachable, the same
+    table is read through SQLAlchemy as a fallback (same rows).
+    """
+    try:
+        row = await directus.get_product(product_id)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        logger.warning(
+            "Directus product read failed, falling back to database: %s", exc
+        )
+        product = await product_service.get_product(db, product_id)
+        if product is None:
+            raise HTTPException(
+                status_code=404, detail="product not found"
+            ) from exc
+        return ProductRead.model_validate(product)
+    if row is None:
+        # Directus has no such product. In production the database is
+        # the same table, so this is normally the same answer — but check
+        # it anyway, so a product created through the API stays readable
+        # even if Directus is a step behind.
+        product = await product_service.get_product(db, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="product not found")
+        return ProductRead.model_validate(product)
+    return ProductRead.model_validate(row)
 
 
 @router.post("/products/{product_id}/photo")

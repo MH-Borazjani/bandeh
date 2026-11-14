@@ -16,6 +16,12 @@
 
 Directus is the headless CMS that holds the shop's content, so editors
 can change categories and products from a dashboard instead of code.
+Directus OWNS this content: the app reads product and category content
+through this client, never through SQLAlchemy models. The one exception
+is stock: order creation and payment reserve and release stock inside
+real database transactions, so stock/reserved stay in SQLAlchemy — the
+same ``products`` table Directus manages, so the dashboard and the app
+always see the same rows.
 This client reads that content — and if Directus is down, slow, or
 returns something broken, it falls back to the hardcoded content below,
 so the landing page NEVER goes blank because the CMS is unreachable.
@@ -36,6 +42,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import uuid
 from typing import Annotated, TypedDict, cast
 
 import httpx
@@ -145,7 +152,7 @@ class DirectusClient:
         url = f"{self._base_url}/items/{collection}"
         params: dict[str, str | int] = {
             "fields": ",".join(fields),
-            "filter[status][_eq]": "published",
+            "filter[is_active][_eq]": "true",
             "limit": 50,
         }
         response = await self._http.get(url, headers=self._headers(), params=params)
@@ -161,7 +168,7 @@ class DirectusClient:
     async def _fetch_landing_content(self) -> LandingContent:
         """Fetch and map the landing content from Directus (no cache, no fallback)."""
         categories = await self._get_items("categories", ["name", "description"])
-        products = await self._get_items("products", ["name", "price", "tag"])
+        products = await self._get_items("products", ["name", "price_toman", "tag"])
 
         mapped_categories: list[CategoryContent] = []
         for row in categories:
@@ -178,7 +185,7 @@ class DirectusClient:
             name = row["name"]
             if not isinstance(name, str):
                 raise ValueError("Directus product name must be a string")
-            raw_price = row.get("price")
+            raw_price = row.get("price_toman")
             price_val: int | str | None = (
                 raw_price
                 if isinstance(raw_price, int | str) and not isinstance(raw_price, bool)
@@ -235,6 +242,127 @@ class DirectusClient:
             except Exception as exc:  # noqa: BLE001 - cache failure never breaks landing
                 logger.warning("Landing cache write failed: %s", exc)
         return content
+
+    async def list_products(self, limit: int = 20) -> list[dict]:
+        """Active products, newest first, from Directus.
+
+        This is the product list the shop serves (``GET /products``).
+        Raises ``httpx.HTTPError`` or ``ValueError`` on any failure, so
+        the caller can fall back to the same table through SQLAlchemy.
+        """
+        params: dict[str, str | int] = {
+            "fields": ",".join(PRODUCT_READ_FIELDS),
+            "filter[is_active][_eq]": "true",
+            "sort": "-created_at",
+            "limit": max(1, limit),
+        }
+        response = await self._http.get(
+            f"{self._base_url}/items/products",
+            headers=self._headers(),
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Directus products returned non-object JSON")
+        rows = data.get("data")
+        if not isinstance(rows, list) or not all(
+            isinstance(row, dict) for row in rows
+        ):
+            raise ValueError("Directus products returned no 'data' list")
+        return [_product_row(row) for row in rows]
+
+    async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
+        """One product by id from Directus. None when it does not exist.
+
+        No ``is_active`` filter here: a single product read matches the
+        old database read, which never filtered on active either.
+        Directus answers 403 (not 404) for a missing single item under
+        the public role, so both 403 and 404 mean "no such product".
+        Any other failure raises, so the caller can fall back.
+        """
+        response = await self._http.get(
+            f"{self._base_url}/items/products/{product_id}",
+            headers=self._headers(),
+            params={"fields": ",".join(PRODUCT_READ_FIELDS)},
+        )
+        if response.status_code in (404, 403):
+            return None
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Directus product returned non-object JSON")
+        row = data.get("data")
+        if not isinstance(row, dict):
+            raise ValueError("Directus product returned no 'data' object")
+        return _product_row(row)
+
+
+def _product_row(row: dict) -> dict:
+    """Validate one Directus product row into the ProductRead shape.
+
+    Only the fields ``ProductRead`` needs are kept, so the route can
+    build the response with ``ProductRead.model_validate``. Any row with
+    a missing or wrongly typed field raises ``ValueError`` instead of
+    serving a half-broken product.
+    """
+    pid = row.get("id")
+    if not isinstance(pid, str):
+        raise ValueError("Directus product id must be a string")
+    name = row.get("name")
+    if not isinstance(name, str):
+        raise ValueError("Directus product name must be a string")
+    price = row.get("price_toman")
+    if not isinstance(price, int) or isinstance(price, bool):
+        raise ValueError("Directus product price_toman must be an integer")
+    stock = row.get("stock")
+    reserved = row.get("reserved")
+    if (
+        not isinstance(stock, int)
+        or isinstance(stock, bool)
+        or not isinstance(reserved, int)
+        or isinstance(reserved, bool)
+    ):
+        raise ValueError("Directus product stock/reserved must be integers")
+    is_active = row.get("is_active")
+    if not isinstance(is_active, bool):
+        raise ValueError("Directus product is_active must be a boolean")
+    description = row.get("description")
+    if description is not None and not isinstance(description, str):
+        raise ValueError("Directus product description must be a string or null")
+    image_path = row.get("image_path")
+    if image_path is not None and not isinstance(image_path, str):
+        raise ValueError("Directus product image_path must be a string or null")
+    created_at = row.get("created_at")
+    if not isinstance(created_at, str):
+        raise ValueError("Directus product created_at must be a string")
+    return {
+        "id": pid,
+        "name": name,
+        "description": description,
+        "price_toman": price,
+        "stock": stock,
+        "reserved": reserved,
+        "image_path": image_path,
+        "is_active": is_active,
+        "created_at": created_at,
+    }
+
+
+# Fields the product list and single-product reads ask Directus for.
+# Same columns the ``products`` table has, so no extra field is needed.
+PRODUCT_READ_FIELDS = [
+    "id",
+    "name",
+    "description",
+    "price_toman",
+    "stock",
+    "reserved",
+    "image_path",
+    "is_active",
+    "category",
+    "created_at",
+]
 
 
 async def invalidate_landing_content(cache: Cache) -> None:
