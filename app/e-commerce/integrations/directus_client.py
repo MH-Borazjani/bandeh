@@ -74,6 +74,11 @@ class ProductContent(TypedDict):
     name: str
     price: str
     tag: str | None
+    # Category name, for the per-category item count on the landing page.
+    # Photo file name, for the product thumbnail. Both None when Directus
+    # did not send them (for example in the hardcoded fallback).
+    category: str | None
+    image_path: str | None
 
 
 class LandingContent(TypedDict):
@@ -95,10 +100,34 @@ FALLBACK_CATEGORIES: list[CategoryContent] = [
 ]
 
 FALLBACK_PRODUCTS: list[ProductContent] = [
-    {"name": "یخچال فریزر دوقلو", "price": "۴۵٬۰۰۰٬۰۰۰", "tag": "پرفروش"},
-    {"name": "ماشین لباسشویی ۸ کیلویی", "price": "۲۸٬۵۰۰٬۰۰۰", "tag": None},
-    {"name": "جاروبرقی ۲۰۰۰ وات", "price": "۹٬۸۰۰٬۰۰۰", "tag": "تخفیف‌دار"},
-    {"name": "اجاق گاز ۵ شعله", "price": "۱۹٬۰۰۰٬۰۰۰", "tag": None},
+    {
+        "name": "یخچال فریزر دوقلو",
+        "price": "۴۵٬۰۰۰٬۰۰۰",
+        "tag": "پرفروش",
+        "category": None,
+        "image_path": None,
+    },
+    {
+        "name": "ماشین لباسشویی ۸ کیلویی",
+        "price": "۲۸٬۵۰۰٬۰۰۰",
+        "tag": None,
+        "category": None,
+        "image_path": None,
+    },
+    {
+        "name": "جاروبرقی ۲۰۰۰ وات",
+        "price": "۹٬۸۰۰٬۰۰۰",
+        "tag": "تخفیف‌دار",
+        "category": None,
+        "image_path": None,
+    },
+    {
+        "name": "اجاق گاز ۵ شعله",
+        "price": "۱۹٬۰۰۰٬۰۰۰",
+        "tag": None,
+        "category": None,
+        "image_path": None,
+    },
 ]
 
 # Persian digits and the Persian thousands separator, for prices.
@@ -171,9 +200,14 @@ class DirectusClient:
 
     async def _fetch_landing_content(self) -> LandingContent:
         """Fetch and map the landing content from Directus (no cache, no fallback)."""
-        categories = await self._get_items("categories", ["name", "description"])
-        products = await self._get_items("products", ["name", "price_toman", "tag"])
+        categories = await self._get_items("categories", ["id", "name", "description"])
+        products = await self._get_items(
+            "products", ["name", "price_toman", "tag", "category", "image_path"]
+        )
 
+        # Category id -> name, so each product can carry its category name
+        # for the per-category item count. Tolerates rows without an id.
+        category_names: dict[int | str, str] = {}
         mapped_categories: list[CategoryContent] = []
         for row in categories:
             name = row["name"]
@@ -182,6 +216,10 @@ class DirectusClient:
             raw_desc = row.get("description") or ""
             if not isinstance(raw_desc, str):
                 raise ValueError("Directus category description must be a string")
+            cat_id = row.get("id")
+            if isinstance(cat_id, int | str) and not isinstance(cat_id, bool):
+                category_names[cat_id] = name
+                category_names[str(cat_id)] = name
             mapped_categories.append({"name": name, "desc": raw_desc})
 
         mapped_products: list[ProductContent] = []
@@ -197,11 +235,26 @@ class DirectusClient:
             )
             raw_tag = row.get("tag")
             tag_val: str | None = raw_tag if isinstance(raw_tag, str) else None
+            raw_category = row.get("category")
+            category_val: str | None = None
+            if isinstance(raw_category, dict):
+                cname = raw_category.get("name")
+                category_val = str(cname) if isinstance(cname, str) else None
+            elif isinstance(raw_category, int | str) and not isinstance(
+                raw_category, bool
+            ):
+                category_val = category_names.get(raw_category) or category_names.get(
+                    str(raw_category)
+                )
+            raw_image = row.get("image_path")
+            image_val: str | None = raw_image if isinstance(raw_image, str) else None
             mapped_products.append(
                 {
                     "name": name,
                     "price": format_toman_price(price_val),
                     "tag": tag_val,
+                    "category": category_val,
+                    "image_path": image_val,
                 }
             )
 

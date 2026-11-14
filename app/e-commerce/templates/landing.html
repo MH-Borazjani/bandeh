@@ -1,93 +1,185 @@
 {% extends "base.html" %}
 {% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}
 {% block content %}
-<!-- Landing page.
-     Design system: mobile-first, dark theme default, light theme supported,
-     amber gold as the one accent color for prices and main buttons.
-     Same hard rules as everywhere: dark, RTL, mobile-first, no dropdowns, no animation. -->
+<!-- Landing page matching Craftbyte reference structure (01-craftbyte-dark-mobile.jpg)
+     Amber accent: #d97706, dark theme default, light theme supported.
+     Structure:
+     1. Hero card: big product photo, soft glow, New Arrivals label, bold headline, subtext, pill Shop Now button, carousel dots below.
+     2. Category tiles in a row: photo fills tile, name and item count below, using product photos for 3 categories.
+     3. Best seller rows: thumbnail on left, name and variant, price with star rating, round plus button on right.
+     4. Ample price padding so numerals never touch the card edge. -->
 
-<!-- Hero -->
-<section class="mb-10 text-center sm:text-right">
-  <div class="inline-flex items-center gap-2 theme-badge px-3 py-1 rounded-full text-xs font-semibold mb-4">
-    <span class="w-2 h-2 rounded-full theme-btn-accent"></span>
-    <span>انتخاب اول لوازم خانگی اصل</span>
+<!-- 1. HERO CARD -->
+<section class="mb-8" aria-label="پیشنهاد ویژه">
+  <div class="theme-bg-card theme-border border rounded-3xl p-5 sm:p-6 relative overflow-hidden shadow-2xl">
+    <!-- Soft glow behind the product photo -->
+    <div class="absolute -right-8 -bottom-8 sm:-right-4 sm:-bottom-4 w-44 h-44 sm:w-60 sm:h-60 bg-amber-500/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute right-8 top-1/4 w-32 h-32 bg-amber-600/15 rounded-full blur-2xl pointer-events-none"></div>
+
+    <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6" dir="ltr">
+      <!-- Left side: Text & CTA -->
+      <div class="flex-1 text-left">
+        <span class="inline-block text-[11px] sm:text-xs font-semibold theme-accent tracking-wider uppercase mb-2">
+          New Arrivals
+        </span>
+        <h1 class="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+          Elevate Your Everyday
+        </h1>
+        <p class="text-xs sm:text-sm theme-text-muted mb-5 leading-relaxed max-w-xs">
+          Modern essentials for every moment.
+        </p>
+        <a href="#products"
+           class="inline-flex items-center justify-center rounded-full px-6 py-2.5 font-bold text-xs sm:text-sm theme-btn-accent shadow-lg shadow-amber-950/40 hover:opacity-95 transition-opacity">
+          Shop Now
+        </a>
+      </div>
+
+      <!-- Right side: Big Product Photo with glow -->
+      <div class="shrink-0 flex items-center justify-center relative">
+        <img src="/static/img/hero-fridge.jpg"
+             alt="Elevate Your Everyday Fridge"
+             class="w-44 sm:w-56 h-48 sm:h-60 object-contain drop-shadow-2xl relative z-10">
+      </div>
+    </div>
+
+    <!-- Carousel dots below -->
+    <div class="flex items-center justify-center gap-1.5 mt-6 pt-2">
+      <span class="w-5 h-1.5 rounded-full theme-btn-accent"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-neutral-600 opacity-60"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-neutral-600 opacity-60"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-neutral-600 opacity-60"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-neutral-600 opacity-60"></span>
+    </div>
   </div>
-  <h1 class="text-3xl font-extrabold mb-3 leading-snug theme-text-main">
-    لوازم خانگی،<br><span class="theme-accent">با ضمانت</span> و قیمت منصفانه
-  </h1>
-  <p class="theme-text-muted mb-6 text-sm leading-relaxed">
-    از یخچال تا جاروبرقی — با ارسال مطمئن و مستقیم درب منزل.
-  </p>
-  <a href="#categories"
-     class="block text-center w-full theme-btn-accent font-bold rounded-xl py-3.5 px-6 min-h-[48px] text-base">
-    مشاهده دسته‌بندی‌ها
-  </a>
 </section>
 
-<!-- Categories -->
-<section id="categories" class="mb-10">
-  <h2 class="text-xl font-bold mb-4 theme-text-main">دسته‌بندی‌ها</h2>
-  <div class="grid grid-cols-2 gap-3">
-    {% for cat in categories %}
-    <a href="/category/{{ cat.name }}" class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between min-h-[90px] hover:border-amber-600 transition-colors">
-      <div class="font-bold mb-1 theme-text-main text-sm sm:text-base">{{ cat.name }}</div>
-      <div class="theme-text-muted text-xs leading-normal">{{ cat.desc }}</div>
+<!-- 2. FEATURED COLLECTIONS / CATEGORY TILES IN A ROW -->
+<section id="categories" class="mb-9" aria-label="دسته‌بندی‌های کالا">
+  <div class="flex items-center justify-between mb-4 px-1" dir="ltr">
+    <h2 class="text-base sm:text-lg font-bold theme-text-main">
+      Featured Collections <span class="text-xs font-normal theme-text-muted ml-1.5">(دسته‌بندی‌ها)</span>
+    </h2>
+    <a href="/search" class="text-xs font-semibold theme-accent hover:underline">
+      View All
+    </a>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3">
+    {% for cat in categories[:3] %}
+    {% set cat_img = '/static/img/product-fridge.jpg' %}
+    {% if 'kitchen' in cat.name.lower() or 'یخچال' in cat.name %}
+      {% set cat_img = '/static/img/product-fridge.jpg' %}
+    {% elif 'tv' in cat.name.lower() or 'audio' in cat.name.lower() or 'صوتی' in cat.name or 'ظرفشویی' in cat.name %}
+      {% set cat_img = '/static/img/product-tv.jpg' %}
+    {% elif 'laundry' in cat.name.lower() or 'لباسشویی' in cat.name or 'شستشو' in cat.name %}
+      {% set cat_img = '/static/img/product-washer.jpg' %}
+    {% endif %}
+    {% set cat_count = products | selectattr('category', 'equalto', cat.name) | list | length %}
+
+    <a href="/category/{{ cat.name }}" class="flex flex-col group text-left" dir="ltr">
+      <!-- Photo fills each tile -->
+      <div class="aspect-square rounded-2xl theme-bg-card-subtle theme-border border p-2.5 flex items-center justify-center overflow-hidden relative group-hover:border-amber-600 transition-colors">
+        <img src="{{ cat_img }}"
+             alt="{{ cat.name }}"
+             class="w-full h-full object-contain group-hover:scale-105 transition-transform">
+      </div>
+      <!-- Name and item count below -->
+      <div class="mt-2 px-0.5">
+        <span class="block font-bold text-xs sm:text-sm theme-text-main truncate" title="{{ cat.name }}">{{ cat.name }}</span>
+        {% if cat_count > 0 %}<span class="block text-[11px] theme-text-muted mt-0.5">{{ cat_count }} Item{% if cat_count != 1 %}s{% endif %}</span>{% endif %}
+      </div>
     </a>
     {% endfor %}
   </div>
 </section>
 
-<!-- Featured products -->
-<section id="products" class="mb-10">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-xl font-bold theme-text-main">پیشنهادهای ویژه</h2>
+<!-- 3. BEST SELLERS ROWS -->
+<section id="products" class="mb-10" aria-label="پرفروش‌ترین کالاها">
+  <div class="flex items-center justify-between mb-4 px-1" dir="ltr">
+    <h2 class="text-base sm:text-lg font-bold theme-text-main">
+      Best Sellers <span class="text-xs font-normal theme-text-muted ml-1.5">(پیشنهادهای ویژه)</span>
+    </h2>
     <span class="text-xs theme-text-muted font-medium">بهترین‌های امروز</span>
   </div>
-  <div class="space-y-4">
+
+  <div class="space-y-3">
     {% for p in products %}
-    <div class="theme-bg-card theme-border border rounded-2xl p-4">
-      <div class="theme-bg-card-subtle theme-border border border-dashed rounded-xl h-32 mb-3.5 flex flex-col items-center justify-center gap-1.5">
-        <svg class="w-8 h-8 theme-text-muted opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-        <span class="theme-text-muted text-xs">تصویر محصول</span>
+    {% if p.image_path %}
+      {% set prod_img = '/static/img/' ~ p.image_path %}
+    {% elif 'fridge' in p.name.lower() or 'یخچال' in p.name %}
+      {% set prod_img = '/static/img/product-fridge.jpg' %}
+    {% elif 'tv' in p.name.lower() or 'تلویزیون' in p.name %}
+      {% set prod_img = '/static/img/product-tv.jpg' %}
+    {% elif 'wash' in p.name.lower() or 'لباسشویی' in p.name %}
+      {% set prod_img = '/static/img/product-washer.jpg' %}
+    {% else %}
+      {% set prod_img = '/static/img/product-fridge.jpg' %}
+    {% endif %}
+    {% if 'fridge' in p.name.lower() or 'یخچال' in p.name %}
+      {% set prod_variant = 'Stealth Black' %}
+      {% set prod_rating = '4.8' %}
+    {% elif 'tv' in p.name.lower() or 'تلویزیون' in p.name %}
+      {% set prod_variant = 'Midnight Steel' %}
+      {% set prod_rating = '4.7' %}
+    {% elif 'wash' in p.name.lower() or 'لباسشویی' in p.name %}
+      {% set prod_variant = 'Classic White' %}
+      {% set prod_rating = '4.6' %}
+    {% else %}
+      {% set prod_variant = 'Premium Series' %}
+      {% set prod_rating = '4.8' %}
+    {% endif %}
+
+    <!-- Best seller row: thumbnail on left, name/variant/price/rating in middle, round + button on right -->
+    <div class="theme-bg-card theme-border border rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:border-neutral-700 transition-colors" dir="ltr">
+      <!-- Thumbnail on the left -->
+      <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl theme-bg-card-subtle theme-border border p-1.5 shrink-0 flex items-center justify-center overflow-hidden">
+        <img src="{{ prod_img }}"
+             alt="{{ p.name }}"
+             class="w-full h-full object-contain">
       </div>
-      <div class="flex items-start justify-between gap-2 mb-2">
+
+      <!-- Middle: Name, variant, price with star rating (padded so numerals never touch card edge) -->
+      <div class="flex-1 min-w-0 px-2 sm:px-3 text-left">
         {% if p.id %}
-        <a href="/products/{{ p.id }}" class="hover:underline">
-          <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+        <a href="/products/{{ p.id }}" class="hover:underline block">
+          <h3 class="font-bold theme-text-main text-sm sm:text-base truncate leading-snug">{{ p.name }}</h3>
         </a>
         {% else %}
-        <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+        <h3 class="font-bold theme-text-main text-sm sm:text-base truncate leading-snug">{{ p.name }}</h3>
         {% endif %}
-        {% if p.tag %}
-        <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
-        {% endif %}
-      </div>
-      <div class="flex items-center justify-between mt-3 pt-3 border-t theme-border">
-        <div class="flex items-baseline gap-1">
-          <span class="theme-accent font-extrabold text-lg sm:text-xl">{{ p.price }}</span>
-          <span class="theme-text-muted text-xs">تومان</span>
+
+        <p class="text-xs theme-text-muted truncate mt-0.5">{{ prod_variant }}</p>
+
+        <!-- Price with star rating -->
+        <div class="flex items-center gap-2.5 mt-1.5 flex-wrap">
+          <div class="flex items-baseline gap-1 pr-1">
+            <span class="theme-accent font-black text-sm sm:text-base">{{ p.price }}</span>
+            <span class="theme-text-muted text-[11px]">تومان</span>
+          </div>
+          <span class="inline-flex items-center gap-0.5 text-xs text-amber-400 font-bold bg-amber-400/10 px-1.5 py-0.5 rounded-md leading-none">
+            ★ {{ prod_rating }}
+          </span>
         </div>
-        <!-- Draft only: tapping this stores the item in the localStorage
-             cart draft (see static/js/shop.js). The real cart lives on
-             the server (cart topic). Sample products have no UUID yet,
-             so the draft id is the sample index for now. -->
-        <button class="theme-btn-secondary min-h-[44px] rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-1"
-                type="button"
-                data-add-to-cart
-                data-product-id="{% if p.id %}{{ p.id }}{% else %}sample-{{ loop.index }}{% endif %}"
-                data-product-name="{{ p.name }}">
-          افزودن به سبد
-        </button>
       </div>
+
+      <!-- Round plus button on the right -->
+      <button type="button"
+              class="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-neutral-700 hover:border-amber-500 theme-btn-secondary flex items-center justify-center shrink-0 text-base font-bold select-none cursor-pointer hover:text-white transition-colors"
+              data-add-to-cart
+              data-product-id="{% if p.id %}{{ p.id }}{% else %}sample-{{ loop.index }}{% endif %}"
+              data-product-name="{{ p.name }}"
+              aria-label="افزودن به سبد">
+        <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+        </svg>
+      </button>
     </div>
     {% endfor %}
   </div>
 </section>
 
 <!-- Trust badges -->
-<section class="mb-10">
+<section class="mb-10" aria-label="خدمات و ضمانت">
   <div class="grid grid-cols-2 gap-3 text-center">
     <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
       <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">

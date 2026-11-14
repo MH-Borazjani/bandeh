@@ -206,9 +206,36 @@
           name: button.getAttribute("data-product-name"),
           qty: qty,
         });
-        button.textContent = "✓ در سبد";
+        if (button.classList.contains("rounded-full")) {
+          button.textContent = "✓";
+        } else {
+          button.textContent = "✓ در سبد";
+        }
       });
     });
+
+    // Mobile menu drawer
+    var menuBtn = document.getElementById("mobile-menu-btn");
+    var menuClose = document.getElementById("mobile-menu-close");
+    var menuDrawer = document.getElementById("mobile-menu-drawer");
+    if (menuBtn && menuDrawer) {
+      menuBtn.addEventListener("click", function () {
+        var isHidden = menuDrawer.style.display === "none" || !menuDrawer.style.display;
+        menuDrawer.style.display = isHidden ? "flex" : "none";
+      });
+    }
+    if (menuClose && menuDrawer) {
+      menuClose.addEventListener("click", function () {
+        menuDrawer.style.display = "none";
+      });
+    }
+    if (menuDrawer) {
+      menuDrawer.addEventListener("click", function (evt) {
+        if (evt.target === menuDrawer) {
+          menuDrawer.style.display = "none";
+        }
+      });
+    }
   }
 
   if (document.readyState === "loading") {

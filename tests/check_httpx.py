@@ -93,7 +93,13 @@ def main() -> None:
             content = await DirectusClient(http).get_landing_content()
         assert content["categories"] == [{"name": "یخچال", "desc": "ساید و دوقلو"}], content
         assert content["products"] == [
-            {"name": "یخچال تست", "price": "۴۵٬۰۰۰٬۰۰۰", "tag": None}
+            {
+                "name": "یخچال تست",
+                "price": "۴۵٬۰۰۰٬۰۰۰",
+                "tag": None,
+                "category": None,
+                "image_path": None,
+            }
         ], content
 
     asyncio.run(_healthy())
