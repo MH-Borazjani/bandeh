@@ -1,15 +1,42 @@
 {% extends "base.html" %}
 {% block title %}حساب من | بنده{% endblock %}
 {% block content %}
-<!-- Demo protected page: you only get here with a valid session cookie.
-     Later topics will grow this into the real customer account area. -->
-<h1 class="text-2xl font-bold mb-2">خوش آمدی! 🎉</h1>
-<p class="text-neutral-400 mb-6">با شماره‌ی <span dir="ltr" class="text-neutral-200">{{ masked }}</span> وارد شدی.</p>
+<!-- Protected account dashboard (Bandeh Shop - Stage 3)
+     Design system: mobile-first, dark theme default, light theme supported. -->
 
-<form action="/auth/logout" method="post">
-  <button type="submit"
-          class="w-full bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded-lg py-3">
-    خروج از حساب
-  </button>
-</form>
+<div class="theme-bg-card theme-border border rounded-2xl p-5 mb-5">
+  <div class="inline-flex items-center gap-2 theme-badge px-3 py-1 rounded-full text-xs font-semibold mb-3">
+    <span class="w-2 h-2 rounded-full theme-btn-accent"></span>
+    <span>حساب کاربری خریدار</span>
+  </div>
+  <h1 class="text-xl font-bold mb-1 theme-text-main">خوش آمدید! 🎉</h1>
+  <p class="text-xs theme-text-muted">با شماره‌ی <span dir="ltr" class="font-mono font-semibold theme-text-main">{{ masked }}</span> وارد شده‌اید.</p>
+</div>
+
+<!-- My Orders Link Card -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-5 flex items-center justify-between">
+  <div>
+    <h2 class="font-bold text-sm theme-text-main mb-1">سفارش‌های من</h2>
+    <p class="text-xs theme-text-muted">مشاهده لیست سفارش‌ها، وضعیت پرداخت و جزئیات فاکتور</p>
+  </div>
+  <a href="/orders" class="theme-btn-accent font-bold text-xs rounded-xl px-4 py-2.5 min-h-[44px] flex items-center justify-center shrink-0">
+    مشاهده
+  </a>
+</div>
+
+<!-- Logout Actions -->
+<div class="space-y-3">
+  <form action="/auth/logout" method="post">
+    <button type="submit"
+            class="w-full theme-btn-secondary font-bold rounded-xl py-3 text-xs min-h-[44px]">
+      خروج از حساب کاربری
+    </button>
+  </form>
+  <form action="/auth/logout-everywhere" method="post">
+    <button type="submit"
+            class="w-full text-neutral-400 hover:text-red-400 text-xs py-2">
+      خروج از تمامی دستگاه‌ها
+    </button>
+  </form>
+</div>
 {% endblock %}

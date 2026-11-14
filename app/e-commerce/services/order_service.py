@@ -80,6 +80,19 @@ async def load_order_for_user(
     return order
 
 
+async def list_orders_for_user(
+    db: AsyncSession, user_id: uuid.UUID
+) -> Sequence[Order]:
+    """Load all orders belonging to ``user_id``, newest first, with items and attempts."""
+    result = await db.execute(
+        select(Order)
+        .where(Order.user_id == user_id)
+        .order_by(Order.created_at.desc())
+        .options(selectinload(Order.items), selectinload(Order.attempts))
+    )
+    return result.scalars().all()
+
+
 async def create_order(
     db: AsyncSession,
     user: User,
@@ -160,6 +173,7 @@ __all__ = [
     "OrderError",
     "OrderItemInput",
     "create_order",
+    "list_orders_for_user",
     "load_order",
     "load_order_for_user",
 ]

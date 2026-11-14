@@ -331,6 +331,83 @@ class DirectusClient:
         category_map = await self.get_category_map()
         return [_product_row(row, category_map=category_map) for row in rows]
 
+    async def list_categories(self) -> list[dict[str, object]]:
+        """Fetch categories collection from Directus, or return fallback."""
+        try:
+            return await self._get_items("categories", ["id", "name", "description"])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to fetch categories list from Directus: %s", exc)
+            return [
+                {"id": idx + 1, "name": c["name"], "description": c["desc"]}
+                for idx, c in enumerate(FALLBACK_CATEGORIES)
+            ]
+
+    async def list_products_by_category(
+        self, category_identifier: str | int, limit: int = 50
+    ) -> list[dict]:
+        """Fetch active products belonging to a category from Directus."""
+        category_map = await self.get_category_map()
+        target_id: int | str | None = None
+        target_name: str | None = None
+
+        if isinstance(category_identifier, int) or (
+            isinstance(category_identifier, str) and category_identifier.isdigit()
+        ):
+            target_id = int(category_identifier)
+            target_name = category_map.get(target_id) or category_map.get(str(target_id))
+        else:
+            target_name = str(category_identifier).strip()
+            for cid, cname in category_map.items():
+                if cname.lower() == target_name.lower():
+                    target_id = cid
+                    break
+
+        params: dict[str, str | int] = {
+            "fields": ",".join(PRODUCT_READ_FIELDS),
+            "filter[is_active][_eq]": "true",
+            "sort": "-created_at",
+            "limit": max(1, limit),
+        }
+        if target_id is not None:
+            params["filter[category][_eq]"] = str(target_id)
+
+        try:
+            response = await self._http.get(
+                f"{self._base_url}/items/products",
+                headers=self._headers(),
+                params=params,
+            )
+            response.raise_for_status()
+            data = response.json()
+            rows = data.get("data")
+            if isinstance(rows, list):
+                result = [
+                    _product_row(row, category_map=category_map)
+                    for row in rows
+                    if isinstance(row, dict)
+                ]
+                if target_name and target_id is None:
+                    result = [p for p in result if p.get("category") == target_name]
+                return result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to list products by category from Directus: %s", exc)
+
+        # Fallback: filter from list_products
+        try:
+            all_products = await self.list_products(limit)
+            matched = []
+            for p in all_products:
+                p_cat = p.get("category")
+                if target_name and p_cat and target_name.lower() in p_cat.lower():
+                    matched.append(p)
+                elif target_id and p_cat and (
+                    str(target_id) == str(p_cat) or category_map.get(target_id) == p_cat
+                ):
+                    matched.append(p)
+            return matched
+        except Exception:  # noqa: BLE001
+            return []
+
     async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
         """One product by id from Directus. None when it does not exist.
 

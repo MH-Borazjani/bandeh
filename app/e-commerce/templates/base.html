@@ -166,6 +166,14 @@
         <span>بنده</span>
       </a>
       <div class="flex items-center gap-2">
+        <!-- Search icon button -->
+        <a href="/search"
+           aria-label="جستجو"
+           class="min-h-[44px] min-w-[44px] flex items-center justify-center theme-btn-secondary rounded-xl px-2.5 py-2 text-sm font-medium">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </a>
         <!-- Theme toggle: dark (default) <-> light. Choice lives in localStorage. -->
         <button id="theme-toggle"
                 type="button"
@@ -182,8 +190,10 @@
                 class="theme-btn-accent rounded-full px-2 py-0.5 text-xs font-bold leading-none"></span>
         </a>
         {% if phone %}
+        <a href="/orders"
+           class="min-h-[44px] flex items-center theme-btn-secondary rounded-xl px-3 py-2 text-sm font-medium">سفارش‌ها</a>
         <a href="/auth/account"
-           class="min-h-[44px] flex items-center theme-btn-secondary rounded-xl px-3.5 py-2 text-sm font-medium">حساب من</a>
+           class="min-h-[44px] flex items-center theme-btn-secondary rounded-xl px-3 py-2 text-sm font-medium">حساب</a>
         {% else %}
         <a href="/auth/login"
            class="min-h-[44px] flex items-center theme-btn-accent font-bold rounded-xl px-4 py-2 text-sm">ورود</a>
@@ -201,6 +211,16 @@
   <!-- Shared Footer -->
   <footer class="theme-bg-card border-t theme-border mt-auto py-8 text-center theme-text-muted text-sm">
     <div class="max-w-md mx-auto px-4">
+      <!-- Trust Navigation Links -->
+      <nav aria-label="پیوندهای اعتماد و قوانین" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-4 text-xs font-medium">
+        <a href="/terms" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">قوانین و مقررات</a>
+        <span class="opacity-30">•</span>
+        <a href="/privacy" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">حریم خصوصی</a>
+        <span class="opacity-30">•</span>
+        <a href="/returns" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">شرایط بازگشت</a>
+        <span class="opacity-30">•</span>
+        <a href="/contact" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">تماس با ما</a>
+      </nav>
       <p class="font-bold theme-text-main mb-1">بنده — فروشگاه لوازم خانگی</p>
       <p class="text-xs theme-text-muted mb-2">ضمانت اصالت و ارسال مستقیم با بهترین قیمت</p>
       <p class="text-xs theme-text-muted">© ۱۴۰۴</p>

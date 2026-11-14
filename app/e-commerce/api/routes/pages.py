@@ -110,5 +110,92 @@ async def checkout_page(
     return response
 
 
-__all__ = ["CATEGORIES", "SAMPLE_PRODUCTS", "cart_page", "checkout_page", "landing", "router"]
+@router.get("/terms", response_class=HTMLResponse)
+@router.get("/terms-of-service", response_class=HTMLResponse)
+async def terms_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render Terms of Service trust page."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="terms.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+@router.get("/privacy-policy", response_class=HTMLResponse)
+async def privacy_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render Privacy Policy trust page."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="privacy.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@router.get("/returns", response_class=HTMLResponse)
+@router.get("/return-policy", response_class=HTMLResponse)
+async def returns_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render Return Policy trust page."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="returns.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@router.get("/contact", response_class=HTMLResponse)
+@router.get("/contact-us", response_class=HTMLResponse)
+async def contact_page(
+    request: Request,
+    phone: CurrentUserDep,
+) -> HTMLResponse:
+    """Render Contact Us trust page."""
+    response = templates.TemplateResponse(
+        request=request,
+        name="contact.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+__all__ = [
+    "CATEGORIES",
+    "SAMPLE_PRODUCTS",
+    "cart_page",
+    "checkout_page",
+    "contact_page",
+    "landing",
+    "privacy_page",
+    "returns_page",
+    "router",
+    "terms_page",
+]
 

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ category.name }} | بنده{% endblock %}
+
+{% block content %}
+<!-- Category Listing Page (Bandeh Shop - Stage 3)
+     Mobile-first, dark theme default, light theme supported,
+     amber gold as the one accent color for prices and main buttons. -->
+
+<!-- Breadcrumbs & Category Header -->
+<div class="mb-5">
+  <div class="flex items-center gap-1.5 text-xs theme-text-muted mb-2">
+    <a href="/" class="hover:underline">خانه</a>
+    <span>/</span>
+    <a href="/search" class="hover:underline">دسته‌بندی‌ها</a>
+    <span>/</span>
+    <span class="theme-text-main font-medium">{{ category.name }}</span>
+  </div>
+
+  <div class="theme-bg-card theme-border border rounded-2xl p-5 mb-6">
+    <div class="inline-flex items-center gap-2 theme-badge px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2">
+      <span class="w-1.5 h-1.5 rounded-full theme-btn-accent"></span>
+      <span>دسته‌بندی محصولات</span>
+    </div>
+    <h1 class="text-xl sm:text-2xl font-black theme-text-main mb-1.5">
+      {{ category.name }}
+    </h1>
+    {% if category.description %}
+    <p class="text-xs theme-text-muted leading-relaxed">
+      {{ category.description }}
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Product list header -->
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-sm font-bold theme-text-main">کالاهای این دسته</h2>
+  <span class="text-xs theme-text-muted">{{ total_count_formatted }} کالا</span>
+</div>
+
+<!-- Product grid/list -->
+{% if products %}
+<div class="space-y-4">
+  {% for p in products %}
+  <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between">
+    <!-- Image -->
+    <div class="theme-bg-card-subtle theme-border border border-dashed rounded-xl h-32 mb-3.5 flex flex-col items-center justify-center gap-1.5 overflow-hidden">
+      {% if p.image_path %}
+      <img src="/uploads/{{ p.image_path }}" alt="{{ p.name }}" class="w-full h-full object-cover">
+      {% else %}
+      <svg class="w-8 h-8 theme-text-muted opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      <span class="theme-text-muted text-xs">تصویر محصول</span>
+      {% endif %}
+    </div>
+
+    <!-- Title and tag -->
+    <div class="flex items-start justify-between gap-2 mb-2">
+      <a href="/products/{{ p.id }}" class="hover:underline">
+        <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+      </a>
+      {% if p.tag %}
+      <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
+      {% endif %}
+    </div>
+
+    {% if p.description %}
+    <p class="text-xs theme-text-muted line-clamp-2 mb-3 leading-relaxed">
+      {{ p.description }}
+    </p>
+    {% endif %}
+
+    <!-- Stock -->
+    <div class="flex items-center gap-2 mb-3 text-xs">
+      {% if p.available > 0 %}
+      <span class="theme-badge-success rounded-lg px-2 py-0.5 font-medium">موجود در انبار</span>
+      {% else %}
+      <span class="theme-badge-danger rounded-lg px-2 py-0.5 font-medium">ناموجود</span>
+      {% endif %}
+    </div>
+
+    <!-- Price and Add to cart -->
+    <div class="flex items-center justify-between pt-3 border-t theme-border">
+      <div class="flex items-baseline gap-1">
+        <span class="theme-accent font-black text-lg sm:text-xl">{{ p.formatted_price }}</span>
+        <span class="theme-text-muted text-xs">تومان</span>
+      </div>
+      <button class="theme-btn-secondary min-h-[44px] rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-1"
+              type="button"
+              data-add-to-cart
+              data-product-id="{{ p.id }}"
+              data-product-name="{{ p.name }}">
+        افزودن به سبد
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<!-- Empty State -->
+<div class="theme-bg-card theme-border border rounded-2xl p-8 text-center my-6">
+  <div class="w-16 h-16 rounded-full theme-bg-card-subtle mx-auto flex items-center justify-center mb-3">
+    <svg class="w-8 h-8 theme-text-muted opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+    </svg>
+  </div>
+  <h3 class="text-base font-bold theme-text-main mb-1.5">کالایی در این دسته موجود نیست</h3>
+  <p class="text-xs theme-text-muted mb-4 leading-relaxed">
+    به زودی کالاهای جدید به این دسته‌بندی افزوده خواهند شد.
+  </p>
+  <a href="/" class="inline-flex items-center justify-center theme-btn-accent text-xs font-bold rounded-xl px-4 py-2.5 min-h-[44px]">
+    مشاهده سایر محصولات فروشگاه
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

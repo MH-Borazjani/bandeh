@@ -29,7 +29,7 @@
   <h2 class="text-xl font-bold mb-4 theme-text-main">دسته‌بندی‌ها</h2>
   <div class="grid grid-cols-2 gap-3">
     {% for cat in categories %}
-    <a href="#products" class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between min-h-[90px]">
+    <a href="/category/{{ cat.name }}" class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between min-h-[90px] hover:border-amber-600 transition-colors">
       <div class="font-bold mb-1 theme-text-main text-sm sm:text-base">{{ cat.name }}</div>
       <div class="theme-text-muted text-xs leading-normal">{{ cat.desc }}</div>
     </a>
