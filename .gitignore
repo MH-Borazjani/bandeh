@@ -12,6 +12,7 @@ wheels/
 
 # Local database and volume storage
 data/
+!app/e-commerce/static/data/
 volumes/
 
 # User-uploaded files (product photos live here, never committed)

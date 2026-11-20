@@ -29,12 +29,14 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.routes import (
+    acp_router,
     admin_router,
     auth_router,
     orders_router,
     pages_router,
     payments_router,
     products_router,
+    ucp_router,
 )
 from core.middleware import register_middleware
 from core.security import read_session
@@ -145,12 +147,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 # Register modular routers
+app.include_router(acp_router)
 app.include_router(auth_router)
 app.include_router(pages_router)
 app.include_router(admin_router)
 app.include_router(products_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
+app.include_router(ucp_router)
 
 
 @app.get("/health", tags=["system"])

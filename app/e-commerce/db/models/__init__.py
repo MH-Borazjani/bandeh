@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Export all SQLAlchemy models for Alembic discovery and application use."""
 
+from db.models.agent_session import AgentCheckoutSession
 from db.models.order import Order, OrderItem, OrderStatus
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus
 from db.models.product import Product
@@ -22,6 +23,7 @@ from db.models.session import UserSession
 from db.models.user import User, UserRole
 
 __all__ = [
+    "AgentCheckoutSession",
     "Order",
     "OrderItem",
     "OrderStatus",

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends base_template | default("base.html") %}
 {% block title %}
 {% if is_success %}پرداخت موفق | بنده{% else %}نتیجه پرداخت | بنده{% endif %}
 {% endblock %}
@@ -117,19 +117,31 @@
   <div class="space-y-2.5">
     {% if is_success %}
     <a href="/"
+       hx-get="/"
+       hx-target="main"
+       hx-push-url="true"
        class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-1.5 min-h-[48px]">
       <span>بازگشت به فروشگاه</span>
     </a>
     <a href="/auth/account"
+       hx-get="/auth/account"
+       hx-target="main"
+       hx-push-url="true"
        class="w-full theme-btn-secondary font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 min-h-[44px]">
       <span>مشاهده سفارش‌ها در حساب کاربری</span>
     </a>
     {% else %}
     <a href="/checkout"
+       hx-get="/checkout"
+       hx-target="main"
+       hx-push-url="true"
        class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-1.5 min-h-[48px]">
       <span>تلاش مجدد برای پرداخت</span>
     </a>
     <a href="/cart"
+       hx-get="/cart"
+       hx-target="main"
+       hx-push-url="true"
        class="w-full theme-btn-secondary font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 min-h-[44px]">
       <span>بازگشت به سبد خرید</span>
     </a>

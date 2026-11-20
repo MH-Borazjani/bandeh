@@ -15,6 +15,7 @@
 """Template rendering configuration for Jinja2."""
 
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi.templating import Jinja2Templates
 
@@ -65,6 +66,26 @@ def to_compact_price(value: int | str | None) -> dict[str, str]:
 templates.env.filters["persian_digits"] = to_persian_digits
 templates.env.filters["item_count"] = to_persian_item_count
 templates.env.filters["compact_price"] = to_compact_price
+
+cast(dict[str, Any], templates.env.globals)["base_template"] = "base.html"
+
+
+def _htmx_context_processor(request: object) -> dict[str, object]:
+    """Provide HTMX layout flags and dynamic base template."""
+    is_htmx = False
+    if hasattr(request, "headers"):
+        headers = getattr(request, "headers", {})
+        is_htmx = (
+            headers.get("hx-request") == "true"
+            or headers.get("HX-Request") == "true"
+        )
+    return {
+        "is_htmx": is_htmx,
+        "base_template": "base_fragment.html" if is_htmx else "base.html",
+    }
+
+
+templates.context_processors.append(_htmx_context_processor)
 
 __all__ = [
     "TEMPLATES_DIR",

@@ -156,11 +156,19 @@
   /* --- Page wiring ----------------------------------------------------- */
 
   function updateCartBadge() {
-    var badge = document.getElementById("cart-count");
-    if (!badge) return;
     var count = cartDraftCount();
-    badge.textContent = count > 0 ? toPersianDigits(count) : "";
-    badge.style.display = count > 0 ? "" : "none";
+    var text = count > 0 ? toPersianDigits(count) : "";
+    var display = count > 0 ? "" : "none";
+    var badge = document.getElementById("cart-count");
+    if (badge) {
+      badge.textContent = text;
+      badge.style.display = display;
+    }
+    var desktopBadge = document.getElementById("desktop-cart-count");
+    if (desktopBadge) {
+      desktopBadge.textContent = text;
+      desktopBadge.style.display = display;
+    }
   }
 
   /* --- Quantity stepper ------------------------------------------- */
@@ -227,9 +235,90 @@
     }
   }
 
+  function wireSearchPanel() {
+    var toggleBtn = document.getElementById("search-toggle-btn");
+    var panel = document.getElementById("search-panel");
+    var input = document.getElementById("live-search-input");
+    if (!toggleBtn || !panel) return;
+
+    toggleBtn.onclick = function (e) {
+      e.stopPropagation();
+      var isHidden = panel.classList.contains("hidden");
+      if (isHidden) {
+        panel.classList.remove("hidden");
+        if (input) {
+          setTimeout(function () {
+            input.focus();
+          }, 50);
+        }
+      } else {
+        panel.classList.add("hidden");
+      }
+    };
+
+    panel.onclick = function (e) {
+      e.stopPropagation();
+      var item = e.target.closest(".search-result-item");
+      if (item) {
+        panel.classList.add("hidden");
+      }
+    };
+
+    document.addEventListener("click", function (e) {
+      if (!panel.contains(e.target) && e.target !== toggleBtn) {
+        panel.classList.add("hidden");
+      }
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        panel.classList.add("hidden");
+      }
+    });
+  }
+
+  function updateActiveNav() {
+    var p = window.location.pathname;
+    var hash = window.location.hash;
+    var isShop = (p === "/" && (!hash || hash === "#"));
+    var isCat = (hash.indexOf("categories") !== -1 || p.indexOf("/category") === 0);
+    var isCart = (p === "/cart" || p.indexOf("/cart/") === 0);
+    var isAccount = (
+      p.indexOf("/auth") === 0 ||
+      p.indexOf("/account") === 0 ||
+      p.indexOf("/orders") === 0 ||
+      p.indexOf("/login") === 0
+    );
+
+    var links = document.querySelectorAll("#desktop-nav a");
+    links.forEach(function (l) {
+      l.classList.remove("theme-accent", "font-bold");
+      l.classList.add("theme-text-muted");
+    });
+    var shopL = document.querySelector("#desktop-nav .nav-link-shop");
+    var catL = document.querySelector("#desktop-nav .nav-link-categories");
+    var cartL = document.querySelector("#desktop-nav .nav-link-cart");
+    var accL = document.querySelector("#desktop-nav .nav-link-account");
+    if (isShop && shopL) {
+      shopL.classList.add("theme-accent", "font-bold");
+      shopL.classList.remove("theme-text-muted");
+    } else if (isCat && catL) {
+      catL.classList.add("theme-accent", "font-bold");
+      catL.classList.remove("theme-text-muted");
+    } else if (isCart && cartL) {
+      cartL.classList.add("theme-accent", "font-bold");
+      cartL.classList.remove("theme-text-muted");
+    } else if (isAccount && accL) {
+      accL.classList.add("theme-accent", "font-bold");
+      accL.classList.remove("theme-text-muted");
+    }
+  }
+
   function wirePage() {
     applyTheme(getTheme());
     updateCartBadge();
+    wireSearchPanel();
+    updateActiveNav();
     var toggle = document.getElementById("theme-toggle");
     if (toggle) {
       toggle.addEventListener("click", function () {
@@ -300,6 +389,17 @@
   } else {
     wirePage();
   }
+
+  document.body.addEventListener("htmx:afterSwap", function (evt) {
+    if (evt.detail.target && evt.detail.target.tagName === "MAIN") {
+      window.scrollTo(0, 0);
+      wirePage();
+    }
+  });
+
+  window.addEventListener("popstate", function () {
+    updateActiveNav();
+  });
 
   // Exposed for the cart page and tests.
   window.BandehStore = {

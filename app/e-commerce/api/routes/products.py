@@ -69,6 +69,119 @@ logger = logging.getLogger("bandeh.products")
 UploadDirDep = Annotated[Path, Depends(get_upload_dir)]
 
 
+def _resolve_product_img_url(name: str, image_path: str | None) -> str:
+    """Resolve an appropriate product image path."""
+    if image_path:
+        return f"/uploads/{image_path}"
+    name_l = name.lower()
+    if "fridge" in name_l or "یخچال" in name:
+        return "/static/img/product-fridge.jpg"
+    if "tv" in name_l or "تلویزیون" in name:
+        return "/static/img/product-tv.jpg"
+    if "wash" in name_l or "لباسشویی" in name:
+        return "/static/img/product-washer.jpg"
+    return "/static/img/product-fridge.jpg"
+
+
+@router.get("/api/search-live", response_class=HTMLResponse)
+async def live_search_endpoint(
+    request: Request,
+    db: DbSessionDep,
+    directus: DirectusClientDep,
+    q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
+) -> HTMLResponse:
+    """Live search dropdown panel fragment for HTMX."""
+    query = q.strip()
+    if not query:
+        empty_hint = (
+            '<div class="py-4 text-center text-xs theme-text-muted">'
+            "نام کالا یا برند را تایپ کنید...</div>"
+        )
+        return HTMLResponse(empty_hint)
+
+    matched: list[dict[str, object]] = []
+    try:
+        db_products = await search_service.search_products(db, query, limit=6)
+        for p in db_products:
+            p_read = ProductRead.model_validate(p)
+            matched.append(
+                {
+                    "id": str(p_read.id),
+                    "name": p_read.name,
+                    "formatted_price": format_toman_price(p_read.price_toman),
+                    "category": p_read.category or "لوازم خانگی",
+                    "image_url": _resolve_product_img_url(
+                        p_read.name, p_read.image_path
+                    ),
+                }
+            )
+    except Exception:
+        pass
+
+    if not matched:
+        try:
+            cms_products = await directus.list_products(limit=30)
+            q_lower = query.lower()
+            for cp in cms_products:
+                name_match = q_lower in cp.get("name", "").lower()
+                desc_match = q_lower in (cp.get("description") or "").lower()
+                if name_match or desc_match:
+                    matched.append(
+                        {
+                            "id": str(cp.get("id")),
+                            "name": cp.get("name"),
+                            "formatted_price": format_toman_price(
+                                cp.get("price_toman")
+                            ),
+                            "category": cp.get("category") or "لوازم خانگی",
+                            "image_url": _resolve_product_img_url(
+                                cp.get("name", ""), cp.get("image_path")
+                            ),
+                        }
+                    )
+                    if len(matched) >= 6:
+                        break
+        except Exception:
+            pass
+
+    if not matched:
+        from integrations.directus_client import FALLBACK_PRODUCTS
+
+        q_lower = query.lower()
+        for fp in FALLBACK_PRODUCTS:
+            name_val = str(fp.get("name", ""))
+            desc_val = str(fp.get("description", ""))
+            if q_lower in name_val.lower() or q_lower in desc_val.lower():
+                matched.append(
+                    {
+                        "id": str(fp.get("id")),
+                        "name": name_val,
+                        "formatted_price": format_toman_price(
+                            fp.get("price_toman")
+                        ),
+                        "category": str(fp.get("category") or "لوازم خانگی"),
+                        "image_url": _resolve_product_img_url(
+                            name_val, fp.get("image_path")
+                        ),
+                    }
+                )
+                if len(matched) >= 6:
+                    break
+
+    return templates.TemplateResponse(
+        request=request,
+        name="_search_live.html",
+        context={"q": query, "results": matched},
+    )
+
+
+@router.get("/categories", response_class=HTMLResponse)
+async def list_categories_redirect() -> Response:
+    """Categories shortcut: directs to categories section on landing."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/#categories", status_code=303)
+
+
 @router.get("/products")
 async def list_products_endpoint(
     db: DbSessionDep,

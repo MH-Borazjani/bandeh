@@ -14,19 +14,23 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Route controllers for e-commerce API and web views."""
 
+from .acp import router as acp_router
 from .admin import router as admin_router
 from .auth import router as auth_router
 from .orders import router as orders_router
 from .pages import router as pages_router
 from .payments import router as payments_router
 from .products import router as products_router
+from .ucp import router as ucp_router
 
 __all__ = [
+    "acp_router",
     "admin_router",
     "auth_router",
     "orders_router",
     "pages_router",
     "payments_router",
     "products_router",
+    "ucp_router",
 ]
 

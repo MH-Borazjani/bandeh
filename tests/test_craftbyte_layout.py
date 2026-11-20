@@ -110,10 +110,10 @@ class CraftbyteLayoutTests(unittest.TestCase):
         self.assertIn('href="/search"', html)
         self.assertIn('id="theme-toggle"', html)
 
-        # Top bar header does NOT contain bag icon / cart link
+        # Desktop nav is present in header with cart and shop links
         header_html = html.split("<header")[1].split("</header>")[0]
-        self.assertNotIn('href="/cart"', header_html)
-        self.assertNotIn('id="cart-count"', header_html)
+        self.assertIn('id="desktop-nav"', header_html)
+        self.assertIn('href="/cart"', header_html)
 
     def test_hero_card_structure(self) -> None:
         """Hero card contains product photo, glow, exact Persian text, and NO dots."""

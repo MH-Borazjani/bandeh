@@ -1,26 +1,30 @@
-{% extends "base.html" %}
+{% extends base_template | default("base.html") %}
 {% block title %}سفارش‌های من | بنده{% endblock %}
 
 {% block content %}
-<!-- My Orders Page (Bandeh Shop - Stage 3)
-     Mobile-first, dark theme default, light theme supported,
-     amber gold as the one accent color for prices and main buttons. -->
+<!-- My Orders Page (Bandeh Shop - Responsive 2-column on desktop)
+     Amber accent: #d97706, dark theme default, light theme supported. -->
 
 <div class="mb-6 flex items-center justify-between">
   <div>
-    <h1 class="text-xl sm:text-2xl font-black theme-text-main">سفارش‌های من</h1>
-    <p class="text-xs theme-text-muted mt-1">لیست تمام سفارش‌ها و وضعیت پرداخت</p>
+    <h1 class="text-xl sm:text-2xl lg:text-3xl font-black theme-text-main">سفارش‌های من</h1>
+    <p class="text-xs sm:text-sm theme-text-muted mt-1">لیست تمام سفارش‌ها و وضعیت پرداخت</p>
   </div>
-  <a href="/" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
+  <a href="/"
+     hx-get="/"
+     hx-target="main"
+     hx-push-url="true"
+     class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
     <span>فروشگاه</span>
     <span>←</span>
   </a>
 </div>
 
 {% if orders %}
-<div class="space-y-4">
+<!-- Multi-column grid on desktop: lg:grid-cols-2 -->
+<div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5">
   {% for order in orders %}
-  <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+  <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 flex flex-col justify-between hover:border-neutral-700 transition-colors">
     <!-- Header of order card: Status badge & Date -->
     <div class="flex items-center justify-between gap-2 mb-3 pb-3 border-b theme-border">
       <span class="inline-flex items-center text-xs font-bold rounded-lg px-2.5 py-1 {{ order.status_badge_class }}">
@@ -50,13 +54,16 @@
     </div>
 
     <!-- Order footer: Total Price & Detail View Link -->
-    <div class="flex items-center justify-between pt-3 border-t theme-border">
+    <div class="flex items-center justify-between pt-3 border-t theme-border mt-auto">
       <div class="flex items-baseline gap-1">
         <span class="text-xs theme-text-muted">مبلغ کل:</span>
         <span class="theme-accent font-extrabold text-base sm:text-lg">{{ order.total_toman_formatted }}</span>
         <span class="text-xs theme-text-muted">تومان</span>
       </div>
       <a href="/orders/{{ order.id }}"
+         hx-get="/orders/{{ order.id }}"
+         hx-target="main"
+         hx-push-url="true"
          class="theme-btn-accent font-bold text-xs rounded-xl px-4 py-2.5 min-h-[44px] flex items-center justify-center">
         جزئیات سفارش
       </a>
@@ -67,7 +74,7 @@
 
 {% else %}
 <!-- Empty State -->
-<div class="theme-bg-card theme-border border rounded-2xl p-8 text-center my-6">
+<div class="theme-bg-card theme-border border rounded-2xl p-8 lg:p-14 text-center my-6">
   <div class="w-16 h-16 rounded-full theme-bg-card-subtle mx-auto flex items-center justify-center mb-4">
     <svg class="w-8 h-8 theme-text-muted opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
@@ -77,7 +84,11 @@
   <p class="text-xs theme-text-muted mb-6 leading-relaxed">
     محصولات فروشگاه را مرور کنید و اولین سفارش خود را ثبت نمایید.
   </p>
-  <a href="/" class="w-full theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm inline-flex items-center justify-center min-h-[48px]">
+  <a href="/"
+     hx-get="/"
+     hx-target="main"
+     hx-push-url="true"
+     class="w-full sm:w-auto theme-btn-accent font-bold py-3 px-6 rounded-xl text-sm inline-flex items-center justify-center min-h-[48px]">
     مشاهده محصولات فروشگاه
   </a>
 </div>

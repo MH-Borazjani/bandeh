@@ -1,0 +1,38 @@
+{% if results %}
+  <div class="space-y-1.5 max-h-80 overflow-y-auto">
+    {% for item in results %}
+    <a href="/products/{{ item.id }}"
+       hx-get="/products/{{ item.id }}"
+       hx-target="main"
+       hx-push-url="true"
+       class="search-result-item flex items-center justify-between gap-3 p-2 rounded-xl hover:theme-bg-card-subtle transition-colors group text-right">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-10 h-10 rounded-lg theme-bg-card-subtle theme-border border overflow-hidden shrink-0">
+          <img src="{{ item.image_url }}" alt="{{ item.name }}" class="w-full h-full object-cover">
+        </div>
+        <div class="min-w-0 text-right">
+          <div class="text-xs font-bold theme-text-main truncate group-hover:theme-accent transition-colors">{{ item.name }}</div>
+          <div class="text-[11px] theme-text-muted mt-0.5">{{ item.category }}</div>
+        </div>
+      </div>
+      <div class="shrink-0 pl-1">
+        <span class="text-xs font-bold theme-accent">{{ item.formatted_price }}</span>
+        <span class="text-[10px] theme-text-muted mr-0.5">تومان</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="pt-2 mt-2 border-t theme-border text-center">
+    <a href="/search?q={{ q }}"
+       hx-get="/search?q={{ q }}"
+       hx-target="main"
+       hx-push-url="true"
+       class="search-result-item text-xs font-semibold theme-accent hover:underline">
+      مشاهده همه نتایج جستجو برای «{{ q }}»
+    </a>
+  </div>
+{% else %}
+  <div class="py-6 text-center text-xs theme-text-muted">
+    کالایی با عبارت «{{ q }}» یافت نشد.
+  </div>
+{% endif %}

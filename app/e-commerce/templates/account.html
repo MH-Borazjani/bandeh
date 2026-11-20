@@ -1,42 +1,63 @@
-{% extends "base.html" %}
+{% extends base_template | default("base.html") %}
 {% block title %}حساب من | بنده{% endblock %}
 {% block content %}
-<!-- Protected account dashboard (Bandeh Shop - Stage 3)
+<!-- Protected account dashboard (Bandeh Shop - Responsive 2-column on desktop)
      Design system: mobile-first, dark theme default, light theme supported. -->
 
-<div class="theme-bg-card theme-border border rounded-2xl p-5 mb-5">
-  <div class="inline-flex items-center gap-2 theme-badge px-3 py-1 rounded-full text-xs font-semibold mb-3">
-    <span class="w-2 h-2 rounded-full theme-btn-accent"></span>
-    <span>حساب کاربری خریدار</span>
-  </div>
-  <h1 class="text-xl font-bold mb-1 theme-text-main">خوش آمدید! 🎉</h1>
-  <p class="text-xs theme-text-muted">با شماره‌ی <span class="font-mono font-semibold theme-text-main">{{ masked }}</span> وارد شده‌اید.</p>
+<div class="mb-5">
+  <h1 class="text-xl sm:text-2xl lg:text-3xl font-black theme-text-main mb-1">حساب کاربری</h1>
+  <p class="text-xs sm:text-sm theme-text-muted">مدیریت اطلاعات و سفارش‌های ثبت‌شده</p>
 </div>
 
-<!-- My Orders Link Card -->
-<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-5 flex items-center justify-between">
-  <div>
-    <h2 class="font-bold text-sm theme-text-main mb-1">سفارش‌های من</h2>
-    <p class="text-xs theme-text-muted">مشاهده لیست سفارش‌ها، وضعیت پرداخت و جزئیات فاکتور</p>
-  </div>
-  <a href="/orders" class="theme-btn-accent font-bold text-xs rounded-xl px-4 py-2.5 min-h-[44px] flex items-center justify-center shrink-0">
-    مشاهده
-  </a>
-</div>
+<!-- 2-column layout on desktop: Info/Orders right, Logout/Security left -->
+<div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+  <!-- Right column on desktop (2/3 width) -->
+  <div class="lg:col-span-2 space-y-4">
+    <!-- User Welcome Card -->
+    <div class="theme-bg-card theme-border border rounded-2xl p-5 sm:p-6">
+      <div class="inline-flex items-center gap-2 theme-badge px-3 py-1 rounded-full text-xs font-semibold mb-3">
+        <span class="w-2 h-2 rounded-full theme-btn-accent"></span>
+        <span>حساب کاربری خریدار</span>
+      </div>
+      <h2 class="text-xl font-bold mb-1.5 theme-text-main">خوش آمدید! 🎉</h2>
+      <p class="text-xs sm:text-sm theme-text-muted">
+        با شماره‌ی <span class="font-mono font-semibold theme-text-main">{{ masked }}</span> وارد شده‌اید.
+      </p>
+    </div>
 
-<!-- Logout Actions -->
-<div class="space-y-3">
-  <form action="/auth/logout" method="post">
-    <button type="submit"
-            class="w-full theme-btn-secondary font-bold rounded-xl py-3 text-xs min-h-[44px]">
-      خروج از حساب کاربری
-    </button>
-  </form>
-  <form action="/auth/logout-everywhere" method="post">
-    <button type="submit"
-            class="w-full text-neutral-400 hover:text-red-400 text-xs py-2">
-      خروج از تمامی دستگاه‌ها
-    </button>
-  </form>
+    <!-- My Orders Link Card -->
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-6 flex items-center justify-between gap-4">
+      <div>
+        <h2 class="font-bold text-sm sm:text-base theme-text-main mb-1">سفارش‌های من</h2>
+        <p class="text-xs theme-text-muted">مشاهده لیست سفارش‌ها، وضعیت پرداخت و جزئیات فاکتور</p>
+      </div>
+      <a href="/orders"
+         hx-get="/orders"
+         hx-target="main"
+         hx-push-url="true"
+         class="theme-btn-accent font-bold text-xs sm:text-sm rounded-xl px-5 py-2.5 min-h-[44px] flex items-center justify-center shrink-0">
+        مشاهده
+      </a>
+    </div>
+  </div>
+
+  <!-- Left column on desktop (1/3 width, sticky) -->
+  <div class="lg:col-span-1 lg:sticky lg:top-24 space-y-3">
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5">
+      <h3 class="text-xs font-bold theme-text-main mb-3 pb-2 border-b theme-border">تنظیمات ورود و خروج</h3>
+      <form action="/auth/logout" method="post" class="mb-2.5">
+        <button type="submit"
+                class="w-full theme-btn-secondary font-bold rounded-xl py-3 text-xs min-h-[44px]">
+          خروج از حساب کاربری
+        </button>
+      </form>
+      <form action="/auth/logout-everywhere" method="post">
+        <button type="submit"
+                class="w-full text-neutral-400 hover:text-red-400 text-xs py-2 transition-colors">
+          خروج از تمامی دستگاه‌ها
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

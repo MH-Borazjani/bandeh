@@ -1,18 +1,17 @@
-{% extends "base.html" %}
+{% extends base_template | default("base.html") %}
 {% block title %}{% if q %}جستجوی {{ q }} | بنده{% else %}جستجوی کالا | بنده{% endif %}{% endblock %}
 
 {% block content %}
-<!-- Search & Category Listing Page (Bandeh Shop - Stage 3)
-     Mobile-first, dark theme default, light theme supported,
-     amber gold as the one accent color for prices and main buttons. -->
+<!-- Search & Category Listing Page (Bandeh Shop - Responsive on Desktop)
+     Amber accent: #d97706, dark theme default, light theme supported. -->
 
 <div class="mb-5">
-  <h1 class="text-xl sm:text-2xl font-black theme-text-main mb-1">جستجوی کالا</h1>
-  <p class="text-xs theme-text-muted">جستجو در بین تمامی لوازم خانگی با فیلتر دسته‌بندی</p>
+  <h1 class="text-xl sm:text-2xl lg:text-3xl font-black theme-text-main mb-1">جستجوی کالا</h1>
+  <p class="text-xs sm:text-sm theme-text-muted">جستجو در بین تمامی لوازم خانگی با فیلتر دسته‌بندی</p>
 </div>
 
 <!-- Search & Filter Form -->
-<form action="/search" method="get" class="theme-bg-card theme-border border rounded-2xl p-4 mb-6 space-y-3">
+<form action="/search" method="get" hx-get="/search" hx-target="main" hx-push-url="true" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6 space-y-3.5">
   <!-- Search query box -->
   <div class="relative flex items-center">
     <input type="search"
@@ -28,19 +27,24 @@
     </div>
     <button type="submit"
             id="search-submit"
-            class="absolute left-2 theme-btn-accent font-bold rounded-lg px-3.5 py-2 text-xs min-h-[36px] flex items-center justify-center">
+            class="absolute left-2 theme-btn-accent font-bold rounded-lg px-4 py-2 text-xs min-h-[36px] flex items-center justify-center">
       جستجو
     </button>
   </div>
 
-  <!-- Category quick list: tappable chips, each opens the category page
-       in the frontend (no dropdown). -->
+  <!-- Category quick list: tappable chips (no dropdown) -->
   <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
     <span class="theme-text-muted shrink-0 font-medium">دسته‌بندی:</span>
     <a href="/search{% if q %}?q={{ q | urlencode }}{% endif %}"
+       hx-get="/search{% if q %}?q={{ q | urlencode }}{% endif %}"
+       hx-target="main"
+       hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if not selected_category %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه دسته‌ها</a>
     {% for cat in categories %}
     <a href="/category/{{ cat.id or cat.name }}"
+       hx-get="/category/{{ cat.id or cat.name }}"
+       hx-target="main"
+       hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if selected_category == cat.name or selected_category == (cat.id|string) %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">{{ cat.name }}</a>
     {% endfor %}
   </div>
@@ -48,8 +52,8 @@
 
 <!-- Results Section -->
 {% if searched %}
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-sm font-bold theme-text-main flex items-center gap-1.5">
+  <div class="flex items-center justify-between mb-4 px-1">
+    <h2 class="text-sm sm:text-base font-bold theme-text-main flex items-center gap-1.5">
       <span>نتایج جستجو</span>
       {% if q %}
       <span class="theme-accent font-semibold">«{{ q }}»</span>
@@ -62,7 +66,7 @@
   </div>
 
   {% if products %}
-  <div class="space-y-4">
+  <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5">
     {% for p in products %}
     {% if p.image_path %}
       {% set search_img = '/uploads/' ~ p.image_path %}
@@ -75,44 +79,54 @@
     {% else %}
       {% set search_img = '/static/img/product-fridge.jpg' %}
     {% endif %}
-    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between">
-      <!-- Product photo: a link to the product page (fills whole box, object-cover) -->
-      <a href="/products/{{ p.id }}" class="theme-bg-card-subtle theme-border border rounded-xl h-36 mb-3.5 overflow-hidden block">
-        <img src="{{ search_img }}" alt="{{ p.name }}" class="w-full h-full object-cover">
-      </a>
-
-      <!-- Title & badges -->
-      <div class="flex items-start justify-between gap-2 mb-2">
-        <a href="/products/{{ p.id }}" class="hover:underline">
-          <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col justify-between hover:border-neutral-700 transition-colors">
+      <div>
+        <!-- Product photo: a link to the product page -->
+        <a href="/products/{{ p.id }}"
+           hx-get="/products/{{ p.id }}"
+           hx-target="main"
+           hx-push-url="true"
+           class="theme-bg-card-subtle theme-border border rounded-xl h-40 sm:h-44 mb-3.5 overflow-hidden block">
+          <img src="{{ search_img }}" alt="{{ p.name }}" class="w-full h-full object-cover">
         </a>
-        {% if p.tag %}
-        <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
-        {% endif %}
-      </div>
 
-      {% if p.description %}
-      <p class="text-xs theme-text-muted line-clamp-2 mb-3 leading-relaxed">
-        {{ p.description }}
-      </p>
-      {% endif %}
+        <!-- Title & badges -->
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <a href="/products/{{ p.id }}"
+             hx-get="/products/{{ p.id }}"
+             hx-target="main"
+             hx-push-url="true"
+             class="hover:underline">
+            <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
+          </a>
+          {% if p.tag %}
+          <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
+          {% endif %}
+        </div>
 
-      <!-- Stock & Category badges -->
-      <div class="flex items-center gap-2 mb-3 text-xs">
-        {% if p.category %}
-        <span class="theme-bg-card-subtle theme-border border rounded-lg px-2 py-0.5 text-neutral-400">
-          {{ p.category }}
-        </span>
+        {% if p.description %}
+        <p class="text-xs theme-text-muted line-clamp-2 mb-3 leading-relaxed">
+          {{ p.description }}
+        </p>
         {% endif %}
-        {% if p.available > 0 %}
-        <span class="theme-badge-success rounded-lg px-2 py-0.5 font-medium">موجود در انبار</span>
-        {% else %}
-        <span class="theme-badge-danger rounded-lg px-2 py-0.5 font-medium">ناموجود</span>
-        {% endif %}
+
+        <!-- Stock & Category badges -->
+        <div class="flex items-center gap-2 mb-3 text-xs">
+          {% if p.category %}
+          <span class="theme-bg-card-subtle theme-border border rounded-lg px-2 py-0.5 text-neutral-400">
+            {{ p.category }}
+          </span>
+          {% endif %}
+          {% if p.available > 0 %}
+          <span class="theme-badge-success rounded-lg px-2 py-0.5 font-medium">موجود در انبار</span>
+          {% else %}
+          <span class="theme-badge-danger rounded-lg px-2 py-0.5 font-medium">ناموجود</span>
+          {% endif %}
+        </div>
       </div>
 
       <!-- Price & Add to cart button -->
-      <div class="flex items-center justify-between pt-3 border-t theme-border">
+      <div class="flex items-center justify-between pt-3 border-t theme-border mt-2">
         {% set cp = p.price_toman | compact_price %}
         <div class="flex items-baseline gap-1">
           <span class="theme-accent font-black text-lg sm:text-xl">{{ cp.value }}</span>
@@ -133,7 +147,7 @@
 
   {% else %}
   <!-- No Results Found -->
-  <div class="theme-bg-card theme-border border rounded-2xl p-8 text-center my-4">
+  <div class="theme-bg-card theme-border border rounded-2xl p-8 lg:p-14 text-center my-4">
     <div class="w-16 h-16 rounded-full theme-bg-card-subtle mx-auto flex items-center justify-center mb-3">
       <svg class="w-8 h-8 theme-text-muted opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -143,7 +157,11 @@
     <p class="text-xs theme-text-muted mb-4 leading-relaxed">
       با کلمات کلیدی دیگر جستجو کنید یا فیلتر دسته‌بندی را تغییر دهید.
     </p>
-    <a href="/search" class="inline-flex items-center justify-center theme-btn-secondary text-xs font-semibold rounded-xl px-4 py-2.5 min-h-[44px]">
+    <a href="/search"
+       hx-get="/search"
+       hx-target="main"
+       hx-push-url="true"
+       class="inline-flex items-center justify-center theme-btn-secondary text-xs font-semibold rounded-xl px-4 py-2.5 min-h-[44px]">
       پاک کردن فیلترها
     </a>
   </div>
@@ -151,25 +169,28 @@
 
 {% else %}
   <!-- Initial State: Guidance & Popular Categories -->
-  <div class="theme-bg-card theme-border border rounded-2xl p-6 mb-6 text-center">
+  <div class="theme-bg-card theme-border border rounded-2xl p-6 lg:p-10 mb-6 text-center">
     <div class="w-12 h-12 rounded-full theme-bg-card-subtle mx-auto flex items-center justify-center mb-3">
       <span class="theme-accent text-lg">🔍</span>
     </div>
-    <h3 class="text-base font-bold theme-text-main mb-1">جستجو در کاتالوگ بنده</h3>
-    <p class="text-xs theme-text-muted leading-relaxed">
+    <h3 class="text-base lg:text-lg font-bold theme-text-main mb-1">جستجو در کاتالوگ بنده</h3>
+    <p class="text-xs sm:text-sm theme-text-muted leading-relaxed max-w-md mx-auto">
       نام محصول، برند یا مشخصات کالا را در کادر بالا وارد کرده و کلید جستجو را بزنید.
     </p>
   </div>
 
   <!-- Category Quick Links -->
   <div class="mb-4">
-    <h2 class="text-sm font-bold theme-text-main mb-3">دسته‌بندی‌های کالا</h2>
-    <div class="grid grid-cols-2 gap-2.5">
+    <h2 class="text-sm sm:text-base font-bold theme-text-main mb-3">دسته‌بندی‌های کالا</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
       {% for cat in categories %}
       <a href="/category/{{ cat.id or cat.name }}"
-         class="theme-bg-card theme-border border rounded-xl p-3 flex flex-col justify-between hover:border-amber-600 transition-colors">
+         hx-get="/category/{{ cat.id or cat.name }}"
+         hx-target="main"
+         hx-push-url="true"
+         class="theme-bg-card theme-border border rounded-xl p-3.5 flex flex-col justify-between hover:border-amber-600 transition-colors">
         <span class="font-bold text-xs sm:text-sm theme-text-main">{{ cat.name }}</span>
-        <span class="text-[11px] theme-text-muted mt-1">مشاهده کالاها ←</span>
+        <span class="text-[11px] theme-text-muted mt-2">مشاهده کالاها ←</span>
       </a>
       {% endfor %}
     </div>

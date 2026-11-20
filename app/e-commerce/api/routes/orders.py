@@ -168,13 +168,29 @@ async def create_order_endpoint(
 ) -> OrderRead:
     """Checkout: freeze the cart into an order (prices fixed at this moment)."""
     try:
+        addr_parts: list[str] = []
+        if data.province and data.city:
+            addr_parts.append(f"{data.province}، {data.city}")
+        elif data.province:
+            addr_parts.append(data.province)
+        if data.delivery_address:
+            addr_parts.append(data.delivery_address)
+        if data.plaque:
+            addr_parts.append(f"پلاک {data.plaque}")
+        if data.postal_code:
+            addr_parts.append(f"کد پستی {data.postal_code}")
+        if data.landline_phone:
+            addr_parts.append(f"تلفن {data.landline_phone}")
+
+        resolved_address = " - ".join(addr_parts) if addr_parts else data.delivery_address
+
         order = await create_order(
             db,
             user,
             data.items,
             recipient_name=data.recipient_name,
             recipient_phone=data.recipient_phone,
-            delivery_address=data.delivery_address,
+            delivery_address=resolved_address,
         )
     except OrderError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc

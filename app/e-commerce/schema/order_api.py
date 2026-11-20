@@ -46,6 +46,11 @@ class OrderCreate(BaseModel):
     recipient_name: str | None = Field(default=None, max_length=100)
     recipient_phone: str | None = Field(default=None, max_length=20)
     delivery_address: str | None = Field(default=None, max_length=500)
+    postal_code: str | None = Field(default=None, max_length=20)
+    landline_phone: str | None = Field(default=None, max_length=20)
+    plaque: str | None = Field(default=None, max_length=50)
+    province: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
 
 
 class OrderItemRead(BaseModel):

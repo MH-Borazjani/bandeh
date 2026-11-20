@@ -14,8 +14,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Public web routes for shop storefront."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 try:
     from core.security import CurrentUserDep
@@ -37,6 +39,11 @@ except ImportError:
     )
 
 router = APIRouter(tags=["pages"])
+
+# PWA files live under static/, but the service worker MUST be served
+# from the site root: a worker's scope is the folder it is served from,
+# and a worker under /static/ could only control /static/*.
+_STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 
 # Hardcoded landing content (used when Directus is down). The single source
 # of truth lives in integrations/directus_client.py; these names stay here
@@ -234,18 +241,68 @@ def sitemap_xml() -> Response:
     return response
 
 
+@router.get("/sw.js", response_class=Response)
+def service_worker() -> Response:
+    """Serve the PWA service worker from the site root (scope = /)."""
+    content = (_STATIC_DIR / "sw.js").read_text(encoding="utf-8")
+    response = Response(content=content, media_type="application/javascript")
+    # Never cache the worker itself: the browser checks for a new
+    # worker on every visit, and a cached copy would freeze the old
+    # worker in place.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@router.get("/favicon.ico", response_class=Response)
+def favicon() -> Response:
+    """Serve the shop favicon (Ganabi logo) from the site root."""
+    content = (_STATIC_DIR / "favicon.ico").read_bytes()
+    response = Response(content=content, media_type="image/x-icon")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+@router.get("/manifest.webmanifest", response_class=Response)
+def web_manifest() -> Response:
+    """Serve the PWA manifest from the site root."""
+    content = (_STATIC_DIR / "manifest.webmanifest").read_text(encoding="utf-8")
+    response = Response(content=content, media_type="application/manifest+json")
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@router.get("/.well-known/ucp")
+def ucp_well_known(request: Request) -> JSONResponse:
+    """UCP discovery: the merchant capability profile (public).
+
+    AI agents fetch this first to learn what the shop can do: the
+    shopping service (REST, UCP 2026-08-25) at /ucp, the checkout /
+    catalog / orders capabilities, and the Zibal payment handler.
+    """
+    from services.agent_commerce import ucp_profile
+
+    base_url = str(request.base_url).rstrip("/")
+    response = JSONResponse(content=ucp_profile(base_url))
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
 __all__ = [
     "CATEGORIES",
     "SAMPLE_PRODUCTS",
     "cart_page",
     "checkout_page",
     "contact_page",
+    "favicon",
     "landing",
     "privacy_page",
     "returns_page",
     "robots_txt",
     "router",
+    "service_worker",
     "sitemap_xml",
     "terms_page",
+    "ucp_well_known",
+    "web_manifest",
 ]
 
