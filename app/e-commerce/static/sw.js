@@ -17,7 +17,7 @@
  * design change), bump CACHE_VERSION below by one and redeploy.
  */
 
-const CACHE_VERSION = "genabay-pwa-v1";
+const CACHE_VERSION = "genabay-pwa-v2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const PAGES_CACHE = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE = `${CACHE_VERSION}-images`;
