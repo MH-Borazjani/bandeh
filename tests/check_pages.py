@@ -65,8 +65,8 @@ def main() -> None:
     # 3. Sections render: categories, sample products, trust, footer.
     assert "دسته‌بندی‌ها" in r.text
     assert "یخچال و فریزر" in r.text
-    assert "پیشنهادهای ویژه" in r.text
-    assert "یخچال فریزر دوقلو" in r.text
+    assert "پرفروش‌ترین‌ها" in r.text
+    assert "ماشین لباسشویی ۸ کیلویی" in r.text
     assert "تومان" in r.text
     assert "ضمانت اصالت" in r.text
 

@@ -63,89 +63,89 @@ async def main_async() -> None:
                 raise
 
     app.dependency_overrides[get_db] = test_get_db
-    client = TestClient(app)
+    with TestClient(app) as client:
 
-    async with Session() as s:
-        s.add_all(
-            [
-                Product(name="یخچال دو درب", description="کم‌مصرف، 400 لیتر", price_toman=45_000_000, stock=5),
-                Product(name="یخچال فریزر", description="فریزر بالا", price_toman=38_000_000, stock=3),
-                Product(name="ماشین لباسشویی", description="8 کیلوگرم", price_toman=22_000_000, stock=4),
-                Product(name="تلویزیون", description="کم‌مصرف 55 اینچ", price_toman=30_000_000, stock=2),
-                Product(name="تخفیف 100% واقعی", description="فروش ویژه", price_toman=1_000_000, stock=1),
-                Product(name="یخچال قدیمی", description="از رده خارج", price_toman=5_000_000, stock=0, is_active=False),
-            ]
-        )
-        await s.commit()
+        async with Session() as s:
+            s.add_all(
+                [
+                    Product(name="یخچال دو درب", description="کم‌مصرف، 400 لیتر", price_toman=45_000_000, stock=5),
+                    Product(name="یخچال فریزر", description="فریزر بالا", price_toman=38_000_000, stock=3),
+                    Product(name="ماشین لباسشویی", description="8 کیلوگرم", price_toman=22_000_000, stock=4),
+                    Product(name="تلویزیون", description="کم‌مصرف 55 اینچ", price_toman=30_000_000, stock=2),
+                    Product(name="تخفیف 100% واقعی", description="فروش ویژه", price_toman=1_000_000, stock=1),
+                    Product(name="یخچال قدیمی", description="از رده خارج", price_toman=5_000_000, stock=0, is_active=False),
+                ]
+            )
+            await s.commit()
 
-    def names(resp) -> list[str]:
-        return [p["name"] for p in resp.json()]
+        def names(resp) -> list[str]:
+            return [p["name"] for p in resp.json()]
 
-    # 1. Substring search: name match, inactive excluded --------------------
-    resp = client.get("/search", params={"q": "یخچال"})
-    assert resp.status_code == 200, resp.status_code
-    # Same-second created_at for both rows, so order between them is free.
-    assert set(names(resp)) == {"یخچال فریزر", "یخچال دو درب"}, names(resp)
-    assert "یخچال قدیمی" not in names(resp), "inactive products must not appear"
-    print("   [OK] search by name, inactive excluded")
+        # 1. Substring search: name match, inactive excluded --------------------
+        resp = client.get("/search", params={"q": "یخچال"})
+        assert resp.status_code == 200, resp.status_code
+        # Same-second created_at for both rows, so order between them is free.
+        assert set(names(resp)) == {"یخچال فریزر", "یخچال دو درب"}, names(resp)
+        assert "یخچال قدیمی" not in names(resp), "inactive products must not appear"
+        print("   [OK] search by name, inactive excluded")
 
-    # 2. Description-only match ---------------------------------------------
-    resp = client.get("/search", params={"q": "کم‌مصرف"})
-    assert set(names(resp)) == {"یخچال دو درب", "تلویزیون"}, names(resp)
-    print("   [OK] search matches description too")
+        # 2. Description-only match ---------------------------------------------
+        resp = client.get("/search", params={"q": "کم‌مصرف"})
+        assert set(names(resp)) == {"یخچال دو درب", "تلویزیون"}, names(resp)
+        print("   [OK] search matches description too")
 
-    # 3. Wildcards are literal: % matches only the product that has % ------
-    resp = client.get("/search", params={"q": "%"})
-    assert names(resp) == ["تخفیف 100% واقعی"], names(resp)
-    resp = client.get("/search", params={"q": "_"})
-    assert names(resp) == [], names(resp)
-    print("   [OK] % and _ in the query match literally")
+        # 3. Wildcards are literal: % matches only the product that has % ------
+        resp = client.get("/search", params={"q": "%"})
+        assert names(resp) == ["تخفیف 100% واقعی"], names(resp)
+        resp = client.get("/search", params={"q": "_"})
+        assert names(resp) == [], names(resp)
+        print("   [OK] % and _ in the query match literally")
 
-    # 4. Empty query returns [] (never a full-table dump) --------------------
-    assert client.get("/search", params={"q": ""}).json() == []
-    assert client.get("/search", params={"q": "   "}).json() == []
-    assert client.get("/search").json() == []
-    print("   [OK] empty query returns []")
+        # 4. Empty query returns [] (never a full-table dump) --------------------
+        assert client.get("/search", params={"q": ""}).json() == []
+        assert client.get("/search", params={"q": "   "}).json() == []
+        assert client.get("/search").json() == []
+        print("   [OK] empty query returns []")
 
-    # 5. Limit respected, and capped at MAX_LIMIT -----------------------------
-    resp = client.get("/search", params={"q": "ی", "limit": 2})
-    assert len(resp.json()) == 2, resp.json()
-    async with Session() as s:
-        for i in range(55):
-            s.add(Product(name=f"کالا {i}", price_toman=1000, stock=1))
-        await s.commit()
-    async with Session() as s:
-        found = await search_products_ilike(s, "کالا", limit=500)
-    assert len(found) == MAX_LIMIT, f"limit must cap at {MAX_LIMIT}, got {len(found)}"
-    print(f"   [OK] limit respected, capped at {MAX_LIMIT}")
+        # 5. Limit respected, and capped at MAX_LIMIT -----------------------------
+        resp = client.get("/search", params={"q": "ی", "limit": 2})
+        assert len(resp.json()) == 2, resp.json()
+        async with Session() as s:
+            for i in range(55):
+                s.add(Product(name=f"کالا {i}", price_toman=1000, stock=1))
+            await s.commit()
+        async with Session() as s:
+            found = await search_products_ilike(s, "کالا", limit=500)
+        assert len(found) == MAX_LIMIT, f"limit must cap at {MAX_LIMIT}, got {len(found)}"
+        print(f"   [OK] limit respected, capped at {MAX_LIMIT}")
 
-    # 6. SQL injection attempt: 200, no crash, table intact ------------------
-    resp = client.get("/search", params={"q": "'; DROP TABLE products; --"})
-    assert resp.status_code == 200, resp.status_code
-    assert resp.json() == []
-    resp = client.get("/products")
-    assert resp.status_code == 200 and len(resp.json()) > 0, "products table must survive"
-    print("   [OK] injection attempt harmless, table intact")
+        # 6. SQL injection attempt: 200, no crash, table intact ------------------
+        resp = client.get("/search", params={"q": "'; DROP TABLE products; --"})
+        assert resp.status_code == 200, resp.status_code
+        assert resp.json() == []
+        resp = client.get("/products")
+        assert resp.status_code == 200 and len(resp.json()) > 0, "products table must survive"
+        print("   [OK] injection attempt harmless, table intact")
 
-    # 7. Product list: active only, public cache header -----------------------
-    resp = client.get("/products")
-    assert resp.status_code == 200
-    assert "یخچال قدیمی" not in names(resp)
-    assert resp.headers["cache-control"] == "public, max-age=60", resp.headers.get("cache-control")
-    print("   [OK] product list: active only, Cache-Control public, max-age=60")
+        # 7. Product list: active only, public cache header -----------------------
+        resp = client.get("/products")
+        assert resp.status_code == 200
+        assert "یخچال قدیمی" not in names(resp)
+        assert resp.headers["cache-control"] == "public, max-age=60", resp.headers.get("cache-control")
+        print("   [OK] product list: active only, Cache-Control public, max-age=60")
 
-    # 8. Full-text SQL: compiled for Postgres, never run here -----------------
-    stmt = build_fulltext_statement("یخچال دو درب", limit=20)
-    sql = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": False}))
-    assert "to_tsvector" in sql, sql
-    assert "plainto_tsquery" in sql, sql
-    assert "ts_rank" in sql, sql
-    assert "LIMIT" in sql, sql
-    assert "یخچال" not in sql, "the query text must stay a bound parameter, not inline SQL"
-    assert "%(param_1)s" in sql or ":param_1" in sql, sql
-    print("   [OK] full-text SQL compiles for Postgres with bound parameters")
+        # 8. Full-text SQL: compiled for Postgres, never run here -----------------
+        stmt = build_fulltext_statement("یخچال دو درب", limit=20)
+        sql = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": False}))
+        assert "to_tsvector" in sql, sql
+        assert "plainto_tsquery" in sql, sql
+        assert "ts_rank" in sql, sql
+        assert "LIMIT" in sql, sql
+        assert "یخچال" not in sql, "the query text must stay a bound parameter, not inline SQL"
+        assert "%(param_1)s" in sql or ":param_1" in sql, sql
+        print("   [OK] full-text SQL compiles for Postgres with bound parameters")
 
-    print("All search checks passed.")
+        print("All search checks passed.")
 
 
 def main() -> None:
