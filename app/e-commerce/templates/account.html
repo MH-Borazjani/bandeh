@@ -39,6 +39,49 @@
         مشاهده
       </a>
     </div>
+
+    <!-- AI connection (MCP) — personal access tokens -->
+    <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-6">
+      <h2 class="font-bold text-sm sm:text-base theme-text-main mb-1">اتصال هوش مصنوعی (MCP)</h2>
+      <p class="text-xs theme-text-muted leading-relaxed mb-3">
+        برای اینکه ChatGPT ،Gemini یا Claude از طرف شما در فروشگاه جستجو کند و به سبد خرید اضافه کند،
+        یک توکن بسازید و آن را در اتصال MCP آن برنامه بگذارید. هوش مصنوعی هیچ‌وقت خودش پرداخت نمی‌کند؛
+        فقط لینک پرداخت را به شما می‌دهد.
+      </p>
+      {% if new_token %}
+      <div class="theme-border border rounded-xl p-3 mb-3">
+        <p class="text-xs font-bold theme-text-main mb-1">توکن شما — فقط همین یک بار نمایش داده می‌شود؛ همین حالا کپی کنید:</p>
+        <p class="font-mono text-xs theme-text-main break-all select-all">{{ new_token }}</p>
+      </div>
+      {% endif %}
+      <form action="/auth/tokens" method="post" class="flex gap-2 mb-3">
+        <input type="text" name="name" placeholder="نام توکن، مثلاً ChatGPT در موبایل" maxlength="80"
+               class="flex-1 min-w-0 theme-bg-card theme-border border rounded-xl px-3 py-2.5 text-xs theme-text-main">
+        <button type="submit"
+                class="theme-btn-accent font-bold text-xs sm:text-sm rounded-xl px-4 py-2.5 min-h-[44px] shrink-0">
+          ساخت توکن
+        </button>
+      </form>
+      {% if tokens %}
+      <ul class="space-y-2">
+        {% for token in tokens %}
+        <li class="flex items-center justify-between gap-2 text-xs">
+          <span class="theme-text-main font-semibold">{{ token.name }}</span>
+          <span class="font-mono theme-text-muted">{{ token.token_prefix }}…</span>
+          {% if token.is_revoked %}
+          <span class="theme-text-muted">باطل شده</span>
+          {% else %}
+          <form action="/auth/tokens/{{ token.id }}/revoke" method="post">
+            <button type="submit" class="text-red-400 hover:text-red-300 font-semibold">باطل کردن</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-xs theme-text-muted">هنوز توکنی نساخته‌اید.</p>
+      {% endif %}
+    </div>
   </div>
 
   <!-- Left column on desktop (1/3 width, sticky) -->

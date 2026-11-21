@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request, Response
@@ -71,6 +72,7 @@ from services.oauth_service import (
     get_user_by_google_sub,
     link_google_account,
 )
+from services.pat_service import create_token, list_tokens, revoke_token
 from services.refresh_service import (
     find_refresh_token,
     issue_refresh_token,
@@ -83,7 +85,11 @@ from services.session_service import (
     revoke_all_user_sessions,
     revoke_session,
 )
-from services.user_service import get_or_create_user_by_phone, record_user_login
+from services.user_service import (
+    get_or_create_user_by_phone,
+    get_user_by_phone,
+    record_user_login,
+)
 
 # Short-lived cookies for the Google flow: the CSRF ``state`` and the
 # pending Google identity waiting for the phone + OTP step (10 min).
@@ -437,13 +443,67 @@ async def logout_everywhere(
 
 
 @router.get("/account", response_class=HTMLResponse)
-def account_page(request: Request, phone: RequireUserDep) -> HTMLResponse:
-    """Protected user account dashboard."""
+async def account_page(
+    request: Request, phone: RequireUserDep, db: DbSessionDep
+) -> HTMLResponse:
+    """Protected user account dashboard (with the MCP token list).
+
+    The token list is best-effort: when the database is briefly
+    unreachable the page still renders (masked number, orders, logout)
+    and the list simply comes back empty — the page never depended on
+    the database before, and it still must not.
+    """
+    tokens = []
+    try:
+        user = await get_user_by_phone(db, phone) if phone else None
+        if user is not None:
+            tokens = await list_tokens(db, user)
+    except Exception:  # noqa: BLE001 - a dead DB must not break the page
+        tokens = []
     return templates.TemplateResponse(
         request=request,
         name="account.html",
-        context={"phone": phone, "masked": mask_phone(phone)},
+        context={"phone": phone, "masked": mask_phone(phone), "tokens": tokens},
     )
+
+
+@router.post("/tokens", response_class=HTMLResponse, response_model=None)
+async def create_pat_token(
+    request: Request,
+    phone: RequireUserDep,
+    db: DbSessionDep,
+    name: Annotated[str, Form()] = "",
+) -> HTMLResponse | RedirectResponse:
+    """Create a personal access token and show it once, on this page only."""
+    user = await get_user_by_phone(db, phone) if phone else None
+    if user is None:
+        return RedirectResponse("/auth/login", status_code=303)
+    _, plaintext = await create_token(db, user, name or "MCP token")
+    tokens = await list_tokens(db, user)
+    return templates.TemplateResponse(
+        request=request,
+        name="account.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone),
+            "tokens": tokens,
+            "new_token": plaintext,
+        },
+    )
+
+
+@router.post("/tokens/{token_id}/revoke")
+async def revoke_pat_token(
+    request: Request, phone: RequireUserDep, db: DbSessionDep, token_id: str
+) -> RedirectResponse:
+    """Revoke one of the customer's own tokens, then back to the account."""
+    user = await get_user_by_phone(db, phone) if phone else None
+    if user is not None:
+        try:
+            await revoke_token(db, user, uuid.UUID(token_id))
+        except ValueError:
+            pass
+    return RedirectResponse("/auth/account", status_code=303)
 
 
 __all__ = ["router"]

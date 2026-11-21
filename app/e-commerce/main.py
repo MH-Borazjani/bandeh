@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Route
 
 from api.routes import (
     acp_router,
@@ -42,6 +43,7 @@ from core.middleware import register_middleware
 from core.security import read_session
 from core.templates import templates
 from integrations.http_client import create_http_client
+from integrations.mcp_server import build_mcp_endpoint, create_mcp_server
 from services.auth_service import mask_phone
 from services.scheduler import ReservationCleanupTask
 
@@ -61,7 +63,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cleanup_task = ReservationCleanupTask(interval_seconds=60.0)
     app.state.cleanup_task = cleanup_task
     cleanup_task.start()
-    yield
+    # The MCP endpoint is registered below as a direct route, but a
+    # custom lifespan replaces the router lifespan that would normally
+    # start the SDK app — so start its session manager explicitly, or
+    # every /mcp request fails with "Task group is not initialized".
+    #
+    # A FRESH server per lifespan entry: the SDK's session manager can
+    # only run() once per instance, and tests enter this lifespan several
+    # times in one process. The fresh endpoint replaces the registered
+    # one before any request is served.
+    fresh_endpoint, fresh_sdk_app = build_mcp_endpoint(
+        app, server=create_mcp_server()
+    )
+    for route in app.routes:
+        if getattr(route, "path", None) == "/mcp" and isinstance(route, Route):
+            route.endpoint = fresh_endpoint
+            route.app = fresh_endpoint
+    async with fresh_sdk_app.router.lifespan_context(fresh_sdk_app):
+        yield
     await cleanup_task.stop()
     await app.state.http_client.aclose()
 
@@ -145,6 +164,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 
 # Static files (shop.js, compiled tailwind.css, etc.)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+# MCP server (Streamable HTTP): the shop as a tool server for AI apps.
+# Public read tools need no login; cart/order tools need the customer's
+# personal access token (Bearer), verified by MCPAuthMiddleware.
+# A direct route, NOT a mount: a Mount 307-redirects /mcp to /mcp/,
+# and AI clients connect to exactly /mcp.
+_mcp_endpoint, _mcp_sdk_app = build_mcp_endpoint(app)
+app.router.routes.append(
+    Route(
+        "/mcp",
+        endpoint=_mcp_endpoint,
+        methods=["GET", "POST", "DELETE"],
+        include_in_schema=False,
+    )
+)
 
 # Register modular routers
 app.include_router(acp_router)

@@ -15,8 +15,10 @@
 """Export all SQLAlchemy models for Alembic discovery and application use."""
 
 from db.models.agent_session import AgentCheckoutSession
+from db.models.cart_item import CartItem
 from db.models.order import Order, OrderItem, OrderStatus
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus
+from db.models.personal_access_token import PersonalAccessToken
 from db.models.product import Product
 from db.models.refresh_token import RefreshToken
 from db.models.session import UserSession
@@ -24,11 +26,13 @@ from db.models.user import User, UserRole
 
 __all__ = [
     "AgentCheckoutSession",
+    "CartItem",
     "Order",
     "OrderItem",
     "OrderStatus",
     "PaymentAttempt",
     "PaymentStatus",
+    "PersonalAccessToken",
     "Product",
     "RefreshToken",
     "User",

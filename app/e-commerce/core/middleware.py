@@ -259,6 +259,7 @@ _SITE_CONTENT_SKIP_PREFIXES = (
     "/api",
     "/acp",
     "/ucp",
+    "/mcp",
     "/static",
     "/uploads",
     "/.well-known",
