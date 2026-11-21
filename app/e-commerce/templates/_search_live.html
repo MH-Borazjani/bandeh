@@ -23,8 +23,8 @@
     {% endfor %}
   </div>
   <div class="pt-2 mt-2 border-t theme-border text-center">
-    <a href="/search?q={{ q }}"
-       hx-get="/search?q={{ q }}"
+    <a href="{{ search_url | default('/search?q=' ~ q, true) }}"
+       hx-get="{{ search_url | default('/search?q=' ~ q, true) }}"
        hx-target="main"
        hx-push-url="true"
        class="search-result-item text-xs font-semibold theme-accent hover:underline">

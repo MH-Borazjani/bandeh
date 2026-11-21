@@ -256,6 +256,37 @@
       }
     };
 
+    /* Pre-search filters: one picked chip per group. The picked value
+       goes into the hidden input, so the form submit (Enter or the
+       button) and the live search both carry it to /search. */
+    var categoryInput = document.getElementById("pre-search-category");
+    var conditionInput = document.getElementById("pre-search-condition");
+    function pickChip(chip, attr, input) {
+      var group = chip.closest("[data-filter-group]");
+      if (!group) return;
+      var chips = group.querySelectorAll(".pre-search-chip");
+      for (var i = 0; i < chips.length; i++) {
+        chips[i].classList.remove("theme-btn-accent");
+        chips[i].classList.add("theme-btn-secondary");
+      }
+      chip.classList.add("theme-btn-accent");
+      chip.classList.remove("theme-btn-secondary");
+      if (input) input.value = chip.getAttribute(attr) || "";
+      // Re-run the live search with the new filter, if text is typed.
+      if (input && typeof htmx !== "undefined" && htmx.trigger) {
+        htmx.trigger(input, "input");
+      }
+    }
+    panel.addEventListener("click", function (e) {
+      var chip = e.target.closest(".pre-search-chip");
+      if (!chip) return;
+      if (chip.hasAttribute("data-filter-category")) {
+        pickChip(chip, "data-filter-category", categoryInput);
+      } else if (chip.hasAttribute("data-filter-condition")) {
+        pickChip(chip, "data-filter-condition", conditionInput);
+      }
+    });
+
     panel.onclick = function (e) {
       e.stopPropagation();
       var item = e.target.closest(".search-result-item");

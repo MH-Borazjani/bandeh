@@ -152,6 +152,9 @@ class SiteContent(TypedDict):
     trust_badges: list[TrustBadge]
     legal_pages: list[LegalPage]
     cert_badges: list[CertBadge]
+    # Categories live here too, so the header search panel (on every page)
+    # can offer the category filter before the visitor types anything.
+    categories: list[CategoryContent]
 
 
 class LandingContent(TypedDict):
@@ -247,6 +250,7 @@ FALLBACK_SITE_CONTENT: SiteContent = {
         {"name": "اینماد", "status_text": "در حال دریافت", "image": None, "link": None},
         {"name": "ساماندهی", "status_text": "در حال دریافت", "image": None, "link": None},
     ],
+    "categories": list(FALLBACK_CATEGORIES),
 }
 
 # Persian digits and the Persian thousands separator, for prices.
@@ -590,6 +594,7 @@ class DirectusClient:
                         and isinstance(parsed.get("trust_badges"), list)
                         and isinstance(parsed.get("legal_pages"), list)
                         and isinstance(parsed.get("cert_badges"), list)
+                        and isinstance(parsed.get("categories"), list)
                     ):
                         return cast(SiteContent, parsed)
             except Exception as exc:  # noqa: BLE001 - cache failure never breaks a page
@@ -702,11 +707,40 @@ class DirectusClient:
                 }
             )
 
+        # Categories for the header search panel. Same mapping as the
+        # landing content: name is required, the rest tolerates bad rows.
+        category_rows = await self._get_items(
+            "categories", ["id", "name", "description", "icon", "sort"]
+        )
+        site_categories: list[CategoryContent] = []
+        for row in category_rows:
+            cat_name = row.get("name")
+            if not isinstance(cat_name, str):
+                continue
+            raw_desc = row.get("description") or ""
+            raw_icon = row.get("icon")
+            raw_sort = row.get("sort")
+            site_categories.append(
+                {
+                    "name": cat_name,
+                    "desc": raw_desc if isinstance(raw_desc, str) else "",
+                    "icon": raw_icon if isinstance(raw_icon, str) else None,
+                    "sort": (
+                        raw_sort
+                        if isinstance(raw_sort, int)
+                        and not isinstance(raw_sort, bool)
+                        else 0
+                    ),
+                }
+            )
+        site_categories.sort(key=lambda c: c["sort"])
+
         return {
             "settings": settings,
             "trust_badges": trust_badges,
             "legal_pages": legal_pages,
             "cert_badges": cert_badges,
+            "categories": site_categories,
         }
 
     async def get_legal_page(self, slug: str) -> dict | None:

@@ -69,7 +69,7 @@ class TestPwa(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text[:200])
         self.assertIn("javascript", r.headers["content-type"])
         self.assertIn("no-cache", r.headers["cache-control"])
-        self.assertIn("genabay-pwa-v1", r.text)
+        self.assertIn("genabay-pwa-v2", r.text)
         # Money and login routes must never be cached.
         for prefix in ("/payments/", "/auth/", "/api/", "/cart", "/checkout"):
             self.assertIn(prefix, r.text)

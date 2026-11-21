@@ -28,6 +28,7 @@ import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import (
@@ -169,8 +170,15 @@ async def live_search_endpoint(
     db: DbSessionDep,
     directus: DirectusClientDep,
     q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
+    category: Annotated[str, Query()] = "",
+    condition: Annotated[str, Query()] = "",
 ) -> HTMLResponse:
-    """Live search dropdown panel fragment for HTMX."""
+    """Live search dropdown panel fragment for HTMX.
+
+    The header panel sends the pre-search filters (category + condition)
+    with every keystroke, so the dropdown only shows products that
+    match the filters the visitor picked before typing.
+    """
     query = q.strip()
     if not query:
         empty_hint = (
@@ -179,30 +187,49 @@ async def live_search_endpoint(
         )
         return HTMLResponse(empty_hint)
 
+    # The pre-search filters: an unknown condition means "all".
+    cond = search_service.clean_condition(condition)
+    cat_name = category.strip() or None
+
     matched: list[dict[str, object]] = []
-    try:
-        db_products = await search_service.search_products(db, query, limit=6)
-        for p in db_products:
-            p_read = ProductRead.model_validate(p)
-            matched.append(
-                {
-                    "id": str(p_read.id),
-                    "name": p_read.name,
-                    "formatted_price": format_toman_price(p_read.price_toman),
-                    "category": p_read.category or "لوازم خانگی",
-                    "image_url": _resolve_product_img_url(
-                        p_read.name, p_read.image_path
-                    ),
-                }
+    # A category filter needs the CMS: the SQLAlchemy Product model does
+    # not map the category column, so the database cannot tell which
+    # category a row belongs to. With a category picked, skip the DB
+    # path and read from Directus (which does know the category).
+    if cat_name is None:
+        try:
+            db_products = await search_service.search_products(
+                db, query, limit=6, condition=cond
             )
-    except Exception:
-        pass
+            for p in db_products:
+                p_read = ProductRead.model_validate(p)
+                matched.append(
+                    {
+                        "id": str(p_read.id),
+                        "name": p_read.name,
+                        "formatted_price": format_toman_price(p_read.price_toman),
+                        "category": p_read.category or "لوازم خانگی",
+                        "image_url": _resolve_product_img_url(
+                            p_read.name, p_read.image_path
+                        ),
+                    }
+                )
+        except Exception:
+            pass
 
     if not matched:
         try:
             cms_products = await directus.list_products(limit=30)
             q_lower = query.lower()
             for cp in cms_products:
+                if cond is not None and cp.get("condition") != cond:
+                    continue
+                if (
+                    cat_name is not None
+                    and isinstance(cp.get("category"), str)
+                    and cp["category"].strip().lower() != cat_name.lower()
+                ):
+                    continue
                 name_match = q_lower in cp.get("name", "").lower()
                 desc_match = q_lower in (cp.get("description") or "").lower()
                 if name_match or desc_match:
@@ -224,11 +251,24 @@ async def live_search_endpoint(
         except Exception:
             pass
 
-    if not matched:
+    # The hardcoded fallback products have no category at all, so they
+    # must never answer a category-filtered search — that would show a
+    # fridge inside the TV category, with a broken /products/None link.
+    if not matched and cat_name is None:
         from integrations.directus_client import FALLBACK_PRODUCTS
 
         q_lower = query.lower()
         for fp in FALLBACK_PRODUCTS:
+            if cond is not None and fp.get("condition") != cond:
+                continue
+            fp_category = fp.get("category")
+            if (
+                cat_name is not None
+                and isinstance(fp_category, str)
+                and fp_category.strip()
+                and fp_category.strip().lower() != cat_name.lower()
+            ):
+                continue
             name_val = str(fp.get("name", ""))
             desc_val = str(fp.get("description", ""))
             if q_lower in name_val.lower() or q_lower in desc_val.lower():
@@ -248,10 +288,20 @@ async def live_search_endpoint(
                 if len(matched) >= 6:
                     break
 
+    # The "see all results" link carries the same pre-search filters.
+    search_params: dict[str, str] = {"q": query}
+    if cat_name is not None:
+        search_params["category"] = cat_name
+    if cond is not None:
+        search_params["condition"] = cond
     return templates.TemplateResponse(
         request=request,
         name="_search_live.html",
-        context={"q": query, "results": matched},
+        context={
+            "q": query,
+            "results": matched,
+            "search_url": "/search?" + urlencode(search_params),
+        },
     )
 
 

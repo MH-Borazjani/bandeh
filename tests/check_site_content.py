@@ -386,6 +386,41 @@ async def main_async() -> None:
         assert tv.condition == "new" and tv.condition_stars is None
     print("11. migration 008 columns round-trip (used=4 stars, new=None)")
 
+    # --- 12. Pre-search filters: chips in the header panel + live search ---
+    # The landing page header panel must offer the filters BEFORE the
+    # visitor types anything: a category chip per CMS category, the
+    # condition chips (sells_used is on here), hidden inputs and a form
+    # that submits to /search.
+    r = client.get("/")
+    assert r.status_code == 200, r.status_code
+    assert 'id="pre-search-form"' in r.text, "header panel must be a form to /search"
+    assert 'action="/search"' in r.text
+    assert 'id="pre-search-category"' in r.text
+    assert 'id="pre-search-condition"' in r.text
+    for cat in ("آشپزخانه", "تلویزیون و صدا", "شستشو"):
+        assert f'data-filter-category="{cat}"' in r.text, f"missing pre-search chip {cat}"
+    assert 'data-filter-condition="used"' in r.text, "missing pre-search condition chip"
+    assert 'data-filter-condition="new"' in r.text
+    # Live search respects the condition filter: used washer only.
+    r = client.get("/api/search-live?q=لباسشویی&condition=used")
+    assert r.status_code == 200, r.status_code
+    assert "ماشین لباسشویی" in r.text, "live search + used must find the washer"
+    assert "condition=used" in r.text, "see-all link must carry the condition"
+    # ... and the same text with condition=new must NOT find the washer.
+    r = client.get("/api/search-live?q=تلویزیون&condition=used")
+    assert r.status_code == 200, r.status_code
+    assert "تلویزیون ۵۵ اینچ" not in r.text, "live search + used must hide the new TV"
+    # Category filter: the fridge query inside the TV category finds nothing.
+    r = client.get("/api/search-live?q=یخچال&category=تلویزیون و صدا")
+    assert r.status_code == 200, r.status_code
+    assert "یخچال دو درب" not in r.text, "live search + wrong category must hide the fridge"
+    assert "یافت نشد" in r.text, "live search + wrong category must say nothing found"
+    # ... and inside its own category it finds it, with the category in the link.
+    r = client.get("/api/search-live?q=یخچال&category=آشپزخانه")
+    assert "یخچال دو درب" in r.text, "live search + right category must find the fridge"
+    assert "category=" in r.text, "see-all link must carry the category"
+    print("12. pre-search filters: header chips + live search respects them")
+
     print("ALL SITE-CONTENT CHECKS PASSED")
 
 

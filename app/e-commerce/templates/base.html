@@ -260,23 +260,52 @@
           <!-- Search panel right under the icon -->
           <div id="search-panel"
                class="hidden absolute left-0 mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] theme-bg-card theme-border border rounded-2xl p-3 shadow-2xl z-50">
-            <div class="relative mb-2">
-              <input type="search"
-                     id="live-search-input"
-                     name="q"
-                     placeholder="جستجوی کالا، برند یا مدل..."
-                     autocomplete="off"
-                     hx-get="/api/search-live"
-                     hx-trigger="input changed delay:250ms, search"
-                     hx-target="#search-live-results"
-                     class="w-full theme-input rounded-xl px-3.5 py-2.5 text-xs min-h-[40px] pl-8">
-              <div class="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
+            <!-- Pre-search filters: the visitor picks category + condition
+                 BEFORE typing, and the full search (Enter or the button)
+                 carries them to /search. The live results below also
+                 respect the picked filters. -->
+            <form id="pre-search-form" action="/search" method="get">
+              <div class="relative mb-2">
+                <input type="search"
+                       id="live-search-input"
+                       name="q"
+                       placeholder="جستجوی کالا، برند یا مدل..."
+                       autocomplete="off"
+                       hx-get="/api/search-live"
+                       hx-trigger="input changed delay:250ms"
+                       hx-target="#search-live-results"
+                       class="w-full theme-input rounded-xl px-3.5 py-2.5 text-xs min-h-[40px] pl-8">
+                <div class="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                  </svg>
+                </div>
               </div>
-            </div>
-            <div id="search-live-results" class="min-h-[60px]">
+              <div id="pre-search-filters" class="space-y-2 mb-2">
+                <div class="flex flex-wrap items-center gap-1.5 text-xs" data-filter-group="category">
+                  <span class="theme-text-muted shrink-0 font-medium">دسته‌بندی:</span>
+                  <button type="button" data-filter-category="" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-accent">همه</button>
+                  {% for cat in site.categories %}
+                  <button type="button" data-filter-category="{{ cat.name }}" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-secondary">{{ cat.name }}</button>
+                  {% endfor %}
+                </div>
+                {% if site.settings.sells_used %}
+                <div class="flex flex-wrap items-center gap-1.5 text-xs" data-filter-group="condition">
+                  <span class="theme-text-muted shrink-0 font-medium">وضعیت:</span>
+                  <button type="button" data-filter-condition="" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-accent">همه</button>
+                  <button type="button" data-filter-condition="new" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-secondary">نو</button>
+                  <button type="button" data-filter-condition="used" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-secondary">دست دوم</button>
+                </div>
+                {% endif %}
+              </div>
+              <input type="hidden" name="category" id="pre-search-category" value="">
+              <input type="hidden" name="condition" id="pre-search-condition" value="">
+              <button type="submit"
+                      class="w-full theme-btn-accent font-bold rounded-xl px-4 py-2 text-xs min-h-[36px]">
+                جستجو
+              </button>
+            </form>
+            <div id="search-live-results" class="min-h-[60px] mt-2">
               <div class="py-4 text-center text-xs theme-text-muted">نام کالا یا برند را تایپ کنید...</div>
             </div>
           </div>
