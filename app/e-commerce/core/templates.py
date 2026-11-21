@@ -85,7 +85,27 @@ def _htmx_context_processor(request: object) -> dict[str, object]:
     }
 
 
+def _site_context_processor(request: object) -> dict[str, object]:
+    """Provide the CMS site content as ``site`` in every template.
+
+    The middleware fills ``request.state.site`` (cached, with a
+    hardcoded fallback). When the middleware did not run — a template
+    rendered outside a page request — fall back the same way, so the
+    header and footer always have something to show.
+    """
+    site: object = None
+    state = getattr(request, "state", None)
+    if state is not None:
+        site = getattr(state, "site", None)
+    if not isinstance(site, dict):
+        from integrations.directus_client import FALLBACK_SITE_CONTENT
+
+        site = FALLBACK_SITE_CONTENT
+    return {"site": site}
+
+
 templates.context_processors.append(_htmx_context_processor)
+templates.context_processors.append(_site_context_processor)
 
 __all__ = [
     "TEMPLATES_DIR",

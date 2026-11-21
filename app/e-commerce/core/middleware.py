@@ -237,9 +237,11 @@ def register_middleware(app: FastAPI) -> None:
     """Register all middleware on the app, in the right order.
 
     Starlette executes middleware in reverse add order, so add them
-    innermost-first: rate limiter, security headers, CORS, then logging.
-    The execution order becomes logging -> CORS -> security headers -> rate limiter -> route.
+    innermost-first: site content, rate limiter, security headers, CORS,
+    then logging. The execution order becomes logging -> CORS ->
+    security headers -> rate limiter -> site content -> route.
     """
+    app.middleware("http")(site_content_middleware)
     app.middleware("http")(rate_limit_middleware)
     app.middleware("http")(security_headers_middleware)
     app.add_middleware(
@@ -252,6 +254,60 @@ def register_middleware(app: FastAPI) -> None:
     app.middleware("http")(logging_middleware)
 
 
+# Paths that never render a shop page: skip the site-content fetch.
+_SITE_CONTENT_SKIP_PREFIXES = (
+    "/api",
+    "/acp",
+    "/ucp",
+    "/static",
+    "/uploads",
+    "/.well-known",
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+)
+
+
+async def site_content_middleware(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    """Attach the CMS site content to the request, for page renders only.
+
+    The shared header and footer (site title/logo, trust seals, legal
+    links) and the landing trust boxes all come from Directus now, so
+    every page request carries that content on ``request.state.site``.
+    The fetch is cached 60 seconds and any failure falls back to the
+    hardcoded defaults, so a slow or dead CMS never breaks a page —
+    and API routes skip the fetch entirely.
+    """
+    path = request.url.path
+    if request.method in ("GET", "HEAD") and not path.startswith(
+        _SITE_CONTENT_SKIP_PREFIXES
+    ):
+        http_client = getattr(request.app.state, "http_client", None)
+        if http_client is not None:
+            try:
+                from core.cache import get_cache
+                from integrations.directus_client import (
+                    FALLBACK_SITE_CONTENT,
+                    DirectusClient,
+                )
+
+                cache = await get_cache()
+                client = DirectusClient(http_client, cache=cache)
+                request.state.site = await client.get_site_content()
+            except Exception as exc:  # noqa: BLE001 - a page must never fail here
+                logger.warning(
+                    "Site content fetch failed, using fallback: %s", exc
+                )
+                from integrations.directus_client import FALLBACK_SITE_CONTENT
+
+                request.state.site = FALLBACK_SITE_CONTENT
+    return await call_next(request)
+
+
 __all__ = [
     "CONTENT_SECURITY_POLICY",
     "RateLimiter",
@@ -262,4 +318,5 @@ __all__ = [
     "rate_limit_middleware",
     "register_middleware",
     "security_headers_middleware",
+    "site_content_middleware",
 ]

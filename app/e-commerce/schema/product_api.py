@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -38,6 +39,12 @@ class ProductCreate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     price_toman: int = Field(ge=0, description="Price in Toman, integer.")
     stock: int = Field(default=0, ge=0)
+    condition: Literal["new", "used"] = Field(
+        default="new", description="'new' or 'used' (second-hand)."
+    )
+    condition_stars: int | None = Field(
+        default=None, ge=1, le=5, description="Cleanliness stars, used only."
+    )
 
 
 class ProductRead(BaseModel):
@@ -56,6 +63,10 @@ class ProductRead(BaseModel):
     created_at: datetime.datetime
     category: str | None = None
     tag: str | None = None
+    # Condition: 'new' or 'used'; stars 1–5 only when used. Defaults keep
+    # old rows (and old Directus dicts without these fields) valid.
+    condition: str = "new"
+    condition_stars: int | None = None
 
     @computed_field
     @property

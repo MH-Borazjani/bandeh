@@ -42,6 +42,17 @@ class Product(Base, TimestampMixin):
         CheckConstraint("stock >= 0", name="ck_products_stock_nonnegative"),
         CheckConstraint("reserved >= 0", name="ck_products_reserved_nonnegative"),
         CheckConstraint("reserved <= stock", name="ck_products_reserved_le_stock"),
+        CheckConstraint(
+            "condition IN ('new', 'used')", name="ck_products_condition_values"
+        ),
+        CheckConstraint(
+            "condition_stars IS NULL OR (condition_stars BETWEEN 1 AND 5)",
+            name="ck_products_condition_stars_range",
+        ),
+        CheckConstraint(
+            "condition = 'used' OR condition_stars IS NULL",
+            name="ck_products_stars_only_when_used",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -82,6 +93,18 @@ class Product(Base, TimestampMixin):
         Boolean,
         default=True,
         nullable=False,
+    )
+    # Condition: 'new' or 'used'. A used product also carries 1–5
+    # cleanliness stars (5 = like new, 1 = a wreck); a new product
+    # never has stars. Read by search filters and the product cards.
+    condition: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="new",
+    )
+    condition_stars: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
     )
 
     @property

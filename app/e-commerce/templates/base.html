@@ -20,7 +20,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>{% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}</title>
+  <title>{% block title %}{{ site.settings.site_title }} | فروشگاه لوازم خانگی{% endblock %}</title>
   <!-- Compiled Tailwind CSS (built at build time) -->
   <link rel="stylesheet" href="/static/css/tailwind.css">
   <!-- HTMX for reactive forms -->
@@ -166,18 +166,27 @@
   </script>
 </head>
 <body class="min-h-screen theme-bg-page theme-text-main flex flex-col font-sans antialiased pb-20 sm:pb-24 lg:pb-0">
+  {% set current_path = request.url.path if request is defined and request.url is defined else '' %}
+  {% set is_shop = (current_path == '/') %}
+  {% set is_categories = current_path.startswith('/category') or current_path.startswith('/categories') %}
+  {% set is_cart = (current_path == '/cart' or current_path.startswith('/cart/')) %}
+  {% set is_account = (current_path.startswith('/auth') or current_path.startswith('/account') or current_path.startswith('/orders') or current_path.startswith('/login')) %}
   {% block header %}
   <!-- Top Bar: Mobile minimal bar & Desktop wide header with navigation -->
   <header class="theme-header border-b theme-border sticky top-0 z-40 backdrop-blur-md">
     <div class="max-w-md lg:max-w-[1200px] mx-auto px-4 lg:px-8 py-2.5 lg:py-3.5 flex items-center justify-between">
-      <!-- Right: Minimal Brand (Start in RTL) -->
+      <!-- Right: Minimal Brand (Start in RTL) — logo from the CMS, else the ■ mark -->
       <a href="/"
          hx-get="/"
          hx-target="main"
          hx-push-url="true"
          class="text-base lg:text-lg font-bold tracking-tight theme-text-main flex items-center gap-1.5 shrink-0">
+        {% if site.settings.logo %}
+        <img src="/site/logo" alt="{{ site.settings.site_title }}" class="h-7 w-7 object-contain rounded">
+        {% else %}
         <span class="theme-accent font-extrabold text-xl leading-none">■</span>
-        <span class="font-extrabold">بنده</span>
+        {% endif %}
+        <span class="font-extrabold">{{ site.settings.site_title }}</span>
       </a>
 
       <!-- Desktop Header Nav: Shop, Categories, Cart, Account -->
@@ -189,8 +198,8 @@
            class="nav-link-shop transition-colors {% if is_shop %}theme-accent font-bold{% else %}theme-text-muted hover:theme-text-main{% endif %}">
           فروشگاه
         </a>
-        <a href="/#categories"
-           hx-get="/"
+        <a href="/categories"
+           hx-get="/categories"
            hx-target="main"
            hx-push-url="true"
            class="nav-link-categories transition-colors {% if is_categories %}theme-accent font-bold{% else %}theme-text-muted hover:theme-text-main{% endif %}">
@@ -285,53 +294,45 @@
   <!-- Shared Footer -->
   <footer class="theme-bg-card border-t theme-border mt-auto py-8 text-center theme-text-muted text-sm">
     <div class="max-w-md lg:max-w-[1200px] mx-auto px-4 lg:px-8">
-      <!-- Trust Navigation Links -->
+      <!-- Trust Navigation Links — only the pages the CMS has active -->
+      {% if site.legal_pages %}
       <nav aria-label="پیوندهای اعتماد و قوانین" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-4 text-xs font-medium">
-        <a href="/terms" hx-get="/terms" hx-target="main" hx-push-url="true" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">قوانین و مقررات</a>
-        <span class="opacity-30">•</span>
-        <a href="/privacy" hx-get="/privacy" hx-target="main" hx-push-url="true" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">حریم خصوصی</a>
-        <span class="opacity-30">•</span>
-        <a href="/returns" hx-get="/returns" hx-target="main" hx-push-url="true" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">شرایط بازگشت</a>
-        <span class="opacity-30">•</span>
-        <a href="/contact" hx-get="/contact" hx-target="main" hx-push-url="true" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">تماس با ما</a>
+        {% for page in site.legal_pages %}
+        {% if not loop.first %}<span class="opacity-30">•</span>{% endif %}
+        <a href="/{{ page.slug }}" hx-get="/{{ page.slug }}" hx-target="main" hx-push-url="true" class="theme-text-muted hover:theme-text-main hover:underline min-h-[32px] flex items-center">{{ page.title }}</a>
+        {% endfor %}
       </nav>
-      <!-- Trust Seal Placeholders (Enamad & Samandehi) -->
+      {% endif %}
+      <!-- Trust Seals (Enamad & Samandehi) — from the CMS, hidden when empty -->
+      {% if site.cert_badges %}
       <div class="flex items-center justify-center gap-3 my-4" aria-label="نمادهای اعتماد الکترونیکی">
-        <div id="enamad-slot"
-             class="theme-bg-card-subtle theme-border border rounded-2xl p-3 w-32 h-28 flex flex-col items-center justify-center text-center">
+        {% for badge in site.cert_badges %}
+        {% if badge.link %}<a href="{{ badge.link }}" target="_blank" rel="noopener" class="block">{% endif %}
+        <div class="theme-bg-card-subtle theme-border border rounded-2xl p-3 w-32 h-28 flex flex-col items-center justify-center text-center">
+          {% if badge.image %}
+          <img src="/site/badge/{{ badge.image }}" alt="{{ badge.name }}" class="w-9 h-9 object-contain mb-1.5">
+          {% else %}
           <div class="w-9 h-9 rounded-full theme-bg-card flex items-center justify-center mb-1.5 theme-accent">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
             </svg>
           </div>
-          <span class="text-[11px] font-bold theme-text-main leading-tight">اینماد</span>
-          <span class="text-[9px] theme-text-muted mt-0.5">در حال دریافت</span>
+          {% endif %}
+          <span class="text-[11px] font-bold theme-text-main leading-tight">{{ badge.name }}</span>
+          {% if badge.status_text %}<span class="text-[9px] theme-text-muted mt-0.5">{{ badge.status_text }}</span>{% endif %}
         </div>
-
-        <div id="samandehi-slot"
-             class="theme-bg-card-subtle theme-border border rounded-2xl p-3 w-32 h-28 flex flex-col items-center justify-center text-center">
-          <div class="w-9 h-9 rounded-full theme-bg-card flex items-center justify-center mb-1.5 theme-accent">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-            </svg>
-          </div>
-          <span class="text-[11px] font-bold theme-text-main leading-tight">ساماندهی</span>
-          <span class="text-[9px] theme-text-muted mt-0.5">در حال دریافت</span>
-        </div>
+        {% if badge.link %}</a>{% endif %}
+        {% endfor %}
       </div>
-      <p class="font-bold theme-text-main mb-1">بنده — فروشگاه لوازم خانگی</p>
-      <p class="text-xs theme-text-muted mb-2">ضمانت اصالت و ارسال مستقیم با بهترین قیمت</p>
+      {% endif %}
+      <p class="font-bold theme-text-main mb-1">{{ site.settings.site_title }} — فروشگاه لوازم خانگی</p>
+      <p class="text-xs theme-text-muted mb-2">{{ site.settings.site_tagline }}</p>
       <p class="text-xs theme-text-muted">© ۱۴۰۴</p>
     </div>
   </footer>
   {% endblock %}
 
   {% block bottom_nav %}
-  {% set current_path = request.url.path if request is defined and request.url is defined else '' %}
-  {% set is_shop = (current_path == '/') %}
-  {% set is_categories = current_path.startswith('/category') %}
-  {% set is_cart = (current_path == '/cart' or current_path.startswith('/cart/')) %}
-  {% set is_account = (current_path.startswith('/auth') or current_path.startswith('/account') or current_path.startswith('/orders') or current_path.startswith('/login')) %}
   <!-- Fixed Bottom Navigation Bar (Mobile only: lg:hidden) -->
   <nav aria-label="ناوبری اصلی فروشگاه"
        class="lg:hidden fixed bottom-0 left-0 right-0 z-40 theme-bg-card border-t theme-border backdrop-blur-lg">
@@ -349,8 +350,8 @@
       </a>
 
       <!-- 2. Categories -->
-      <a href="/#categories"
-         hx-get="/"
+      <a href="/categories"
+         hx-get="/categories"
          hx-target="main"
          hx-push-url="true"
          class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] transition-colors {% if is_categories %}theme-accent font-semibold text-[#d97706]{% else %}theme-text-muted hover:theme-text-main{% endif %}">

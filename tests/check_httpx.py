@@ -99,7 +99,9 @@ def main() -> None:
     async def _healthy() -> None:
         async with _mock_client(_directus_ok) as http:
             content = await DirectusClient(http).get_landing_content()
-        assert content["categories"] == [{"name": "یخچال", "desc": "ساید و دوقلو"}], content
+        assert content["categories"] == [
+            {"name": "یخچال", "desc": "ساید و دوقلو", "icon": None, "sort": 0}
+        ], content
         assert content["products"] == [
             {
                 "name": "یخچال تست",
@@ -109,6 +111,8 @@ def main() -> None:
                 "tag": None,
                 "category": None,
                 "image_path": None,
+                "condition": "new",
+                "condition_stars": None,
             }
         ], content
 

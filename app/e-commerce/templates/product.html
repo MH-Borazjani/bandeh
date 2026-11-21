@@ -1,5 +1,6 @@
 {% extends base_template | default("base.html") %}
-{% block title %}{{ product.name }} | بنده{% endblock %}
+{% from "_condition_label.html" import condition_label %}
+{% block title %}{{ product.name }} | {{ site.settings.site_title }}{% endblock %}
 
 {% block content %}
 <!-- Product Detail Page (Bandeh Shop)
@@ -31,16 +32,21 @@
       </div>
 
       <!-- Product Name -->
-      <h1 class="text-2xl lg:text-3xl font-extrabold theme-text-main leading-snug mb-3">
+      <h1 class="text-2xl lg:text-3xl font-extrabold theme-text-main leading-snug mb-2">
         {{ product.name }}
       </h1>
+
+      <!-- Condition: «نو» or «دست دوم» + cleanliness stars -->
+      <div class="mb-3">
+        {{ condition_label(product.condition | default('new'), product.condition_stars, site.settings.sells_used) }}
+      </div>
 
       <!-- Stock state indicator -->
       <div class="mb-5">
         {% if available > 5 %}
         <div class="inline-flex items-center gap-2 theme-badge-success px-3 py-1.5 rounded-full text-xs font-semibold">
           <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span>موجود در انبار بنده</span>
+          <span>موجود در انبار {{ site.settings.site_title }}</span>
         </div>
         {% elif available > 0 %}
         <div class="inline-flex items-center gap-2 theme-badge px-3 py-1.5 rounded-full text-xs font-semibold">
@@ -116,7 +122,7 @@
     <div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-6">
       <h2 class="text-sm lg:text-base font-bold theme-text-main mb-2.5">توضیحات و مشخصات کالا</h2>
       <div class="theme-text-muted text-sm leading-relaxed whitespace-pre-line">
-        {{ product.description or "مشخصات تکمیلی این کالا به زودی توسط کارشناسان بنده ثبت خواهد شد." }}
+        {{ product.description or "مشخصات تکمیلی این کالا به زودی توسط کارشناسان " ~ site.settings.site_title ~ " ثبت خواهد شد." }}
       </div>
     </div>
   </div>

@@ -42,6 +42,17 @@ DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 MAX_QUERY_LENGTH = 200
 
+# Product condition values (see db/models/product.py). A filter outside
+# this set means "no filter" — never an error, never an empty result.
+CONDITIONS = ("new", "used")
+
+
+def clean_condition(condition: str | None) -> str | None:
+    """Keep only a real condition value; anything else means 'all'."""
+    if isinstance(condition, str) and condition.strip().lower() in CONDITIONS:
+        return condition.strip().lower()
+    return None
+
 
 def _normalise_limit(limit: int) -> int:
     """Clamp the limit: at least 1, at most MAX_LIMIT."""
@@ -61,17 +72,22 @@ def _clean_query(query: str) -> str:
 
 
 async def search_products_ilike(
-    db: AsyncSession, query: str, limit: int = DEFAULT_LIMIT
+    db: AsyncSession,
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
 ) -> list[Product]:
     """Substring search (name + description), active products only.
 
     The pattern is a bound parameter — SQLAlchemy sends ``%...%`` as a
     value, never as SQL text. Wildcards inside the query are escaped.
+    ``condition`` narrows to new / used products when given.
     """
     clean = _clean_query(query)
     if not clean:
         return []
     pattern = f"%{_escape_like(clean)}%"
+    cond = clean_condition(condition)
     stmt = (
         select(Product)
         .where(
@@ -84,12 +100,14 @@ async def search_products_ilike(
         .order_by(Product.created_at.desc())
         .limit(_normalise_limit(limit))
     )
+    if cond is not None:
+        stmt = stmt.where(Product.condition == cond)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
 def build_fulltext_statement(
-    query: str, limit: int = DEFAULT_LIMIT
+    query: str, limit: int = DEFAULT_LIMIT, condition: str | None = None
 ) -> Select[Product, float]:
     """Postgres full-text statement (built, not run — see below).
 
@@ -98,6 +116,7 @@ def build_fulltext_statement(
     ``plainto_tsquery`` turns the user's words into a query; the
     ``@@`` operator matches it against the document vector; ``ts_rank``
     orders best matches first. The query text stays a bound parameter.
+    ``condition`` narrows to new / used products when given.
     """
     clean = _clean_query(query)
     vector = func.to_tsvector(
@@ -105,7 +124,7 @@ def build_fulltext_statement(
         Product.name + " " + func.coalesce(Product.description, ""),
     )
     ts_query = func.plainto_tsquery("simple", clean)
-    return (
+    stmt = (
         select(Product, func.ts_rank(vector, ts_query).label("rank"))
         .where(
             Product.is_active == True,  # noqa: E712
@@ -114,55 +133,76 @@ def build_fulltext_statement(
         .order_by(func.ts_rank(vector, ts_query).desc())
         .limit(_normalise_limit(limit))
     )
+    cond = clean_condition(condition)
+    if cond is not None:
+        stmt = stmt.where(Product.condition == cond)
+    return stmt
 
 
 async def search_products_fulltext(
-    db: AsyncSession, query: str, limit: int = DEFAULT_LIMIT
+    db: AsyncSession,
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
 ) -> list[Product]:
     """Run the full-text statement. Postgres only — callers check first."""
     if _clean_query(query) == "":
         return []
-    result = await db.execute(build_fulltext_statement(query, limit))
+    result = await db.execute(
+        build_fulltext_statement(query, limit, condition=condition)
+    )
     return [row[0] for row in result.all()]
 
 
 async def search_products(
-    db: AsyncSession, query: str, limit: int = DEFAULT_LIMIT
+    db: AsyncSession,
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
 ) -> list[Product]:
     """The route's one search call: full-text on Postgres, ILIKE elsewhere.
 
     On Postgres, full-text runs first and ILIKE is the fallback when it
     finds nothing (a substring can match where token search cannot).
+    ``condition`` narrows to new / used products when given.
     """
     if _clean_query(query) == "":
         return []
     is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
     if is_postgres:
-        found = await search_products_fulltext(db, query, limit)
+        found = await search_products_fulltext(db, query, limit, condition=condition)
         if found:
             return found
-    return await search_products_ilike(db, query, limit)
+    return await search_products_ilike(db, query, limit, condition=condition)
 
 
 async def list_products(
-    db: AsyncSession, limit: int = DEFAULT_LIMIT
+    db: AsyncSession, limit: int = DEFAULT_LIMIT, condition: str | None = None
 ) -> list[Product]:
-    """Active products, newest first, always limited."""
+    """Active products, newest first, always limited.
+
+    ``condition`` narrows to new / used products when given.
+    """
     stmt = (
         select(Product)
         .where(Product.is_active == True)  # noqa: E712
         .order_by(Product.created_at.desc())
         .limit(_normalise_limit(limit))
     )
+    cond = clean_condition(condition)
+    if cond is not None:
+        stmt = stmt.where(Product.condition == cond)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
 __all__ = [
+    "CONDITIONS",
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
     "MAX_QUERY_LENGTH",
     "build_fulltext_statement",
+    "clean_condition",
     "list_products",
     "search_products",
     "search_products_fulltext",

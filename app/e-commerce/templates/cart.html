@@ -1,5 +1,5 @@
 {% extends base_template | default("base.html") %}
-{% block title %}سبد خرید | بنده{% endblock %}
+{% block title %}سبد خرید | {{ site.settings.site_title }}{% endblock %}
 
 {% block content %}
 <!-- Cart Page (Bandeh Shop - Responsive 2-column on desktop)
@@ -62,7 +62,7 @@
     <!-- Assurance item -->
     <div class="flex items-center gap-2 mb-4 text-xs theme-text-muted">
       <span class="theme-accent text-sm">🚚</span>
-      <span>ارسال سریع و ضمانت اصالت کالا توسط بنده</span>
+      <span>ارسال سریع و ضمانت اصالت کالا توسط {{ site.settings.site_title }}</span>
     </div>
 
     <!-- Actions -->

@@ -108,6 +108,18 @@ class FakeDirectusClient:
     async def list_categories(self) -> list[dict]:
         return list(self.categories)
 
+    async def get_legal_page(self, slug: str) -> dict | None:
+        # No CMS legal page in this fake: the route falls back to the
+        # static template, which is what the trust-page tests check.
+        return None
+
+    async def get_site_content(self) -> dict:
+        # The middleware builds its own client; this is only here so the
+        # fake matches the real client's surface for the routes.
+        from integrations.directus_client import FALLBACK_SITE_CONTENT
+
+        return FALLBACK_SITE_CONTENT
+
     async def list_products_by_category(
         self, category_identifier: str | int, limit: int = 50
     ) -> list[dict]:
@@ -322,10 +334,12 @@ class FrontendStage3Tests(unittest.TestCase):
         self.assertIn("text/html", resp.headers["content-type"])
         html = resp.text
 
-        # Search box form and category chips (no dropdown anymore)
+        # Search box form and category chips (no dropdown anymore).
+        # The chips filter on /search itself (category + condition);
+        # /category/<name> is the separate category page.
         self.assertIn('name="q"', html)
         self.assertIn("همه دسته‌ها", html)
-        self.assertIn("/category/", html)
+        self.assertIn("/search?category=", html)
         self.assertIn("جستجو", html)
 
     def test_search_page_with_query_returns_results(self) -> None:

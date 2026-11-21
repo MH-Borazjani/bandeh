@@ -1,5 +1,5 @@
 {% extends base_template | default("base.html") %}
-{% block title %}جزئیات سفارش {{ order.id }} | بنده{% endblock %}
+{% block title %}جزئیات سفارش {{ order.id }} | {{ site.settings.site_title }}{% endblock %}
 
 {% block content %}
 <!-- Order Detail Page (Bandeh Shop - Responsive 2-column on desktop)

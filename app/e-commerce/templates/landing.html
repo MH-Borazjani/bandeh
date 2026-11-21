@@ -1,5 +1,7 @@
 {% extends base_template | default("base.html") %}
-{% block title %}بنده | فروشگاه لوازم خانگی{% endblock %}
+{% from "_condition_label.html" import condition_label %}
+{% from "_category_icon.html" import category_icon %}
+{% block title %}{{ site.settings.site_title }} | فروشگاه لوازم خانگی{% endblock %}
 {% block content %}
 <!-- Landing page: Mobile-first & Desktop-responsive
      Amber accent: #d97706, dark theme default, light theme supported.
@@ -23,10 +25,10 @@
           تازه‌ها
         </span>
         <h1 class="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-black theme-text-main leading-tight mb-2 lg:mb-4">
-          خانه‌ی مدرن، زندگی بهتر
+          {{ site.settings.hero_title }}
         </h1>
         <p class="text-xs sm:text-sm lg:text-base theme-text-muted mb-5 lg:mb-7 leading-relaxed max-w-xs sm:max-w-md">
-          وسایل ضروری مدرن برای هر لحظه از روز
+          {{ site.settings.hero_subtitle }}
         </p>
         <a href="#products"
            class="inline-flex items-center justify-center rounded-full px-6 py-2.5 lg:px-8 lg:py-3.5 font-bold text-xs sm:text-sm lg:text-base theme-btn-accent shadow-lg shadow-amber-950/40 hover:opacity-95 transition-opacity">
@@ -50,8 +52,8 @@
     <h2 class="text-base sm:text-lg lg:text-xl font-bold theme-text-main">
       دسته‌بندی‌ها
     </h2>
-    <a href="/search"
-       hx-get="/search"
+    <a href="/categories"
+       hx-get="/categories"
        hx-target="main"
        hx-push-url="true"
        class="text-xs sm:text-sm font-semibold theme-accent hover:underline">
@@ -70,37 +72,9 @@
        hx-target="main"
        hx-push-url="true"
        class="{% if is_extra %}category-extra hidden{% endif %} flex-1 min-w-[95px] sm:min-w-[120px] max-w-[calc(33.333%-0.5rem)] sm:max-w-[calc(25%-0.6rem)] lg:max-w-[calc(20%-0.8rem)] theme-bg-card theme-border border rounded-2xl p-3.5 sm:p-4 flex flex-col items-center justify-center text-center group hover:border-amber-500/50 transition-colors">
-      <!-- Icon Circle on Top -->
+      <!-- Icon Circle on Top: CMS icon when set, else a name-based SVG -->
       <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2 theme-accent group-hover:scale-105 transition-transform">
-        {% if 'fridge' in cat.name.lower() or 'یخچال' in cat.name or 'فریزر' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V4a2 2 0 012-2zm0 8h12M9 5v2m0 7v3"/>
-        </svg>
-        {% elif 'wash' in cat.name.lower() or 'لباسشویی' in cat.name or 'شستشو' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 14a5 5 0 100-10 5 5 0 000 10zm-4-10h.01M16 7h.01"/>
-        </svg>
-        {% elif 'tv' in cat.name.lower() or 'تلویزیون' in cat.name or 'صوتی' in cat.name or 'صدا' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 4l5 4 5-4M4 8h16a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-8a2 2 0 012-2z"/>
-        </svg>
-        {% elif 'ظرفشویی' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-        </svg>
-        {% elif 'گاز' in cat.name or 'فر' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343a7.975 7.975 0 010 11.314z"/>
-        </svg>
-        {% elif 'جارو' in cat.name %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
-        {% else %}
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-        </svg>
-        {% endif %}
+        {{ category_icon(cat) }}
       </div>
 
       <!-- Title & Item Count -->
@@ -108,7 +82,7 @@
         {{ cat.name }}
       </span>
       <span class="block text-[11px] theme-text-muted mt-0.5">
-        {% if cat_count > 0 %}{{ cat_count | persian_digits }} کالا{% else %}{{ (loop.index * 3 + 2) | persian_digits }} کالا{% endif %}
+        {{ cat_count | persian_digits }} کالا
       </span>
     </a>
     {% endfor %}
@@ -152,16 +126,6 @@
     {% else %}
       {% set prod_img = '/static/img/product-fridge.jpg' %}
     {% endif %}
-    {% if 'fridge' in p.name.lower() or 'یخچال' in p.name %}
-      {% set prod_variant = 'مشکی' %}
-    {% elif 'tv' in p.name.lower() or 'تلویزیون' in p.name %}
-      {% set prod_variant = 'مشکی' %}
-    {% elif 'wash' in p.name.lower() or 'لباسشویی' in p.name %}
-      {% set prod_variant = 'سفید' %}
-    {% else %}
-      {% set prod_variant = 'مشکی' %}
-    {% endif %}
-
     <!-- Best seller row card: thumbnail on right in RTL, info in middle, round + button on left in RTL -->
     <div class="theme-bg-card theme-border border rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:border-neutral-700 transition-colors">
       <!-- Thumbnail on the right in RTL: a link to the product page -->
@@ -197,7 +161,9 @@
         <h3 class="font-bold theme-text-main text-sm sm:text-base truncate leading-snug">{{ p.name }}</h3>
         {% endif %}
 
-        <p class="text-xs theme-text-muted truncate mt-0.5">{{ prod_variant }}</p>
+        <div class="mt-1">
+          {{ condition_label(p.condition | default('new'), p.condition_stars, site.settings.sells_used) }}
+        </div>
 
         <!-- Compact price -->
         {% set cp = p.price_toman | compact_price %}
@@ -226,37 +192,21 @@
   </div>
 </section>
 
-<!-- 4. TRUST BADGES (2-col mobile, 4-col desktop) -->
+<!-- 4. TRUST BADGES (2-col mobile, 4-col desktop) — from the CMS.
+     An empty badge list hides the whole section. -->
+{% if site.trust_badges %}
 <section class="mb-10 lg:mb-16" aria-label="خدمات و ضمانت">
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
+    {% for badge in site.trust_badges %}
     <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
       <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
-        <span class="theme-accent text-sm">✦</span>
+        <span class="theme-accent text-sm">{{ badge.icon }}</span>
       </div>
-      <div class="font-bold mb-1 text-sm theme-text-main">ضمانت اصالت</div>
-      <div class="theme-text-muted text-xs">کالا با ضمانت‌نامه‌ی معتبر</div>
+      <div class="font-bold mb-1 text-sm theme-text-main">{{ badge.title }}</div>
+      <div class="theme-text-muted text-xs">{{ badge.text }}</div>
     </div>
-    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
-      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
-        <span class="theme-accent text-sm">🚚</span>
-      </div>
-      <div class="font-bold mb-1 text-sm theme-text-main">ارسال سریع</div>
-      <div class="theme-text-muted text-xs">تحویل درب منزل</div>
-    </div>
-    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
-      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
-        <span class="theme-accent text-sm">🔒</span>
-      </div>
-      <div class="font-bold mb-1 text-sm theme-text-main">پرداخت امن</div>
-      <div class="theme-text-muted text-xs">درگاه بانکی معتبر</div>
-    </div>
-    <div class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center">
-      <div class="w-8 h-8 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2">
-        <span class="theme-accent text-sm">↺</span>
-      </div>
-      <div class="font-bold mb-1 text-sm theme-text-main">مهلت بازگشت</div>
-      <div class="theme-text-muted text-xs">۷ روز ضمانت بازگشت</div>
-    </div>
+    {% endfor %}
   </div>
 </section>
+{% endif %}
 {% endblock %}

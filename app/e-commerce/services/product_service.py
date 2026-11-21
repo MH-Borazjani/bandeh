@@ -31,6 +31,8 @@ async def create_product(db: AsyncSession, data: ProductCreate) -> Product:
         description=data.description,
         price_toman=data.price_toman,
         stock=data.stock,
+        condition=data.condition,
+        condition_stars=data.condition_stars if data.condition == "used" else None,
     )
     db.add(product)
     await db.flush()

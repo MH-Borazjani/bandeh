@@ -1,5 +1,6 @@
 {% extends base_template | default("base.html") %}
-{% block title %}{{ category.name }} | بنده{% endblock %}
+{% from "_condition_label.html" import condition_label %}
+{% block title %}{{ category.name }} | {{ site.settings.site_title }}{% endblock %}
 
 {% block content %}
 <!-- Category Listing Page (Bandeh Shop - Responsive Grid on Desktop)
@@ -10,7 +11,7 @@
   <div class="flex items-center gap-1.5 text-xs theme-text-muted mb-2">
     <a href="/" hx-get="/" hx-target="main" hx-push-url="true" class="hover:underline">خانه</a>
     <span>/</span>
-    <a href="/#categories" hx-get="/" hx-target="main" hx-push-url="true" class="hover:underline">دسته‌بندی‌ها</a>
+    <a href="/categories" hx-get="/categories" hx-target="main" hx-push-url="true" class="hover:underline">دسته‌بندی‌ها</a>
     <span>/</span>
     <span class="theme-text-main font-medium">{{ category.name }}</span>
   </div>
@@ -72,9 +73,12 @@
            class="hover:underline">
           <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
         </a>
-        {% if p.tag %}
-        <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
-        {% endif %}
+        <span class="flex items-center gap-1.5 shrink-0">
+          {{ condition_label(p.condition | default('new'), p.condition_stars, site.settings.sells_used) }}
+          {% if p.tag %}
+          <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold">{{ p.tag }}</span>
+          {% endif %}
+        </span>
       </div>
 
       {% if p.description %}

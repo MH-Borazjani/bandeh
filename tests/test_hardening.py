@@ -149,7 +149,10 @@ class HardeningUnitTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
             client_failing = DirectusClient(http, cache=_FailingCache())
             data = await client_failing.get_landing_content()
-            self.assertEqual(data["categories"], [{"name": "Cat", "desc": "Desc"}])
+            self.assertEqual(
+                data["categories"],
+                [{"name": "Cat", "desc": "Desc", "icon": None, "sort": 0}],
+            )
 
             client_corrupt = DirectusClient(http, cache=_CorruptCache())
             data2 = await client_corrupt.get_landing_content()

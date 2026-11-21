@@ -1,0 +1,21 @@
+{# Condition label macro: «نو» or «دست دوم» + cleanliness stars.
+   Call: {{ condition_label(condition, stars, sells_used) }}
+   - condition: 'new' or 'used' (product.condition)
+   - stars: 1–5 when used, None otherwise (product.condition_stars)
+   - sells_used: site.settings.sells_used — a site that sells new only
+     hides the whole flow, so the macro renders nothing at all.
+   Stars: 5 = like new, 1 = a wreck. #}
+{% macro condition_label(condition, stars, sells_used) -%}
+{% if sells_used %}
+  {% if condition == 'used' %}
+  <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold theme-badge rounded-lg px-2 py-0.5">
+    <span>دست دوم</span>
+    {% if stars %}
+    <span class="tracking-tight" aria-label="تمیزی {{ stars }} از ۵">{%- for i in range(1, 6) -%}{{ '★' if i <= stars else '☆' }}{%- endfor -%}</span>
+    {% endif %}
+  </span>
+  {% else %}
+  <span class="inline-flex items-center text-[11px] font-semibold theme-badge-success rounded-lg px-2 py-0.5">نو</span>
+  {% endif %}
+{% endif %}
+{%- endmacro %}

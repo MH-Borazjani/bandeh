@@ -83,6 +83,86 @@ def _resolve_product_img_url(name: str, image_path: str | None) -> str:
     return "/static/img/product-fridge.jpg"
 
 
+def _wants_html(request: Request) -> bool:
+    """True when the caller wants the HTML page, not JSON.
+
+    A browser direct load sends ``Accept: text/html``. HTMX swaps send
+    ``Accept: */*`` but mark the request with ``HX-Request`` — and a
+    JSON body swapped into ``<main>`` is the [] bug (Nov 2026): the
+    search page answered JSON to an HTMX click, so the page showed a
+    lone empty array. ``?format=json`` still forces JSON for API users.
+    """
+    fmt = request.query_params.get("format")
+    if fmt == "json":
+        return False
+    if fmt == "html":
+        return True
+    if "text/html" in request.headers.get("accept", ""):
+        return True
+    return request.headers.get("hx-request") == "true"
+
+
+def _product_dict_from_read(p_read: ProductRead, category: str) -> dict:
+    """One search/category result row from a validated product read."""
+    return {
+        "id": str(p_read.id),
+        "name": p_read.name,
+        "description": p_read.description,
+        "formatted_price": format_toman_price(p_read.price_toman),
+        "price_toman": p_read.price_toman,
+        "category": p_read.category or category,
+        "tag": p_read.tag,
+        "stock": p_read.stock,
+        "available": max(0, p_read.stock - p_read.reserved),
+        "image_path": p_read.image_path,
+        "condition": p_read.condition,
+        "condition_stars": p_read.condition_stars,
+    }
+
+
+def _product_dict_from_cms(cp: dict, category: str) -> dict:
+    """One search/category result row from a Directus product row."""
+    avail = max(0, cp.get("stock", 0) - cp.get("reserved", 0))
+    condition = cp.get("condition")
+    condition = condition if condition in ("new", "used") else "new"
+    stars = cp.get("condition_stars")
+    stars = stars if isinstance(stars, int) and 1 <= stars <= 5 else None
+    if condition != "used":
+        stars = None
+    return {
+        "id": str(cp.get("id")),
+        "name": cp.get("name"),
+        "description": cp.get("description"),
+        "formatted_price": format_toman_price(cp.get("price_toman")),
+        "price_toman": cp.get("price_toman"),
+        "category": cp.get("category") or category,
+        "tag": cp.get("tag"),
+        "stock": cp.get("stock", 0),
+        "available": avail,
+        "image_path": cp.get("image_path"),
+        "condition": condition,
+        "condition_stars": stars,
+    }
+
+
+def _resolve_category_name(
+    category: str | None, categories_list: list[dict]
+) -> str | None:
+    """Resolve a category filter value (id or name) to its display name.
+
+    The search chips pass names; older links may pass ids. Unknown
+    values pass through unchanged (they simply match nothing).
+    """
+    if not category or not category.strip():
+        return None
+    raw = category.strip()
+    if raw.isdigit():
+        for c in categories_list:
+            if str(c.get("id")) == raw and isinstance(c.get("name"), str):
+                return str(c.get("name"))
+    return raw
+
+
 @router.get("/api/search-live", response_class=HTMLResponse)
 async def live_search_endpoint(
     request: Request,
@@ -175,13 +255,6 @@ async def live_search_endpoint(
     )
 
 
-@router.get("/categories", response_class=HTMLResponse)
-async def list_categories_redirect() -> Response:
-    """Categories shortcut: directs to categories section on landing."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/#categories", status_code=303)
-
-
 @router.get("/products")
 async def list_products_endpoint(
     db: DbSessionDep,
@@ -222,22 +295,33 @@ async def search_products_endpoint(
     phone: CurrentUserDep,
     q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
     category: Annotated[str | None, Query()] = None,
+    condition: Annotated[str | None, Query()] = None,
     limit: Annotated[
         int, Query(ge=1, le=search_service.MAX_LIMIT)
     ] = search_service.DEFAULT_LIMIT,
 ) -> list[ProductRead] | HTMLResponse:
-    """Public: search products by name or description.
+    """Public: search products by name or description, with filters.
 
-    When requested with Accept: text/html (or format=html), renders the HTML
-    search and category listing page. Otherwise returns JSON list[ProductRead]
-    for existing search API callers.
+    Filters combine: a text query, one category, and the condition
+    (``new`` / ``used`` — only offered when the site sells used goods).
+    When requested with Accept: text/html, an HTMX request, or
+    format=html, renders the HTML search page; otherwise returns JSON
+    list[ProductRead] for existing search API callers.
     """
-    accept = request.headers.get("accept", "")
-    fmt = request.query_params.get("format")
-    is_html = ("text/html" in accept or fmt == "html") and fmt != "json"
-
-    if not is_html:
-        products = await search_service.search_products(db, q, limit)
+    if not _wants_html(request):
+        cond = search_service.clean_condition(condition)
+        if q.strip():
+            products = await search_service.search_products(
+                db, q, limit, condition=cond
+            )
+        elif cond is not None:
+            # Filter only, no text: list instead of search (an empty
+            # query searches nothing by design — see check_search).
+            products = await search_service.list_products(
+                db, limit, condition=cond
+            )
+        else:
+            products = await search_service.search_products(db, q, limit)
         return [ProductRead.model_validate(p) for p in products]
 
     # HTML view: resolve categories and results
@@ -249,28 +333,30 @@ async def search_products_endpoint(
             for idx, c in enumerate(FALLBACK_CATEGORIES)
         ]
 
+    cond = search_service.clean_condition(condition)
+    cat_name = _resolve_category_name(category, categories_list)
     matched_products: list[dict] = []
     has_query = bool(q.strip())
-    has_category = bool(category and category.strip())
-    searched = has_query or has_category
+    has_category = bool(cat_name)
+    has_condition = cond is not None
+    searched = has_query or has_category or has_condition
+
+    def _matches_filters(p: dict) -> bool:
+        """Category (exact name) + condition, applied after any source."""
+        if cat_name is not None and (p.get("category") or "").strip().lower() != cat_name.lower():
+            return False
+        if cond is not None and p.get("condition") != cond:
+            return False
+        return True
 
     if has_query:
-        db_products = await search_service.search_products(db, q, limit)
+        db_products = await search_service.search_products(
+            db, q, limit, condition=cond
+        )
         for p in db_products:
             p_read = ProductRead.model_validate(p)
             matched_products.append(
-                {
-                    "id": str(p_read.id),
-                    "name": p_read.name,
-                    "description": p_read.description,
-                    "formatted_price": format_toman_price(p_read.price_toman),
-                    "price_toman": p_read.price_toman,
-                    "category": p_read.category or "لوازم خانگی",
-                    "tag": p_read.tag,
-                    "stock": p_read.stock,
-                    "available": max(0, p_read.stock - p_read.reserved),
-                    "image_path": p_read.image_path,
-                }
+                _product_dict_from_read(p_read, cat_name or "لوازم خانگی")
             )
         if not matched_products:
             try:
@@ -280,78 +366,41 @@ async def search_products_endpoint(
                     name_match = q_lower in cp.get("name", "").lower()
                     desc_match = q_lower in (cp.get("description") or "").lower()
                     if name_match or desc_match:
-                        avail = max(0, cp.get("stock", 0) - cp.get("reserved", 0))
                         matched_products.append(
-                            {
-                                "id": str(cp.get("id")),
-                                "name": cp.get("name"),
-                                "description": cp.get("description"),
-                                "formatted_price": format_toman_price(
-                                    cp.get("price_toman")
-                                ),
-                                "price_toman": cp.get("price_toman"),
-                                "category": cp.get("category") or "لوازم خانگی",
-                                "tag": cp.get("tag"),
-                                "stock": cp.get("stock", 0),
-                                "available": avail,
-                                "image_path": cp.get("image_path"),
-                            }
+                            _product_dict_from_cms(cp, cat_name or "لوازم خانگی")
                         )
             except Exception:
                 pass
-
-        if has_category and category:
-            cat_filter = category.strip().lower()
-            matched_products = [
-                p
-                for p in matched_products
-                if cat_filter in (p.get("category") or "").lower()
-            ]
-    elif has_category and category:
+        matched_products = [p for p in matched_products if _matches_filters(p)]
+    elif has_category or has_condition:
         try:
-            cms_cat_products = await directus.list_products_by_category(
-                category, limit=limit
-            )
-            for cp in cms_cat_products:
-                avail = max(0, cp.get("stock", 0) - cp.get("reserved", 0))
+            if cat_name is not None:
+                cms_products = await directus.list_products_by_category(
+                    cat_name, limit=limit
+                )
+            else:
+                cms_products = await directus.list_products(limit=limit)
+            for cp in cms_products:
                 matched_products.append(
-                    {
-                        "id": str(cp.get("id")),
-                        "name": cp.get("name"),
-                        "description": cp.get("description"),
-                        "formatted_price": format_toman_price(
-                            cp.get("price_toman")
-                        ),
-                        "price_toman": cp.get("price_toman"),
-                        "category": cp.get("category") or category,
-                        "tag": cp.get("tag"),
-                        "stock": cp.get("stock", 0),
-                        "available": avail,
-                        "image_path": cp.get("image_path"),
-                    }
+                    _product_dict_from_cms(cp, cat_name or "لوازم خانگی")
                 )
         except Exception:
             pass
 
         if not matched_products:
-            db_all = await search_service.list_products(db, limit=limit)
+            try:
+                db_all = await search_service.list_products(
+                    db, limit=limit, condition=cond
+                )
+            except Exception:
+                # Both sources failed: show an empty result, not a 500.
+                db_all = []
             for p in db_all:
                 p_read = ProductRead.model_validate(p)
-                if category.lower() in (p_read.category or "").lower():
-                    matched_products.append(
-                        {
-                            "id": str(p_read.id),
-                            "name": p_read.name,
-                            "description": p_read.description,
-                            "formatted_price": format_toman_price(p_read.price_toman),
-                            "price_toman": p_read.price_toman,
-                            "category": p_read.category or category,
-                            "tag": p_read.tag,
-                            "stock": p_read.stock,
-                            "available": max(0, p_read.stock - p_read.reserved),
-                            "image_path": p_read.image_path,
-                        }
-                    )
+                matched_products.append(
+                    _product_dict_from_read(p_read, cat_name or "لوازم خانگی")
+                )
+        matched_products = [p for p in matched_products if _matches_filters(p)]
 
     total_count_formatted = str(len(matched_products)).translate(_FA_DIGITS)
 
@@ -361,7 +410,8 @@ async def search_products_endpoint(
         context={
             "phone": phone,
             "q": q,
-            "selected_category": category or "",
+            "selected_category": cat_name or "",
+            "selected_condition": cond or "",
             "categories": categories_list,
             "products": matched_products,
             "searched": searched,
@@ -433,7 +483,12 @@ async def category_page_endpoint(
         logger.warning("Failed to list products by category from Directus: %s", exc)
 
     if not cat_products_raw:
-        db_all = await search_service.list_products(db, limit=50)
+        try:
+            db_all = await search_service.list_products(db, limit=50)
+        except Exception as exc:
+            # Both sources failed: show the empty state, not a 500.
+            logger.warning("Category DB fallback failed: %s", exc)
+            db_all = []
         for p in db_all:
             p_read = ProductRead.model_validate(p)
             if cat_name.lower() in (p_read.name or "").lower() or (
@@ -451,6 +506,12 @@ async def category_page_endpoint(
         reserved = p.get("reserved", 0)
         tag = p.get("tag")
         avail = max(0, stock - reserved)
+        condition = p.get("condition")
+        condition = condition if condition in ("new", "used") else "new"
+        stars = p.get("condition_stars")
+        stars = stars if isinstance(stars, int) and 1 <= stars <= 5 else None
+        if condition != "used":
+            stars = None
         formatted_products.append(
             {
                 "id": str(pid),
@@ -462,6 +523,8 @@ async def category_page_endpoint(
                 "stock": stock,
                 "tag": tag,
                 "image_path": p.get("image_path"),
+                "condition": condition,
+                "condition_stars": stars,
             }
         )
 
@@ -560,8 +623,7 @@ async def read_product(
     renders the HTML product detail page. Otherwise returns JSON ProductRead unchanged.
     """
     product = await _fetch_product_read(db, directus, product_id)
-    accept = request.headers.get("accept", "")
-    if "text/html" in accept or request.query_params.get("format") == "html":
+    if _wants_html(request):
         return _render_product_page(request, product, phone)
     return product
 

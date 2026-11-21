@@ -111,7 +111,7 @@ class DesktopAndSpaTests(unittest.TestCase):
         desktop_nav = html.split('id="desktop-nav"')[1].split("</nav>")[0]
         self.assertIn('href="/"', desktop_nav)
         self.assertIn("فروشگاه", desktop_nav)
-        self.assertIn('href="/#categories"', desktop_nav)
+        self.assertIn('href="/categories"', desktop_nav)
         self.assertIn("دسته‌بندی‌ها", desktop_nav)
         self.assertIn('href="/cart"', desktop_nav)
         self.assertIn("سبد خرید", desktop_nav)

@@ -1,0 +1,19 @@
+{% extends base_template | default("base.html") %}
+{% block title %}{{ page.title }} | {{ site.settings.site_title }}{% endblock %}
+{% block content %}
+<!-- A CMS-written legal page (legal_pages). The body is the editor's
+     HTML, rendered as-is; the footer link for it comes from the same
+     row, so turning the page off hides both. -->
+<nav class="text-xs theme-text-muted mb-4 flex items-center gap-1.5" aria-label="مسیر صفحه">
+  <a href="/" hx-get="/" hx-target="main" hx-push-url="true" class="hover:underline">فروشگاه</a>
+  <span>›</span>
+  <span class="theme-text-main font-semibold">{{ page.title }}</span>
+</nav>
+
+<article class="theme-bg-card theme-border border rounded-2xl p-5 sm:p-6">
+  <h1 class="text-lg sm:text-xl font-bold theme-text-main mb-4">{{ page.title }}</h1>
+  <div class="text-sm theme-text-main leading-loose space-y-3">
+    {{ page.body | safe }}
+  </div>
+</article>
+{% endblock %}

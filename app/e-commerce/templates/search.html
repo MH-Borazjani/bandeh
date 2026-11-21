@@ -1,5 +1,6 @@
 {% extends base_template | default("base.html") %}
-{% block title %}{% if q %}جستجوی {{ q }} | بنده{% else %}جستجوی کالا | بنده{% endif %}{% endblock %}
+{% from "_condition_label.html" import condition_label %}
+{% block title %}{% if q %}جستجوی {{ q }} | {{ site.settings.site_title }}{% else %}جستجوی کالا | {{ site.settings.site_title }}{% endif %}{% endblock %}
 
 {% block content %}
 <!-- Search & Category Listing Page (Bandeh Shop - Responsive on Desktop)
@@ -31,23 +32,49 @@
       جستجو
     </button>
   </div>
+  <!-- Keep the active filters when the user types a new query. -->
+  {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+  {% if selected_condition %}<input type="hidden" name="condition" value="{{ selected_condition }}">{% endif %}
 
-  <!-- Category quick list: tappable chips (no dropdown) -->
+  <!-- Category quick list: tappable chips (no dropdown). Each chip stays
+       on /search and keeps the query and the other filter. -->
   <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
     <span class="theme-text-muted shrink-0 font-medium">دسته‌بندی:</span>
-    <a href="/search{% if q %}?q={{ q | urlencode }}{% endif %}"
-       hx-get="/search{% if q %}?q={{ q | urlencode }}{% endif %}"
+    <a href="/search{% if q or selected_condition %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_condition %}&{% endif %}{% if selected_condition %}condition={{ selected_condition }}{% endif %}{% endif %}"
+       hx-get="/search{% if q or selected_condition %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_condition %}&{% endif %}{% if selected_condition %}condition={{ selected_condition }}{% endif %}{% endif %}"
        hx-target="main"
        hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if not selected_category %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه دسته‌ها</a>
     {% for cat in categories %}
-    <a href="/category/{{ cat.id or cat.name }}"
-       hx-get="/category/{{ cat.id or cat.name }}"
+    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}category={{ cat.name | urlencode }}{% if selected_condition %}&condition={{ selected_condition }}{% endif %}"
+       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}category={{ cat.name | urlencode }}{% if selected_condition %}&condition={{ selected_condition }}{% endif %}"
        hx-target="main"
        hx-push-url="true"
-       class="rounded-full px-3 py-1.5 font-semibold {% if selected_category == cat.name or selected_category == (cat.id|string) %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">{{ cat.name }}</a>
+       class="rounded-full px-3 py-1.5 font-semibold {% if selected_category == cat.name %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">{{ cat.name }}</a>
     {% endfor %}
   </div>
+
+  <!-- Condition filter: only on a site that sells used goods. -->
+  {% if site.settings.sells_used %}
+  <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
+    <span class="theme-text-muted shrink-0 font-medium">وضعیت:</span>
+    <a href="/search{% if q or selected_category %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_category %}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}{% endif %}{% endif %}"
+       hx-get="/search{% if q or selected_category %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_category %}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}{% endif %}{% endif %}"
+       hx-target="main"
+       hx-push-url="true"
+       class="rounded-full px-3 py-1.5 font-semibold {% if not selected_condition %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه</a>
+    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=new"
+       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=new"
+       hx-target="main"
+       hx-push-url="true"
+       class="rounded-full px-3 py-1.5 font-semibold {% if selected_condition == 'new' %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">نو</a>
+    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=used"
+       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=used"
+       hx-target="main"
+       hx-push-url="true"
+       class="rounded-full px-3 py-1.5 font-semibold {% if selected_condition == 'used' %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">دست دوم</a>
+  </div>
+  {% endif %}
 </form>
 
 <!-- Results Section -->
@@ -60,6 +87,11 @@
       {% endif %}
       {% if selected_category %}
       <span class="text-xs theme-badge rounded-lg px-2 py-0.5">{{ selected_category }}</span>
+      {% endif %}
+      {% if selected_condition == 'new' %}
+      <span class="text-xs theme-badge-success rounded-lg px-2 py-0.5">نو</span>
+      {% elif selected_condition == 'used' %}
+      <span class="text-xs theme-badge rounded-lg px-2 py-0.5">دست دوم</span>
       {% endif %}
     </h2>
     <span class="text-xs theme-text-muted">{{ total_count_formatted }} کالا</span>
@@ -99,9 +131,12 @@
              class="hover:underline">
             <h3 class="font-bold theme-text-main text-base">{{ p.name }}</h3>
           </a>
-          {% if p.tag %}
-          <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold shrink-0">{{ p.tag }}</span>
-          {% endif %}
+          <span class="flex items-center gap-1.5 shrink-0">
+            {{ condition_label(p.condition | default('new'), p.condition_stars, site.settings.sells_used) }}
+            {% if p.tag %}
+            <span class="text-xs theme-badge rounded-lg px-2.5 py-1 font-semibold">{{ p.tag }}</span>
+            {% endif %}
+          </span>
         </div>
 
         {% if p.description %}
@@ -173,7 +208,7 @@
     <div class="w-12 h-12 rounded-full theme-bg-card-subtle mx-auto flex items-center justify-center mb-3">
       <span class="theme-accent text-lg">🔍</span>
     </div>
-    <h3 class="text-base lg:text-lg font-bold theme-text-main mb-1">جستجو در کاتالوگ بنده</h3>
+    <h3 class="text-base lg:text-lg font-bold theme-text-main mb-1">جستجو در کاتالوگ {{ site.settings.site_title }}</h3>
     <p class="text-xs sm:text-sm theme-text-muted leading-relaxed max-w-md mx-auto">
       نام محصول، برند یا مشخصات کالا را در کادر بالا وارد کرده و کلید جستجو را بزنید.
     </p>
@@ -184,8 +219,8 @@
     <h2 class="text-sm sm:text-base font-bold theme-text-main mb-3">دسته‌بندی‌های کالا</h2>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
       {% for cat in categories %}
-      <a href="/category/{{ cat.id or cat.name }}"
-         hx-get="/category/{{ cat.id or cat.name }}"
+      <a href="/search?category={{ cat.name | urlencode }}"
+         hx-get="/search?category={{ cat.name | urlencode }}"
          hx-target="main"
          hx-push-url="true"
          class="theme-bg-card theme-border border rounded-xl p-3.5 flex flex-col justify-between hover:border-amber-600 transition-colors">

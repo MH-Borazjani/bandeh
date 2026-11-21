@@ -1,6 +1,6 @@
 {% extends base_template | default("base.html") %}
 {% block title %}
-{% if is_success %}پرداخت موفق | بنده{% else %}نتیجه پرداخت | بنده{% endif %}
+{% if is_success %}پرداخت موفق | {{ site.settings.site_title }}{% else %}نتیجه پرداخت | {{ site.settings.site_title }}{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -28,7 +28,7 @@
     سفارش شما ثبت شد
   </h1>
   <p class="text-xs theme-text-muted mb-5 leading-relaxed">
-    با تشکر از خرید شما از فروشگاه بنده. فرایند پردازش و ارسال سفارش آغاز گردید.
+    با تشکر از خرید شما از فروشگاه {{ site.settings.site_title }}. فرایند پردازش و ارسال سفارش آغاز گردید.
   </p>
 
   <!-- Details Card -->
@@ -102,7 +102,7 @@
     </h2>
     <ul class="text-xs theme-text-muted space-y-1.5 leading-relaxed list-disc list-inside">
       {% if is_success %}
-      <li>تایید اطلاعات و تخصیص قطعی کالا در انبار مرکزی بنده</li>
+      <li>تایید اطلاعات و تخصیص قطعی کالا در انبار مرکزی {{ site.settings.site_title }}</li>
       <li>تماس کارشناس ارسال با شما جهت هماهنگی بازه زمانی تحویل</li>
       <li>ارسال مستقیم کالا با بسته‌بندی ایمن و ضمانت‌نامه معتبر</li>
       {% else %}

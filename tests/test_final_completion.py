@@ -515,11 +515,9 @@ class FinalCompletionTests(unittest.TestCase):
         self.assertIn("<loc>/products</loc>", sitemap.text)
 
     def test_footer_trust_seals_present(self) -> None:
-        """Base footer contains Enamad and Samandehi placeholder slots."""
+        """Base footer contains Enamad and Samandehi badges (from the CMS)."""
         resp = self.client.get("/terms", headers={"Accept": "text/html"})
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('id="enamad-slot"', resp.text)
-        self.assertIn('id="samandehi-slot"', resp.text)
         self.assertIn("اینماد", resp.text)
         self.assertIn("ساماندهی", resp.text)
 

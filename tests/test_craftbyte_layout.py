@@ -166,9 +166,10 @@ class CraftbyteLayoutTests(unittest.TestCase):
         # Exact heading
         self.assertIn("پرفروش‌ترین‌ها", html)
 
-        # Persian colour variants
-        self.assertIn("مشکی", html)
-        self.assertIn("سفید", html)
+        # No fake colour variants: the old hardcoded مشکی/سفید text is
+        # gone — the condition label (نو / دست دوم + stars) replaced it.
+        self.assertNotIn("مشکی", html)
+        self.assertNotIn("سفید", html)
         self.assertIn("تومان", html)
 
         # Round plus button with data-add-to-cart
@@ -272,10 +273,25 @@ class CraftbyteLayoutTests(unittest.TestCase):
                 self.assertEqual(resp.headers.get("content-type"), "image/jpeg")
 
     def test_no_star_ratings(self) -> None:
-        """Star ratings are removed from the products (fake demo values)."""
+        """No fake star RATINGS: stars exist only as the used-item
+        cleanliness mark inside the «دست دوم» label (his order
+        2026-11-20: 5 stars = like new, 1 = a wreck). A standalone
+        rating widget with invented values stays banned."""
+        import re
+
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertNotIn("★", resp.text)
+        html = resp.text
+        # Strip the condition-label stars (aria-label="تمیزی N از ۵"):
+        # after that, no star may remain anywhere on the page.
+        stripped = re.sub(
+            r'<span[^>]*aria-label="تمیزی[^"]*"[^>]*>.*?</span>',
+            "",
+            html,
+            flags=re.DOTALL,
+        )
+        self.assertNotIn("★", stripped)
+        self.assertNotIn("☆", stripped)
 
     def test_search_category_chips(self) -> None:
         """Search page has tappable category chips, no dropdown select."""
@@ -285,7 +301,8 @@ class CraftbyteLayoutTests(unittest.TestCase):
         self.assertNotIn("<select", html)
         self.assertNotIn("category-select", html)
         self.assertIn("همه دسته‌ها", html)
-        self.assertIn("/category/", html)
+        # Chips filter on /search itself (category + condition).
+        self.assertIn("/search?category=", html)
 
     def test_compact_prices_on_landing(self) -> None:
         """Landing shows compact prices (۳۲ میلیون), never the full zeros."""

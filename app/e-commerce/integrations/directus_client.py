@@ -39,6 +39,7 @@ retries Directus right away.
 
 from __future__ import annotations
 
+import copy
 import datetime
 import json
 import logging
@@ -59,6 +60,9 @@ LANDING_CONTENT_KEY = "bandeh:landing:content"
 LANDING_CONTENT_TTL = 60
 CATEGORIES_MAP_KEY = "bandeh:categories:map"
 CATEGORIES_MAP_TTL = 300
+# Cache key and lifetime for the site content (settings, badges, pages).
+SITE_CONTENT_KEY = "bandeh:site:content"
+SITE_CONTENT_TTL = 60
 
 
 class CategoryContent(TypedDict):
@@ -66,6 +70,11 @@ class CategoryContent(TypedDict):
 
     name: str
     desc: str
+    # CMS icon (emoji or short symbol) shown in the card circle.
+    # None means the template picks an SVG by the category name.
+    icon: str | None
+    # Display order set in Directus (lower first). 0 = no order set.
+    sort: int
 
 
 class ProductContent(TypedDict):
@@ -85,6 +94,64 @@ class ProductContent(TypedDict):
     # did not send them (for example in the hardcoded fallback).
     category: str | None
     image_path: str | None
+    # Condition: 'new' or 'used'. Stars 1–5 only when used.
+    condition: str
+    condition_stars: int | None
+
+
+class SiteSettings(TypedDict):
+    """One row in Directus ``site_settings``: the site's identity.
+
+    One codebase serves many sites: each site has its own Directus,
+    so each one sets its own title, logo and switches here. Nothing
+    about the shop's identity is hardcoded in the templates anymore.
+    """
+
+    site_title: str
+    site_tagline: str
+    hero_title: str
+    hero_subtitle: str
+    # Directus file id of the logo, or None (header falls back to text).
+    logo: str | None
+    # True when this site also sells second-hand goods. False hides the
+    # whole used flow: condition labels, stars and the search filter.
+    sells_used: bool
+
+
+class TrustBadge(TypedDict):
+    """One service box on the landing page (from ``trust_badges``)."""
+
+    title: str
+    text: str
+    icon: str
+
+
+class LegalPage(TypedDict):
+    """One footer page (from ``legal_pages``)."""
+
+    slug: str
+    title: str
+    body: str
+    is_active: bool
+
+
+class CertBadge(TypedDict):
+    """One trust seal in the footer (from ``certification_badges``)."""
+
+    name: str
+    status_text: str
+    # Directus file id of the seal image, or None (shield icon instead).
+    image: str | None
+    link: str | None
+
+
+class SiteContent(TypedDict):
+    """Everything the shared header/footer/landing needs from the CMS."""
+
+    settings: SiteSettings
+    trust_badges: list[TrustBadge]
+    legal_pages: list[LegalPage]
+    cert_badges: list[CertBadge]
 
 
 class LandingContent(TypedDict):
@@ -97,12 +164,12 @@ class LandingContent(TypedDict):
 # Hardcoded landing content, used ONLY when Directus cannot answer.
 # Same data the shop showed before the Directus integration.
 FALLBACK_CATEGORIES: list[CategoryContent] = [
-    {"name": "یخچال و فریزر", "desc": "ساید، دوقلو، معمولی"},
-    {"name": "ماشین لباسشویی", "desc": "۷ تا ۱۰ کیلویی"},
-    {"name": "ماشین ظرفشویی", "desc": "رومیزی و ایستاده"},
-    {"name": "اجاق گاز و فر", "desc": "صفحه‌ای و مبله"},
-    {"name": "جاروبرقی", "desc": "کیسه‌ای و مخزن‌دار"},
-    {"name": "لوازم کوچک", "desc": "آشپزخانه و خانه"},
+    {"name": "یخچال و فریزر", "desc": "ساید، دوقلو، معمولی", "icon": None, "sort": 1},
+    {"name": "ماشین لباسشویی", "desc": "۷ تا ۱۰ کیلویی", "icon": None, "sort": 2},
+    {"name": "ماشین ظرفشویی", "desc": "رومیزی و ایستاده", "icon": None, "sort": 3},
+    {"name": "اجاق گاز و فر", "desc": "صفحه‌ای و مبله", "icon": None, "sort": 4},
+    {"name": "جاروبرقی", "desc": "کیسه‌ای و مخزن‌دار", "icon": None, "sort": 5},
+    {"name": "لوازم کوچک", "desc": "آشپزخانه و خانه", "icon": None, "sort": 6},
 ]
 
 FALLBACK_PRODUCTS: list[ProductContent] = [
@@ -114,6 +181,8 @@ FALLBACK_PRODUCTS: list[ProductContent] = [
         "category": None,
         "image_path": None,
         "id": None,
+        "condition": "new",
+        "condition_stars": None,
     },
     {
         "name": "ماشین لباسشویی ۸ کیلویی",
@@ -123,6 +192,8 @@ FALLBACK_PRODUCTS: list[ProductContent] = [
         "category": None,
         "image_path": None,
         "id": None,
+        "condition": "new",
+        "condition_stars": None,
     },
     {
         "name": "جاروبرقی ۲۰۰۰ وات",
@@ -132,6 +203,8 @@ FALLBACK_PRODUCTS: list[ProductContent] = [
         "category": None,
         "image_path": None,
         "id": None,
+        "condition": "new",
+        "condition_stars": None,
     },
     {
         "name": "اجاق گاز ۵ شعله",
@@ -141,8 +214,40 @@ FALLBACK_PRODUCTS: list[ProductContent] = [
         "category": None,
         "image_path": None,
         "id": None,
+        "condition": "new",
+        "condition_stars": None,
     },
 ]
+
+# Hardcoded site content, used ONLY when Directus cannot answer.
+# Same identity the shop showed before the CMS took it over: the
+# header, footer, trust boxes and seal cards render exactly as today.
+FALLBACK_SITE_CONTENT: SiteContent = {
+    "settings": {
+        "site_title": "بنده",
+        "site_tagline": "ضمانت اصالت و ارسال مستقیم با بهترین قیمت",
+        "hero_title": "خانه‌ی مدرن، زندگی بهتر",
+        "hero_subtitle": "وسایل ضروری مدرن برای هر لحظه از روز",
+        "logo": None,
+        "sells_used": False,
+    },
+    "trust_badges": [
+        {"title": "ضمانت اصالت", "text": "کالا با ضمانت‌نامه‌ی معتبر", "icon": "✦"},
+        {"title": "ارسال سریع", "text": "تحویل درب منزل", "icon": "🚚"},
+        {"title": "پرداخت امن", "text": "درگاه بانکی معتبر", "icon": "🔒"},
+        {"title": "مهلت بازگشت", "text": "۷ روز ضمانت بازگشت", "icon": "↺"},
+    ],
+    "legal_pages": [
+        {"slug": "terms", "title": "قوانین و مقررات", "body": "", "is_active": True},
+        {"slug": "privacy", "title": "حریم خصوصی", "body": "", "is_active": True},
+        {"slug": "returns", "title": "شرایط بازگشت", "body": "", "is_active": True},
+        {"slug": "contact", "title": "تماس با ما", "body": "", "is_active": True},
+    ],
+    "cert_badges": [
+        {"name": "اینماد", "status_text": "در حال دریافت", "image": None, "link": None},
+        {"name": "ساماندهی", "status_text": "در حال دریافت", "image": None, "link": None},
+    ],
+}
 
 # Persian digits and the Persian thousands separator, for prices.
 _FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -188,20 +293,24 @@ class DirectusClient:
         return {}
 
     async def _get_items(
-        self, collection: str, fields: list[str]
+        self, collection: str, fields: list[str], active_only: bool = True
     ) -> list[dict[str, object]]:
         """Fetch one published collection from Directus, or raise.
 
         Raises ``httpx.HTTPError`` on network/HTTP failure and ``ValueError``
         when the response body is not the expected shape. The caller decides
         what a failure means (for landing content: fall back).
+        ``active_only=False`` skips the is_active filter — for collections
+        that have no is_active column (site_settings) or when the caller
+        needs to see inactive rows too (one legal page by slug).
         """
         url = f"{self._base_url}/items/{collection}"
         params: dict[str, str | int] = {
             "fields": ",".join(fields),
-            "filter[is_active][_eq]": "true",
             "limit": 50,
         }
+        if active_only:
+            params["filter[is_active][_eq]"] = "true"
         response = await self._http.get(url, headers=self._headers(), params=params)
         response.raise_for_status()
         data = response.json()
@@ -214,10 +323,21 @@ class DirectusClient:
 
     async def _fetch_landing_content(self) -> LandingContent:
         """Fetch and map the landing content from Directus (no cache, no fallback)."""
-        categories = await self._get_items("categories", ["id", "name", "description"])
+        categories = await self._get_items(
+            "categories", ["id", "name", "description", "icon", "sort"]
+        )
         products = await self._get_items(
             "products",
-            ["id", "name", "price_toman", "tag", "category", "image_path"],
+            [
+                "id",
+                "name",
+                "price_toman",
+                "tag",
+                "category",
+                "image_path",
+                "condition",
+                "condition_stars",
+            ],
         )
 
         # Category id -> name, so each product can carry its category name
@@ -231,11 +351,23 @@ class DirectusClient:
             raw_desc = row.get("description") or ""
             if not isinstance(raw_desc, str):
                 raise ValueError("Directus category description must be a string")
+            raw_icon = row.get("icon")
+            icon_val: str | None = raw_icon if isinstance(raw_icon, str) else None
+            raw_sort = row.get("sort")
+            sort_val: int = (
+                raw_sort
+                if isinstance(raw_sort, int) and not isinstance(raw_sort, bool)
+                else 0
+            )
             cat_id = row.get("id")
             if isinstance(cat_id, int | str) and not isinstance(cat_id, bool):
                 category_names[cat_id] = name
                 category_names[str(cat_id)] = name
-            mapped_categories.append({"name": name, "desc": raw_desc})
+            mapped_categories.append(
+                {"name": name, "desc": raw_desc, "icon": icon_val, "sort": sort_val}
+            )
+        # Display order comes from Directus (sort); ties keep CMS order.
+        mapped_categories.sort(key=lambda c: c["sort"])
 
         mapped_products: list[ProductContent] = []
         for row in products:
@@ -279,6 +411,8 @@ class DirectusClient:
                     "tag": tag_val,
                     "category": category_val,
                     "image_path": image_val,
+                    "condition": _clean_condition_value(row.get("condition")),
+                    "condition_stars": _clean_stars_value(row.get("condition_stars")),
                 }
             )
 
@@ -409,15 +543,229 @@ class DirectusClient:
         return [_product_row(row, category_map=category_map) for row in rows]
 
     async def list_categories(self) -> list[dict[str, object]]:
-        """Fetch categories collection from Directus, or return fallback."""
+        """Fetch categories collection from Directus, or return fallback.
+
+        Sorted by the ``sort`` value set in Directus (lower first); rows
+        without one keep their CMS order. Every new category an editor
+        adds in Directus shows up here — and in the search filters and
+        the categories page — with no code change.
+        """
         try:
-            return await self._get_items("categories", ["id", "name", "description"])
+            rows = await self._get_items(
+                "categories", ["id", "name", "description", "icon", "sort"]
+            )
+            rows.sort(key=_sort_value)
+            return rows
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to fetch categories list from Directus: %s", exc)
             return [
-                {"id": idx + 1, "name": c["name"], "description": c["desc"]}
+                {
+                    "id": idx + 1,
+                    "name": c["name"],
+                    "description": c["desc"],
+                    "icon": c["icon"],
+                    "sort": c["sort"],
+                }
                 for idx, c in enumerate(FALLBACK_CATEGORIES)
             ]
+
+    async def get_site_content(self) -> SiteContent:
+        """Return the site content: cache first, then Directus, then fallback.
+
+        One cached payload for the shared header/footer/landing: settings,
+        trust badges, legal pages and certification badges. Any failure —
+        Directus down, a collection missing, an unexpected body — means
+        the same thing: serve the hardcoded fallback and log a warning.
+        The shop page must never fail because the CMS is unreachable.
+        Failures are not cached, so the next request retries right away.
+        """
+        if self._cache is not None:
+            try:
+                cached = await self._cache.get(SITE_CONTENT_KEY)
+                if cached is not None:
+                    parsed = json.loads(cached)
+                    if (
+                        isinstance(parsed, dict)
+                        and isinstance(parsed.get("settings"), dict)
+                        and isinstance(parsed.get("trust_badges"), list)
+                        and isinstance(parsed.get("legal_pages"), list)
+                        and isinstance(parsed.get("cert_badges"), list)
+                    ):
+                        return cast(SiteContent, parsed)
+            except Exception as exc:  # noqa: BLE001 - cache failure never breaks a page
+                logger.warning("Site content cache read failed, bypassing: %s", exc)
+        try:
+            content = await self._fetch_site_content()
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            logger.warning(
+                "Directus site content unavailable, using fallback: %s", exc
+            )
+            return copy.deepcopy(FALLBACK_SITE_CONTENT)
+        if self._cache is not None:
+            try:
+                await self._cache.set(
+                    SITE_CONTENT_KEY, json.dumps(content), SITE_CONTENT_TTL
+                )
+            except Exception as exc:  # noqa: BLE001 - cache failure never breaks a page
+                logger.warning("Site content cache write failed: %s", exc)
+        return content
+
+    async def _fetch_site_content(self) -> SiteContent:
+        """Fetch and map the site content from Directus (no cache, no fallback)."""
+        settings_rows = await self._get_items(
+            "site_settings",
+            [
+                "site_title",
+                "site_tagline",
+                "hero_title",
+                "hero_subtitle",
+                "logo",
+                "sells_used",
+            ],
+            active_only=False,
+        )
+        fallback_settings = FALLBACK_SITE_CONTENT["settings"]
+        settings: SiteSettings = copy.deepcopy(fallback_settings)
+        if settings_rows:
+            row = settings_rows[0]
+            title = row.get("site_title")
+            if isinstance(title, str) and title.strip():
+                settings["site_title"] = title.strip()
+            tagline = row.get("site_tagline")
+            if isinstance(tagline, str):
+                settings["site_tagline"] = tagline
+            hero_title = row.get("hero_title")
+            if isinstance(hero_title, str) and hero_title.strip():
+                settings["hero_title"] = hero_title.strip()
+            hero_subtitle = row.get("hero_subtitle")
+            if isinstance(hero_subtitle, str):
+                settings["hero_subtitle"] = hero_subtitle
+            logo = row.get("logo")
+            settings["logo"] = logo if isinstance(logo, str) else None
+            sells_used = row.get("sells_used")
+            settings["sells_used"] = sells_used is True
+
+        badge_rows = await self._get_items(
+            "trust_badges", ["title", "text", "icon", "sort"]
+        )
+        trust_badges: list[TrustBadge] = []
+        for row in sorted(badge_rows, key=_sort_value):
+            title = row.get("title")
+            text = row.get("text")
+            if not isinstance(title, str) or not isinstance(text, str):
+                continue
+            icon = row.get("icon")
+            trust_badges.append(
+                {
+                    "title": title,
+                    "text": text,
+                    "icon": icon if isinstance(icon, str) and icon else "✦",
+                }
+            )
+
+        page_rows = await self._get_items(
+            "legal_pages", ["slug", "title", "body", "sort", "is_active"]
+        )
+        legal_pages: list[LegalPage] = []
+        for row in sorted(page_rows, key=_sort_value):
+            slug = row.get("slug")
+            title = row.get("title")
+            if not isinstance(slug, str) or not isinstance(title, str):
+                continue
+            body = row.get("body")
+            legal_pages.append(
+                {
+                    "slug": slug,
+                    "title": title,
+                    "body": body if isinstance(body, str) else "",
+                    "is_active": row.get("is_active") is True,
+                }
+            )
+
+        cert_rows = await self._get_items(
+            "certification_badges", ["name", "status_text", "image", "link", "sort"]
+        )
+        cert_badges: list[CertBadge] = []
+        for row in sorted(cert_rows, key=_sort_value):
+            name = row.get("name")
+            if not isinstance(name, str):
+                continue
+            status_text = row.get("status_text")
+            image = row.get("image")
+            link = row.get("link")
+            cert_badges.append(
+                {
+                    "name": name,
+                    "status_text": status_text if isinstance(status_text, str) else "",
+                    "image": image if isinstance(image, str) else None,
+                    "link": link if isinstance(link, str) and link else None,
+                }
+            )
+
+        return {
+            "settings": settings,
+            "trust_badges": trust_badges,
+            "legal_pages": legal_pages,
+            "cert_badges": cert_badges,
+        }
+
+    async def get_legal_page(self, slug: str) -> dict | None:
+        """One legal page by slug, or None when it does not exist.
+
+        No is_active filter here: the caller must tell "deleted by the
+        editor" (inactive → 404) apart from "never created / CMS down"
+        (None → fall back to the static template). Any failure returns
+        None, so the route falls back instead of breaking the page.
+        """
+        try:
+            response = await self._http.get(
+                f"{self._base_url}/items/legal_pages",
+                headers=self._headers(),
+                params={
+                    "fields": "slug,title,body,is_active,sort",
+                    "filter[slug][_eq]": slug,
+                    "limit": 1,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            rows = data.get("data") if isinstance(data, dict) else None
+            if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+                row = rows[0]
+                body = row.get("body")
+                return {
+                    "slug": slug,
+                    "title": row.get("title") if isinstance(row.get("title"), str) else slug,
+                    "body": body if isinstance(body, str) else "",
+                    "is_active": row.get("is_active") is True,
+                }
+            return None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to fetch legal page %s: %s", slug, exc)
+            return None
+
+    async def get_asset(self, file_id: str) -> tuple[bytes, str] | None:
+        """Fetch one Directus file's bytes + content type, or None.
+
+        Serves the CMS logo and seal images through the shop itself
+        (``/site/logo``, ``/site/badge/<id>``), so the browser never
+        needs the Directus host. ``file_id`` must be a plain id — no
+        slashes, no ``..`` — anything else is refused outright.
+        """
+        if not file_id or "/" in file_id or "\\" in file_id or ".." in file_id:
+            return None
+        try:
+            response = await self._http.get(
+                f"{self._base_url}/assets/{file_id}", headers=self._headers()
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "application/octet-stream")
+            return response.content, content_type
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to fetch Directus asset %s: %s", file_id, exc)
+            return None
 
     async def list_products_by_category(
         self, category_identifier: str | int, limit: int = 50
@@ -512,6 +860,26 @@ class DirectusClient:
         return _product_row(row, category_map=category_map)
 
 
+def _clean_condition_value(value: object) -> str:
+    """Coerce a CMS condition value to 'new' or 'used'; anything else is 'new'."""
+    if isinstance(value, str) and value.strip().lower() in ("new", "used"):
+        return value.strip().lower()
+    return "new"
+
+
+def _clean_stars_value(value: object) -> int | None:
+    """Coerce a CMS stars value to 1–5; anything else is None (no stars)."""
+    if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 5:
+        return value
+    return None
+
+
+def _sort_value(row: dict[str, object]) -> int:
+    """The CMS ``sort`` value of a row (lower first); missing → 0."""
+    sort = row.get("sort")
+    return sort if isinstance(sort, int) and not isinstance(sort, bool) else 0
+
+
 def _product_row(
     row: dict,
     category_map: dict[int | str, str] | None = None,
@@ -589,6 +957,11 @@ def _product_row(
     if tag is not None and not isinstance(tag, str):
         tag = str(tag)
 
+    condition = _clean_condition_value(row.get("condition"))
+    stars = _clean_stars_value(row.get("condition_stars"))
+    if condition != "used":
+        stars = None
+
     return {
         "id": pid_str,
         "name": name,
@@ -601,6 +974,8 @@ def _product_row(
         "created_at": created_at,
         "category": category,
         "tag": tag,
+        "condition": condition,
+        "condition_stars": stars,
     }
 
 
@@ -618,6 +993,8 @@ PRODUCT_READ_FIELDS = [
     "category",
     "tag",
     "created_at",
+    "condition",
+    "condition_stars",
 ]
 
 
@@ -631,6 +1008,15 @@ async def invalidate_landing_content(cache: Cache) -> None:
     await cache.delete(CATEGORIES_MAP_KEY)
 
 
+async def invalidate_site_content(cache: Cache) -> None:
+    """Delete-on-change: drop the cached site content right now.
+
+    Call this when site settings, badges or legal pages change in
+    Directus instead of waiting up to 60 seconds for the TTL.
+    """
+    await cache.delete(SITE_CONTENT_KEY)
+
+
 def get_directus_client(client: HttpClientDep, cache: CacheDep) -> DirectusClient:
     """Dependency: build a DirectusClient on the shared HTTP client and cache."""
     return DirectusClient(client, cache=cache)
@@ -642,15 +1028,24 @@ DirectusClientDep = Annotated[DirectusClient, Depends(get_directus_client)]
 
 __all__ = [
     "CategoryContent",
+    "CertBadge",
     "DirectusClient",
     "DirectusClientDep",
     "FALLBACK_CATEGORIES",
     "FALLBACK_PRODUCTS",
+    "FALLBACK_SITE_CONTENT",
     "LANDING_CONTENT_KEY",
     "LANDING_CONTENT_TTL",
     "LandingContent",
+    "LegalPage",
     "ProductContent",
+    "SITE_CONTENT_KEY",
+    "SITE_CONTENT_TTL",
+    "SiteContent",
+    "SiteSettings",
+    "TrustBadge",
     "format_toman_price",
     "get_directus_client",
     "invalidate_landing_content",
+    "invalidate_site_content",
 ]

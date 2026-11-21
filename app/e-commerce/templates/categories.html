@@ -1,0 +1,41 @@
+{% extends base_template | default("base.html") %}
+{% from "_category_icon.html" import category_icon %}
+{% block title %}دسته‌بندی‌ها | {{ site.settings.site_title }}{% endblock %}
+{% block content %}
+<!-- All categories: one card per category Directus knows, with its real
+     product count. Adding a category in Directus adds a card here, in
+     the search filters and on the landing page — no code change. -->
+<nav class="text-xs theme-text-muted mb-4 flex items-center gap-1.5" aria-label="مسیر صفحه">
+  <a href="/" hx-get="/" hx-target="main" hx-push-url="true" class="hover:underline">فروشگاه</a>
+  <span>›</span>
+  <span class="theme-text-main font-semibold">دسته‌بندی‌ها</span>
+</nav>
+
+<h1 class="text-lg sm:text-xl font-bold theme-text-main mb-1">دسته‌بندی‌ها</h1>
+<p class="text-xs sm:text-sm theme-text-muted mb-5">همه‌ی دسته‌های فروشگاه — روی هر دسته بزنید تا کالاهایش را ببینید.</p>
+
+{% if categories %}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {% for cat in categories %}
+  <a href="/category/{{ cat.name | urlencode }}"
+     hx-get="/category/{{ cat.name | urlencode }}"
+     hx-target="main"
+     hx-push-url="true"
+     class="theme-bg-card theme-border border rounded-2xl p-4 flex flex-col items-center justify-center text-center hover:border-amber-500/50 transition-colors">
+    <div class="w-11 h-11 rounded-full theme-bg-card-subtle flex items-center justify-center mb-2.5 theme-accent">
+      {{ category_icon(cat) }}
+    </div>
+    <span class="font-bold text-sm theme-text-main">{{ cat.name }}</span>
+    {% if cat.description %}
+    <span class="text-[11px] theme-text-muted mt-1 leading-relaxed">{{ cat.description }}</span>
+    {% endif %}
+    <span class="text-[11px] theme-text-muted mt-1.5">{{ cat.count | persian_digits }} کالا</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="theme-bg-card theme-border border rounded-2xl p-8 text-center theme-text-muted text-sm">
+  هنوز دسته‌ای ثبت نشده است.
+</div>
+{% endif %}
+{% endblock %}

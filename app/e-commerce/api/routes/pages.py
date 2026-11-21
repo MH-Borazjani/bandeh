@@ -16,7 +16,7 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 try:
@@ -25,6 +25,7 @@ try:
     from integrations.directus_client import (
         FALLBACK_CATEGORIES,
         FALLBACK_PRODUCTS,
+        DirectusClient,
         DirectusClientDep,
     )
     from services.auth_service import mask_phone
@@ -35,6 +36,7 @@ except ImportError:
     from integrations.directus_client import (
         FALLBACK_CATEGORIES,
         FALLBACK_PRODUCTS,
+        DirectusClient,
         DirectusClientDep,
     )
 
@@ -81,6 +83,49 @@ async def landing(
     return response
 
 
+@router.get("/categories", response_class=HTMLResponse)
+async def categories_page(
+    request: Request,
+    phone: CurrentUserDep,
+    directus: DirectusClientDep,
+) -> HTMLResponse:
+    """Render the all-categories page (header nav + landing 'see all').
+
+    Every category Directus knows, with its real product count — adding
+    a category in Directus adds a card here, in the search filters and
+    on the landing page, with no code change. Content comes from
+    Directus (cached 60s); when Directus is down the client returns
+    the hardcoded fallback, so the page renders exactly the same.
+    """
+    content = await directus.get_landing_content()
+    products = content["products"]
+    counts: dict[str, int] = {}
+    for p in products:
+        cat = p.get("category")
+        if cat:
+            counts[cat] = counts.get(cat, 0) + 1
+    categories = [
+        {
+            "name": c["name"],
+            "description": c["desc"],
+            "icon": c.get("icon"),
+            "count": counts.get(c["name"], 0),
+        }
+        for c in content["categories"]
+    ]
+    response = templates.TemplateResponse(
+        request=request,
+        name="categories.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+            "categories": categories,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return response
+
+
 @router.get("/cart", response_class=HTMLResponse)
 async def cart_page(
     request: Request,
@@ -117,16 +162,41 @@ async def checkout_page(
     return response
 
 
-@router.get("/terms", response_class=HTMLResponse)
-@router.get("/terms-of-service", response_class=HTMLResponse)
-async def terms_page(
+async def _render_legal_page(
     request: Request,
-    phone: CurrentUserDep,
+    phone: str | None,
+    directus: DirectusClient,
+    slug: str,
+    fallback_template: str,
 ) -> HTMLResponse:
-    """Render Terms of Service trust page."""
+    """Render one footer page from the CMS, or its static template.
+
+    The editor writes the page in Directus (``legal_pages``: title +
+    body). Three cases:
+    - The CMS has it and it is active → ``legal_page.html`` with CMS text.
+    - The CMS has it and it is inactive → the editor removed it → 404.
+    - The CMS has no row for it, or Directus is down → the static
+      template (the text the shop showed before the CMS took over).
+    Turning a page off also hides its link in the footer (see base.html).
+    """
+    page = await directus.get_legal_page(slug)
+    if page is not None:
+        if not page["is_active"]:
+            raise HTTPException(status_code=404, detail="page not found")
+        response = templates.TemplateResponse(
+            request=request,
+            name="legal_page.html",
+            context={
+                "phone": phone,
+                "masked": mask_phone(phone) if phone is not None else None,
+                "page": page,
+            },
+        )
+        response.headers["Cache-Control"] = "public, max-age=3600"
+        return response
     response = templates.TemplateResponse(
         request=request,
-        name="terms.html",
+        name=fallback_template,
         context={
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
@@ -134,6 +204,17 @@ async def terms_page(
     )
     response.headers["Cache-Control"] = "public, max-age=3600"
     return response
+
+
+@router.get("/terms", response_class=HTMLResponse)
+@router.get("/terms-of-service", response_class=HTMLResponse)
+async def terms_page(
+    request: Request,
+    phone: CurrentUserDep,
+    directus: DirectusClientDep,
+) -> HTMLResponse:
+    """Render Terms of Service trust page (CMS text, static fallback)."""
+    return await _render_legal_page(request, phone, directus, "terms", "terms.html")
 
 
 @router.get("/privacy", response_class=HTMLResponse)
@@ -141,18 +222,12 @@ async def terms_page(
 async def privacy_page(
     request: Request,
     phone: CurrentUserDep,
+    directus: DirectusClientDep,
 ) -> HTMLResponse:
-    """Render Privacy Policy trust page."""
-    response = templates.TemplateResponse(
-        request=request,
-        name="privacy.html",
-        context={
-            "phone": phone,
-            "masked": mask_phone(phone) if phone is not None else None,
-        },
+    """Render Privacy Policy trust page (CMS text, static fallback)."""
+    return await _render_legal_page(
+        request, phone, directus, "privacy", "privacy.html"
     )
-    response.headers["Cache-Control"] = "public, max-age=3600"
-    return response
 
 
 @router.get("/returns", response_class=HTMLResponse)
@@ -160,18 +235,12 @@ async def privacy_page(
 async def returns_page(
     request: Request,
     phone: CurrentUserDep,
+    directus: DirectusClientDep,
 ) -> HTMLResponse:
-    """Render Return Policy trust page."""
-    response = templates.TemplateResponse(
-        request=request,
-        name="returns.html",
-        context={
-            "phone": phone,
-            "masked": mask_phone(phone) if phone is not None else None,
-        },
+    """Render Return Policy trust page (CMS text, static fallback)."""
+    return await _render_legal_page(
+        request, phone, directus, "returns", "returns.html"
     )
-    response.headers["Cache-Control"] = "public, max-age=3600"
-    return response
 
 
 @router.get("/contact", response_class=HTMLResponse)
@@ -179,16 +248,47 @@ async def returns_page(
 async def contact_page(
     request: Request,
     phone: CurrentUserDep,
+    directus: DirectusClientDep,
 ) -> HTMLResponse:
-    """Render Contact Us trust page."""
-    response = templates.TemplateResponse(
-        request=request,
-        name="contact.html",
-        context={
-            "phone": phone,
-            "masked": mask_phone(phone) if phone is not None else None,
-        },
+    """Render Contact Us trust page (CMS text, static fallback)."""
+    return await _render_legal_page(
+        request, phone, directus, "contact", "contact.html"
     )
+
+
+@router.get("/site/logo", response_class=Response)
+async def site_logo(directus: DirectusClientDep) -> Response:
+    """Serve the CMS logo (site_settings.logo) through the shop itself.
+
+    The browser never needs the Directus host: the shop fetches the
+    file server-side and serves its bytes. No logo configured (or the
+    file is gone) → 404, and the header falls back to the text brand.
+    """
+    site = await directus.get_site_content()
+    logo = site["settings"].get("logo")
+    if not logo:
+        raise HTTPException(status_code=404, detail="no logo configured")
+    asset = await directus.get_asset(logo)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="logo not found")
+    content, content_type = asset
+    response = Response(content=content, media_type=content_type)
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@router.get("/site/badge/{file_id}", response_class=Response)
+async def site_badge(file_id: str, directus: DirectusClientDep) -> Response:
+    """Serve one CMS seal image (certification_badges.image) via the shop.
+
+    Same proxy idea as /site/logo: the file id comes from the CMS data,
+    and get_asset refuses anything that is not a plain id.
+    """
+    asset = await directus.get_asset(file_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="badge image not found")
+    content, content_type = asset
+    response = Response(content=content, media_type=content_type)
     response.headers["Cache-Control"] = "public, max-age=3600"
     return response
 
@@ -217,6 +317,7 @@ def sitemap_xml() -> Response:
     urls = [
         ("/", "1.0", "daily"),
         ("/products", "0.9", "daily"),
+        ("/categories", "0.8", "daily"),
         ("/cart", "0.5", "weekly"),
         ("/terms", "0.3", "monthly"),
         ("/privacy", "0.3", "monthly"),
@@ -291,6 +392,7 @@ __all__ = [
     "CATEGORIES",
     "SAMPLE_PRODUCTS",
     "cart_page",
+    "categories_page",
     "checkout_page",
     "contact_page",
     "favicon",
@@ -300,6 +402,8 @@ __all__ = [
     "robots_txt",
     "router",
     "service_worker",
+    "site_badge",
+    "site_logo",
     "sitemap_xml",
     "terms_page",
     "ucp_well_known",
