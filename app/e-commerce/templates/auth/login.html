@@ -7,7 +7,26 @@
 <h1 class="text-2xl font-bold mb-2">ورود به {{ site.settings.site_title }}</h1>
 <p class="text-neutral-400 mb-6">با شماره موبایل وارد شو؛ بدون رمز عبور، مثل دیجی‌کالا.</p>
 
+{% if google_notice %}
+<p class="theme-bg-card theme-border border rounded-xl px-4 py-3 text-sm theme-text-main mb-4">یک قدم مانده: شماره موبایلت را وارد کن تا حساب گوگلت به آن وصل شود. بعد از این، با گوگل هم می‌توانی وارد شوی.</p>
+{% endif %}
+{% if google_error %}
+<p class="theme-bg-card theme-border border rounded-xl px-4 py-3 text-sm theme-text-main mb-4">ورود با گوگل انجام نشد؛ دوباره تلاش کن یا با شماره موبایل وارد شو.</p>
+{% endif %}
+
 <div id="auth-box">
   {% include "auth/_phone_form.html" %}
 </div>
+
+{% if google_enabled %}
+<div class="flex items-center gap-3 my-5">
+  <span class="flex-1 border-t theme-border"></span>
+  <span class="text-xs theme-text-muted">یا</span>
+  <span class="flex-1 border-t theme-border"></span>
+</div>
+<a href="/auth/google"
+   class="theme-btn-secondary font-bold rounded-xl px-4 py-2.5 text-sm min-h-[44px] flex items-center justify-center gap-2">
+  ورود با گوگل
+</a>
+{% endif %}
 {% endblock %}

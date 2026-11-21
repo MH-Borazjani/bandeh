@@ -68,6 +68,28 @@ def _get_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(_SECRET_KEY, salt="bandeh-session")
 
 
+# --- OAuth helpers ----------------------------------------------------------
+# Google login reuses the same signing secret with its own salts: the
+# ``state`` value stops CSRF on the Google redirect, and the pending
+# Google identity (sub + email) waits at most 10 minutes for the phone
+# + OTP step that links it to a shop user. Both are signed, so the
+# browser cannot forge or change them.
+def sign_oauth_data(data: dict[str, str], salt: str) -> str:
+    """Sign a small OAuth payload (state or pending identity)."""
+    serializer = URLSafeTimedSerializer(_SECRET_KEY, salt=salt)
+    return serializer.dumps(data)
+
+
+def read_oauth_data(token: str, salt: str, max_age: int) -> dict[str, str] | None:
+    """Verify a signed OAuth payload, or None when bad/expired."""
+    serializer = URLSafeTimedSerializer(_SECRET_KEY, salt=salt)
+    try:
+        data = serializer.loads(token, max_age=max_age)
+    except (BadSignature, SignatureExpired):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def create_session(
     response: Response,
     phone: str,

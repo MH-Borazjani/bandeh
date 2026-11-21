@@ -77,6 +77,19 @@ class User(Base, TimestampMixin):
         String(100),
         nullable=True,
     )
+    # Google OAuth login (next to phone OTP): Google's stable user id,
+    # unique when set; the email Google verified for that account.
+    # Phone stays required — a Google login without a phone asks for
+    # the phone + OTP once, then links it to this account.
+    google_sub: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=True,
+    )
+    google_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
     last_login_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
