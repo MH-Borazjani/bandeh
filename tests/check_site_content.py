@@ -140,10 +140,10 @@ CMS_GUIDE_SECTIONS = [
     {
         "slug": "gemini",
         "ai_name": "Gemini",
-        "title": "Gemini — در اپ اتصال ندارد",
-        "support_note": "در اپ پشتیبانی نمی‌کند",
-        "body": "<p>فقط Gemini CLI.</p>",
-        "supported": False,
+        "title": "Gemini — در اپ وب، با دکمه Custom وصل می‌شود",
+        "support_note": "پشتیبانی می‌کند — در اپ وب با دکمه Custom",
+        "body": "<p>به <b>Customize</b> بعد <b>Connectors</b> و دکمه <b>+ Custom</b> بروید و لینک را در <b>MCP Server URL</b> بچسبانید.</p>",
+        "supported": True,
         "sort": 2,
         "is_active": True,
     },
@@ -448,8 +448,9 @@ async def main_async() -> None:
     # --- 13. MCP + Instagram promo boxes + /mcp-guide ---
     # Landing: MCP box first (above the hero), Instagram second; both
     # from site_settings (the mock has no MCP fields, so the fallback
-    # test values show). Copy button carries the MCP link; Claude and
-    # ChatGPT open in a new tab; the guide link goes to /mcp-guide.
+    # test values show). Copy button carries the MCP link; ChatGPT and
+    # Gemini open in a new tab (the owner's pick); the guide link goes
+    # to /mcp-guide. ChatGPT opens straight at chatgpt.com/plugins.
     r = client.get("/")
     assert r.status_code == 200, r.status_code
     mcp_pos = r.text.index("هوش مصنوعی‌ات را به فروشگاهمون وصل کن")
@@ -457,23 +458,32 @@ async def main_async() -> None:
     hero_pos = r.text.index("خانه‌ی مدرن، زندگی بهتر")
     assert mcp_pos < insta_pos < hero_pos, "MCP box first, Instagram second, both above the hero"
     assert 'data-copy-text="https://genabay.ir/mcp"' in r.text
-    assert 'href="https://claude.ai"' in r.text and 'target="_blank"' in r.text
-    assert 'href="https://chatgpt.com"' in r.text
+    assert 'href="https://chatgpt.com/plugins"' in r.text and 'target="_blank"' in r.text
+    assert 'href="https://gemini.google.com/customize/connectors"' in r.text
+    assert 'href="https://claude.ai"' not in r.text, "the box buttons are ChatGPT + Gemini, not Claude"
     assert 'href="/mcp-guide"' in r.text
     assert 'href="https://instagram.com/genabay"' in r.text
     # Guide page: intro + checklist marks + TOC + sections + back-to-top.
     r = client.get("/mcp-guide")
     assert r.status_code == 200, r.status_code
     assert "هوش مصنوعی‌ات را به فروشگاه وصل کن" in r.text
-    assert "✓" in r.text and "✗" in r.text, "checklist must show supported and unsupported"
+    # All five AIs are supported now (Gemini was fixed), so the checklist
+    # shows only ✓; the ✗ branch stays in the template for a future
+    # unsupported AI.
+    assert "✓" in r.text, "checklist must show supported marks"
     assert 'href="#claude"' in r.text and 'href="#gemini"' in r.text
     assert 'id="claude"' in r.text and "Customize" in r.text
     assert 'id="gemini"' in r.text
     assert "بازگشت به بالا" in r.text
     # Directus down: the guide still renders from the fallback sections.
+    # (Rebuild the dead client first: app.state.http_client is global,
+    # and the mock client above overwrote the failing transport.)
+    dead = _make_dead_client()
     r = dead.get("/mcp-guide")
     assert r.status_code == 200, r.status_code
     assert "Claude — بهترین گزینه" in r.text
+    assert "Gemini — در اپ وب، با دکمه Custom وصل می‌شود" in r.text
+    assert "chatgpt.com/plugins" in r.text
     print("13. MCP + Instagram boxes above hero; /mcp-guide with checklist, TOC, back-to-top")
 
     print("ALL SITE-CONTENT CHECKS PASSED")

@@ -123,7 +123,7 @@ class SiteSettings(TypedDict):
     mcp_text: str
     mcp_url: str
     mcp_chatgpt_url: str
-    mcp_claude_url: str
+    mcp_gemini_url: str
     mcp_guide_intro: str
     instagram_title: str
     instagram_text: str
@@ -268,8 +268,8 @@ FALLBACK_SITE_CONTENT: SiteContent = {
             "می‌کند، قیمت و موجودی را می‌گوید و مقایسه می‌کند."
         ),
         "mcp_url": "https://genabay.ir/mcp",
-        "mcp_chatgpt_url": "https://chatgpt.com",
-        "mcp_claude_url": "https://claude.ai",
+        "mcp_chatgpt_url": "https://chatgpt.com/plugins",
+        "mcp_gemini_url": "https://gemini.google.com/customize/connectors",
         "mcp_guide_intro": (
             "وصل کردن هوش مصنوعی به فروشگاه یعنی دیگر سرچ نمی‌کنی؛ می‌پرسی. هوش مصنوعی به‌جای تو در"
             "فروشگاه می‌گردد، قیمت و موجودی را"
@@ -334,8 +334,9 @@ FALLBACK_GUIDE_SECTIONS: list[GuideSection] = [
             "استفاده کامل MCP برای Business و Enterprise و Edu است و Pro فقط"
             "خواندن (جستجو، قیمت، موجودی). پس اگر روی حساب رایگان دکمه"
             "Create کار نکرد یا فقط خواندن جواب داد، همان محدودیت است.</p>"
-            "<ol><li>در وب چت‌جی‌پی‌تی به <b>Plugins</b>"
-            "بروید.</li><li>روی دکمه <b>+</b> بزنید، بعد <b>Add custom MCP server</b>.</li><li>نام"
+            "<ol><li>مستقیم به <b>chatgpt.com/plugins</b>"
+            "بروید (یا در وب چت‌جی‌پی‌تی به <b>Plugins</b>).</li>"
+            "<li>روی دکمه <b>+</b> بزنید، بعد <b>Add custom MCP server</b>.</li><li>نام"
             "بنویسید و لینک فروشگاه را در قسمت <b>Connection</b> بچسبانید.</li><li>تیک <b>I"
             "understand and want to continue</b>"
             "را بزنید، بعد <b>Create as a plugin</b>.</li><li>در"
@@ -368,20 +369,27 @@ FALLBACK_GUIDE_SECTIONS: list[GuideSection] = [
     {
         "slug": "gemini",
         "ai_name": "Gemini",
-        "title": "Gemini — در اپ موبایل و وب، اتصال شخصی ندارد",
-        "support_note": "در اپ پشتیبانی نمی‌کند — فقط Gemini CLI با ترمینال و فایل تنظیمات",
+        "title": "Gemini — در اپ وب، با دکمه Custom وصل می‌شود",
+        "support_note": "پشتیبانی می‌کند — در اپ وب با دکمه Custom؛ فقط حساب شخصی گوگل",
         "body": (
-            "<p>در مستندات رسمی تا آبان ۱۴۰۵ هیچ راهی برای اضافه کردن سرور MCP شخصی در اپ جمنای (وب"
-            "یا موبایل) پیدا نشد. فقط <b>Gemini CLI</b> این کار را می‌کند و آن هم ابزار"
-            "توسعه‌دهنده‌هاست: ترمینال و فایل"
-            "تنظیمات لازم دارد.</p><p>اگر برنامه‌نویس هستید، در فایل"
-            "تنظیمات Gemini CLI این متن را"
-            "بگذارید:</p><pre>{\n  \"mcpServers\": {\n    \"shop\": {\n"
-            "\"httpUrl\": \"https://genabay.ir/mcp\"\n    }\n  }\n}</pre><p>دقت کنید: در Gemini CLI"
-            "فیلد درست <b>httpUrl</b> است، نه <b>url</b>. اگر روزی جمنای در اپ خودش این امکان را"
-            "اضافه کرد، این بخش به‌روز می‌شود.</p>"
+            "<p>اپ وب جمنای هم سرور MCP شخصی می‌پذیرد (با اسکرین‌شات تایید شده):</p>"
+            "<ol><li>به <b>gemini.google.com</b> بروید و وارد حساب گوگل شوید.</li>"
+            "<li>در منوی کناری روی <b>Customize</b> بزنید، بعد بالای صفحه <b>Connectors</b>.</li>"
+            "<li>روی دکمه <b>+ Custom</b> بزنید؛ پنجره"
+            " <b>Connect to an MCP server</b> باز می‌شود.</li>"
+            "<li>لینک فروشگاه را در قسمت <b>MCP Server URL</b> بچسبانید"
+            " (باید با https:// شروع شود)،"
+            " بعد <b>Next</b>.</li></ol>"
+            "<p>شرط‌های سند گوگل: حساب شخصی گوگل (نه حساب کاری یا مدرسه)،"
+            " بالای ۱۸ سال، History روشن و زبان انگلیسی. سند گوگل درباره رایگان یا Pro بودن"
+            " چیزی نمی‌گوید.</p><p>اگر برنامه‌نویس هستید، <b>Gemini CLI</b> هم این کار را می‌کند"
+            " (ترمینال و فایل تنظیمات): در فایل تنظیمات این متن را"
+            " بگذارید:</p><pre>{\n  \"mcpServers\":"
+            " {\n    \"shop\": {\n      \"httpUrl\":"
+            " \"https://genabay.ir/mcp\"\n    }\n  }\n}</pre><p>دقت"
+            " کنید: در Gemini CLI فیلد درست <b>httpUrl</b> است، نه <b>url</b>.</p>"
         ),
-        "supported": False,
+        "supported": True,
         "sort": 4,
     },
     {
@@ -781,7 +789,7 @@ class DirectusClient:
                 "mcp_text",
                 "mcp_url",
                 "mcp_chatgpt_url",
-                "mcp_claude_url",
+                "mcp_gemini_url",
                 "mcp_guide_intro",
                 "instagram_title",
                 "instagram_text",
@@ -816,7 +824,7 @@ class DirectusClient:
                 "mcp_text",
                 "mcp_url",
                 "mcp_chatgpt_url",
-                "mcp_claude_url",
+                "mcp_gemini_url",
                 "mcp_guide_intro",
                 "instagram_title",
                 "instagram_text",
