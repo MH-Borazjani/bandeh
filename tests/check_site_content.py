@@ -126,6 +126,29 @@ CMS_CERT_BADGES = [
     {"name": "اینماد تست", "status_text": "فعال", "image": None, "link": None, "sort": 1, "is_active": True},
 ]
 
+CMS_GUIDE_SECTIONS = [
+    {
+        "slug": "claude",
+        "ai_name": "Claude",
+        "title": "Claude — بهترین گزینه",
+        "support_note": "پشتیبانی می‌کند — رایگان",
+        "body": "<p>به <b>Customize</b> و بعد <b>Connectors</b> بروید.</p>",
+        "supported": True,
+        "sort": 1,
+        "is_active": True,
+    },
+    {
+        "slug": "gemini",
+        "ai_name": "Gemini",
+        "title": "Gemini — در اپ اتصال ندارد",
+        "support_note": "در اپ پشتیبانی نمی‌کند",
+        "body": "<p>فقط Gemini CLI.</p>",
+        "supported": False,
+        "sort": 2,
+        "is_active": True,
+    },
+]
+
 LOGO_BYTES = b"\x89PNG\r\n\x1a\nfake-png-bytes"
 
 
@@ -155,6 +178,7 @@ def _mock_handler(settings: dict, logo_bytes: bytes | None):
         "trust_badges": CMS_TRUST_BADGES,
         "legal_pages": CMS_LEGAL_PAGES,
         "certification_badges": CMS_CERT_BADGES,
+        "mcp_guide_sections": CMS_GUIDE_SECTIONS,
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -420,6 +444,37 @@ async def main_async() -> None:
     assert "یخچال دو درب" in r.text, "live search + right category must find the fridge"
     assert "category=" in r.text, "see-all link must carry the category"
     print("12. pre-search filters: header chips + live search respects them")
+
+    # --- 13. MCP + Instagram promo boxes + /mcp-guide ---
+    # Landing: MCP box first (above the hero), Instagram second; both
+    # from site_settings (the mock has no MCP fields, so the fallback
+    # test values show). Copy button carries the MCP link; Claude and
+    # ChatGPT open in a new tab; the guide link goes to /mcp-guide.
+    r = client.get("/")
+    assert r.status_code == 200, r.status_code
+    mcp_pos = r.text.index("هوش مصنوعی‌ات را به فروشگاهمون وصل کن")
+    insta_pos = r.text.index("ما را در اینستاگرام دنبال کنید")
+    hero_pos = r.text.index("خانه‌ی مدرن، زندگی بهتر")
+    assert mcp_pos < insta_pos < hero_pos, "MCP box first, Instagram second, both above the hero"
+    assert 'data-copy-text="https://genabay.ir/mcp"' in r.text
+    assert 'href="https://claude.ai"' in r.text and 'target="_blank"' in r.text
+    assert 'href="https://chatgpt.com"' in r.text
+    assert 'href="/mcp-guide"' in r.text
+    assert 'href="https://instagram.com/genabay"' in r.text
+    # Guide page: intro + checklist marks + TOC + sections + back-to-top.
+    r = client.get("/mcp-guide")
+    assert r.status_code == 200, r.status_code
+    assert "هوش مصنوعی‌ات را به فروشگاه وصل کن" in r.text
+    assert "✓" in r.text and "✗" in r.text, "checklist must show supported and unsupported"
+    assert 'href="#claude"' in r.text and 'href="#gemini"' in r.text
+    assert 'id="claude"' in r.text and "Customize" in r.text
+    assert 'id="gemini"' in r.text
+    assert "بازگشت به بالا" in r.text
+    # Directus down: the guide still renders from the fallback sections.
+    r = dead.get("/mcp-guide")
+    assert r.status_code == 200, r.status_code
+    assert "Claude — بهترین گزینه" in r.text
+    print("13. MCP + Instagram boxes above hero; /mcp-guide with checklist, TOC, back-to-top")
 
     print("ALL SITE-CONTENT CHECKS PASSED")
 

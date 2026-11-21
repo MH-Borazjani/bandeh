@@ -116,6 +116,18 @@ class SiteSettings(TypedDict):
     # True when this site also sells second-hand goods. False hides the
     # whole used flow: condition labels, stars and the search filter.
     sells_used: bool
+    # The two promo boxes above the hero on the landing page, and the
+    # intro of the MCP guide page. All editable in Directus; the links
+    # are TEST values until the MCP server is deployed on the server.
+    mcp_title: str
+    mcp_text: str
+    mcp_url: str
+    mcp_chatgpt_url: str
+    mcp_claude_url: str
+    mcp_guide_intro: str
+    instagram_title: str
+    instagram_text: str
+    instagram_url: str
 
 
 class TrustBadge(TypedDict):
@@ -143,6 +155,22 @@ class CertBadge(TypedDict):
     # Directus file id of the seal image, or None (shield icon instead).
     image: str | None
     link: str | None
+
+
+class GuideSection(TypedDict):
+    """One app section of the MCP guide (from ``mcp_guide_sections``).
+
+    Steps stay in Persian; only the button/menu names the visitor must
+    tap are in English, exactly as they appear in the app.
+    """
+
+    slug: str
+    ai_name: str
+    title: str
+    support_note: str
+    body: str
+    supported: bool
+    sort: int
 
 
 class SiteContent(TypedDict):
@@ -233,6 +261,24 @@ FALLBACK_SITE_CONTENT: SiteContent = {
         "hero_subtitle": "وسایل ضروری مدرن برای هر لحظه از روز",
         "logo": None,
         "sells_used": False,
+        "mcp_title": "هوش مصنوعی‌ات را به فروشگاهمون وصل کن؛ خرید با یک سوال",
+        "mcp_text": (
+            "دیگر لازم نیست دنبال کالا بگردی. به"
+            "هوش مصنوعی‌ات بگو چی می‌خواهی؛ خودش در فروشگاه پیدا"
+            "می‌کند، قیمت و موجودی را می‌گوید و مقایسه می‌کند."
+        ),
+        "mcp_url": "https://genabay.ir/mcp",
+        "mcp_chatgpt_url": "https://chatgpt.com",
+        "mcp_claude_url": "https://claude.ai",
+        "mcp_guide_intro": (
+            "وصل کردن هوش مصنوعی به فروشگاه یعنی دیگر سرچ نمی‌کنی؛ می‌پرسی. هوش مصنوعی به‌جای تو در"
+            "فروشگاه می‌گردد، قیمت و موجودی را"
+            "می‌گوید و بهترین گزینه را پیشنهاد می‌کند. پول و سفارش"
+            "همیشه با تایید خودت انجام می‌شود."
+        ),
+        "instagram_title": "ما را در اینستاگرام دنبال کنید",
+        "instagram_text": "تخفیف‌ها، کالاهای جدید و ویدیوهای فروشگاه را اول در اینستاگرام می‌بینید.",
+        "instagram_url": "https://instagram.com/genabay",
     },
     "trust_badges": [
         {"title": "ضمانت اصالت", "text": "کالا با ضمانت‌نامه‌ی معتبر", "icon": "✦"},
@@ -252,6 +298,109 @@ FALLBACK_SITE_CONTENT: SiteContent = {
     ],
     "categories": list(FALLBACK_CATEGORIES),
 }
+
+# Fallback MCP guide sections, used ONLY when Directus cannot answer.
+# Same steps the guide shows from the CMS; verified against the
+# official docs on 2026-11-21. The CMS seed holds the fuller text.
+FALLBACK_GUIDE_SECTIONS: list[GuideSection] = [
+    {
+        "slug": "claude",
+        "ai_name": "Claude",
+        "title": "Claude — بهترین گزینه؛ رایگان و فقط با لینک",
+        "support_note": "پشتیبانی می‌کند — حساب رایگان هم کافی است (۱ اتصال)",
+        "body": (
+            "<p>کلود ساده‌ترین راه است: فقط لینک را می‌چسبانید، بدون کد و بدون فایل.</p><ol><li>به"
+            "آدرس <b>claude.ai</b> بروید و وارد حساب شوید.</li><li>روی <b>Customize</b> بزنید، بعد"
+            "<b>Connectors</b>.</li><li>روی <b>+ Add</b> بزنید، بعد <b>Add custom"
+            "connector</b>.</li><li>یک نام بنویسید و لینک فروشگاه را در قسمت آدرس بچسبانید، بعد"
+            "<b>Continue</b> و <b>Add</b>.</li><li>در هر گفتگو با دکمه <b>+</b> پایین صفحه، از"
+            "<b>Connectors</b> آن را روشن کنید.</li></ol><p>فقط لینک لازم است؛ فایل تنظیمات"
+            "نمی‌خواهد. سرور باید آدرس عمومی و امن (https) باشد.</p>"
+        ),
+        "supported": True,
+        "sort": 1,
+    },
+    {
+        "slug": "chatgpt",
+        "ai_name": "ChatGPT",
+        "title": "ChatGPT — فقط برای طرح‌های کاری؛ فقط در وب",
+        "support_note": (
+            "پشتیبانی می‌کند — کامل فقط در Business و Enterprise و Edu؛ نسخه Pro فقط"
+            "خواندن"
+        ),
+        "body": (
+            "<p>اتصال کامل به MCP در چت‌جی‌پی‌تی"
+            "فقط برای مشتری‌های کاری (Business ،Enterprise ،Edu)"
+            "است. کاربران Pro فقط می‌توانند بخوانند (جستجو، قیمت، موجودی). نسخه رایگان و Plus در"
+            "مستندات رسمی پشتیبانی نشده‌اند.</p><ol><li>در وب چت‌جی‌پی‌تی به <b>Plugins</b>"
+            "بروید.</li><li>روی دکمه <b>+</b> بزنید، بعد <b>Add custom MCP server</b>.</li><li>نام"
+            "بنویسید و لینک فروشگاه را در قسمت <b>Connection</b> بچسبانید.</li><li>تیک <b>I"
+            "understand and want to continue</b>"
+            "را بزنید، بعد <b>Create as a plugin</b>.</li><li>در"
+            "چت با <b>@</b> افزونه را انتخاب کنید.</li></ol><p>فقط در وب کار می‌کند، نه در موبایل."
+            "فقط مدیر فضای کاری می‌تواند آن را بسازد.</p>"
+        ),
+        "supported": True,
+        "sort": 2,
+    },
+    {
+        "slug": "codex",
+        "ai_name": "Codex",
+        "title": "Codex — رایگان؛ ولی ابزار برنامه‌نویس‌هاست",
+        "support_note": "پشتیبانی می‌کند — در طرح‌های ChatGPT از جمله رایگان؛ فقط در اپ دسکتاپ",
+        "body": (
+            "<p>کودکس در اپ دسکتاپ خودش سرور MCP"
+            "می‌پذیرد، ولی ابزار برنامه‌نویسی است؛ برای خرید کردن"
+            "ساخته نشده است.</p><ol><li>اپ دسکتاپ Codex را باز کنید.</li><li>به <b>Settings</b>"
+            "بروید، بعد <b>MCP servers</b>.</li><li>روی"
+            "<b>Add server</b> بزنید.</li><li>نام بنویسید،"
+            "گزینه <b>Streamable HTTP</b> را انتخاب کنید و لینک فروشگاه را بچسبانید.</li><li>ذخیره"
+            "کنید، بعد <b>Restart</b>"
+            "بزنید.</li></ol><p>برای کسانی که کد می‌نویسند، تنظیمات با فایل"
+            "هم ممکن است (در مستندات، فایل"
+            "<b>config.toml</b>)؛ ولی برای خرید، کلود ساده‌تر است.</p>"
+        ),
+        "supported": True,
+        "sort": 3,
+    },
+    {
+        "slug": "gemini",
+        "ai_name": "Gemini",
+        "title": "Gemini — در اپ موبایل و وب، اتصال شخصی ندارد",
+        "support_note": "در اپ پشتیبانی نمی‌کند — فقط Gemini CLI با ترمینال و فایل تنظیمات",
+        "body": (
+            "<p>در مستندات رسمی تا آبان ۱۴۰۵ هیچ راهی برای اضافه کردن سرور MCP شخصی در اپ جمنای (وب"
+            "یا موبایل) پیدا نشد. فقط <b>Gemini CLI</b> این کار را می‌کند و آن هم ابزار"
+            "توسعه‌دهنده‌هاست: ترمینال و فایل"
+            "تنظیمات لازم دارد.</p><p>اگر برنامه‌نویس هستید، در فایل"
+            "تنظیمات Gemini CLI این متن را"
+            "بگذارید:</p><pre>{\n  \"mcpServers\": {\n    \"shop\": {\n"
+            "\"httpUrl\": \"https://genabay.ir/mcp\"\n    }\n  }\n}</pre><p>دقت کنید: در Gemini CLI"
+            "فیلد درست <b>httpUrl</b> است، نه <b>url</b>. اگر روزی جمنای در اپ خودش این امکان را"
+            "اضافه کرد، این بخش به‌روز می‌شود.</p>"
+        ),
+        "supported": False,
+        "sort": 4,
+    },
+    {
+        "slug": "antigravity",
+        "ai_name": "Antigravity",
+        "title": "Antigravity — پشتیبانی می‌کند؛ ولی با ویرایش فایل",
+        "support_note": "پشتیبانی می‌کند — طرح رایگان هم دارد؛ ولی اتصال شخصی فقط با فایل تنظیمات",
+        "body": (
+            "<p>در اپ Antigravity دکمه <b>Add MCP Server</b> فقط سرورهای آماده فروشگاه خودش را نصب"
+            "می‌کند. برای سرور شخصی فروشگاه ما باید فایل تنظیمات را ویرایش کنید:</p><pre>{\n "
+            "\"mcpServers\": {\n    \"shop\": {\n"
+            "     \"serverUrl\": \"https://genabay.ir/mcp/\"\n  "
+            "}\n  }\n}</pre><p>مسیر فایل را از"
+            "بخش <b>Customizations</b> و گزینه <b>Copy Config File"
+            "Path</b> پیدا کنید. دقت کنید: در Antigravity فیلد درست <b>serverUrl</b> است؛ فیلد"
+            "<b>httpUrl</b> اینجا کار نمی‌کند (برعکس Gemini CLI).</p>"
+        ),
+        "supported": True,
+        "sort": 5,
+    },
+]
 
 # Persian digits and the Persian thousands separator, for prices.
 _FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -626,6 +775,15 @@ class DirectusClient:
                 "hero_subtitle",
                 "logo",
                 "sells_used",
+                "mcp_title",
+                "mcp_text",
+                "mcp_url",
+                "mcp_chatgpt_url",
+                "mcp_claude_url",
+                "mcp_guide_intro",
+                "instagram_title",
+                "instagram_text",
+                "instagram_url",
             ],
             active_only=False,
         )
@@ -649,6 +807,22 @@ class DirectusClient:
             settings["logo"] = logo if isinstance(logo, str) else None
             sells_used = row.get("sells_used")
             settings["sells_used"] = sells_used is True
+            # Promo boxes + guide intro: a non-empty CMS value wins,
+            # otherwise the hardcoded fallback stays.
+            for key in (
+                "mcp_title",
+                "mcp_text",
+                "mcp_url",
+                "mcp_chatgpt_url",
+                "mcp_claude_url",
+                "mcp_guide_intro",
+                "instagram_title",
+                "instagram_text",
+                "instagram_url",
+            ):
+                value = row.get(key)
+                if isinstance(value, str) and value.strip():
+                    settings[key] = value.strip()
 
         badge_rows = await self._get_items(
             "trust_badges", ["title", "text", "icon", "sort"]
@@ -777,6 +951,53 @@ class DirectusClient:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to fetch legal page %s: %s", slug, exc)
             return None
+
+    async def get_mcp_guide_sections(self) -> list[GuideSection]:
+        """All active MCP guide sections, in CMS sort order.
+
+        Any failure — Directus down, collection missing — returns the
+        hardcoded fallback sections, so the guide page never goes blank.
+        """
+        try:
+            rows = await self._get_items(
+                "mcp_guide_sections",
+                ["slug", "ai_name", "title", "support_note", "body", "supported", "sort"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "MCP guide sections unavailable, using fallback: %s", exc
+            )
+            return copy.deepcopy(FALLBACK_GUIDE_SECTIONS)
+        sections: list[GuideSection] = []
+        for row in sorted(rows, key=_sort_value):
+            slug = row.get("slug")
+            title = row.get("title")
+            if not isinstance(slug, str) or not slug.strip():
+                continue
+            if not isinstance(title, str) or not title.strip():
+                continue
+            ai_name = row.get("ai_name")
+            body = row.get("body")
+            note = row.get("support_note")
+            raw_sort = row.get("sort")
+            sections.append(
+                {
+                    "slug": slug.strip(),
+                    "ai_name": ai_name if isinstance(ai_name, str) else slug.strip(),
+                    "title": title.strip(),
+                    "support_note": note if isinstance(note, str) else "",
+                    "body": body if isinstance(body, str) else "",
+                    "supported": row.get("supported") is True,
+                    "sort": (
+                        raw_sort
+                        if isinstance(raw_sort, int)
+                        and not isinstance(raw_sort, bool)
+                        else 0
+                    ),
+                }
+            )
+        sections.sort(key=lambda s: s["sort"])
+        return sections or copy.deepcopy(FALLBACK_GUIDE_SECTIONS)
 
     async def get_asset(self, file_id: str) -> tuple[bytes, str] | None:
         """Fetch one Directus file's bytes + content type, or None.

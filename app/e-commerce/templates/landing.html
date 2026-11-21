@@ -11,6 +11,46 @@
      3. Best seller rows: multi-column grid on desktop.
      4. Trust badges: 2-col on mobile, 4-col on desktop. -->
 
+<!-- 0. PROMO BOXES — above the hero, MCP first, Instagram second.
+     Every text and link comes from Directus (site_settings); the MCP
+     link is a TEST value until the real MCP server is deployed. -->
+<section class="mb-6 lg:mb-8 space-y-3" aria-label="هوش مصنوعی و اینستاگرام">
+  <div class="theme-bg-card theme-border border rounded-3xl p-5 sm:p-6 lg:p-7">
+    <h2 class="text-lg sm:text-xl lg:text-2xl font-black theme-text-main leading-snug mb-2">{{ site.settings.mcp_title }}</h2>
+    <p class="text-xs sm:text-sm theme-text-muted leading-relaxed mb-4">{{ site.settings.mcp_text }}</p>
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button"
+              data-copy-text="{{ site.settings.mcp_url }}"
+              class="theme-btn-accent font-bold rounded-xl px-4 py-2.5 text-xs sm:text-sm min-h-[44px]">
+        کپی لینک اتصال
+      </button>
+      <a href="{{ site.settings.mcp_claude_url }}" target="_blank" rel="noopener"
+         class="theme-btn-secondary font-bold rounded-xl px-4 py-2.5 text-xs sm:text-sm min-h-[44px] inline-flex items-center">
+        باز کردن Claude
+      </a>
+      <a href="{{ site.settings.mcp_chatgpt_url }}" target="_blank" rel="noopener"
+         class="theme-btn-secondary font-bold rounded-xl px-4 py-2.5 text-xs sm:text-sm min-h-[44px] inline-flex items-center">
+        باز کردن ChatGPT
+      </a>
+      <a href="/mcp-guide"
+         hx-get="/mcp-guide"
+         hx-target="main"
+         hx-push-url="true"
+         class="text-xs sm:text-sm font-semibold theme-accent hover:underline px-1 py-2">
+        بیشتر بدانید — نحوه وصل کردن ←
+      </a>
+    </div>
+  </div>
+  <div class="theme-bg-card theme-border border rounded-3xl p-5 sm:p-6 lg:p-7">
+    <h2 class="text-lg sm:text-xl lg:text-2xl font-black theme-text-main leading-snug mb-2">{{ site.settings.instagram_title }}</h2>
+    <p class="text-xs sm:text-sm theme-text-muted leading-relaxed mb-4">{{ site.settings.instagram_text }}</p>
+    <a href="{{ site.settings.instagram_url }}" target="_blank" rel="noopener"
+       class="theme-btn-secondary font-bold rounded-xl px-4 py-2.5 text-xs sm:text-sm min-h-[44px] inline-flex items-center">
+      اینستاگرام ما
+    </a>
+  </div>
+</section>
+
 <!-- 1. HERO CARD -->
 <section class="mb-8 lg:mb-12" aria-label="پیشنهاد ویژه">
   <div class="theme-bg-card theme-border border rounded-3xl p-5 sm:p-6 lg:p-10 relative overflow-hidden shadow-2xl">

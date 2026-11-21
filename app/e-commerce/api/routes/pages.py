@@ -256,6 +256,32 @@ async def contact_page(
     )
 
 
+@router.get("/mcp-guide", response_class=HTMLResponse)
+async def mcp_guide_page(
+    request: Request,
+    phone: CurrentUserDep,
+    directus: DirectusClientDep,
+) -> HTMLResponse:
+    """MCP guide: how a normal person connects their AI to the shop.
+
+    Sections come from Directus (``mcp_guide_sections``), with a
+    hardcoded fallback when the CMS is down; the intro and the link
+    come from ``site_settings`` through the shared site content.
+    """
+    sections = await directus.get_mcp_guide_sections()
+    response = templates.TemplateResponse(
+        request=request,
+        name="mcp_guide.html",
+        context={
+            "phone": phone,
+            "masked": mask_phone(phone) if phone is not None else None,
+            "sections": sections,
+        },
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
 @router.get("/site/logo", response_class=Response)
 async def site_logo(directus: DirectusClientDep) -> Response:
     """Serve the CMS logo (site_settings.logo) through the shop itself.
@@ -318,6 +344,7 @@ def sitemap_xml() -> Response:
         ("/", "1.0", "daily"),
         ("/products", "0.9", "daily"),
         ("/categories", "0.8", "daily"),
+        ("/mcp-guide", "0.6", "monthly"),
         ("/cart", "0.5", "weekly"),
         ("/terms", "0.3", "monthly"),
         ("/privacy", "0.3", "monthly"),

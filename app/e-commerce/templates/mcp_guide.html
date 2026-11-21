@@ -1,0 +1,81 @@
+{% extends base_template | default("base.html") %}
+{% block title %}راهنمای وصل کردن هوش مصنوعی | {{ site.settings.site_title }}{% endblock %}
+
+{% block content %}
+<!-- MCP guide: how a normal person connects their AI to the shop.
+     Steps stay in Persian; only the button/menu names are in English,
+     exactly as they appear in each app. Sections come from Directus
+     (mcp_guide_sections); the intro and the link come from site_settings. -->
+<div id="top" class="mb-5">
+  <h1 class="text-xl sm:text-2xl lg:text-3xl font-black theme-text-main mb-2">هوش مصنوعی‌ات را به فروشگاه وصل کن</h1>
+  <p class="text-xs sm:text-sm theme-text-muted leading-relaxed">{{ site.settings.mcp_guide_intro }}</p>
+</div>
+
+<!-- The link itself, with a copy button -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <p class="text-xs sm:text-sm font-bold theme-text-main mb-2">لینک اتصال فروشگاه</p>
+  <div class="flex flex-wrap items-center gap-2">
+    <code class="theme-bg-card-subtle theme-border border rounded-xl px-3 py-2 text-xs theme-text-main break-all" dir="ltr">{{ site.settings.mcp_url }}</code>
+    <button type="button"
+            data-copy-text="{{ site.settings.mcp_url }}"
+            class="theme-btn-accent font-bold rounded-xl px-4 py-2 text-xs min-h-[36px]">
+      کپی لینک
+    </button>
+  </div>
+  <p class="text-[11px] sm:text-xs theme-text-muted leading-relaxed mt-3">این لینک همان چیزی است که در بیشتر برنامه‌ها می‌چسبانید. برای برنامه‌هایی که فایل تنظیمات می‌خواهند، متن آماده در بخش همان برنامه آمده است.</p>
+</div>
+
+<!-- What it does for you — and what it never does alone -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">به چه دردت می‌خورد؟</h2>
+  <ul class="text-xs sm:text-sm theme-text-muted leading-relaxed space-y-2 list-disc pr-5">
+    <li>به‌جای سرچ کردن، می‌پرسی: «ماشین لباسشویی ۸ کیلویی داری؟» — هوش مصنوعی خودش در فروشگاه می‌گردد و جواب می‌دهد.</li>
+    <li>قیمت و موجودی را از داده زنده فروشگاه می‌گوید، نه از حافظه خودش.</li>
+    <li>چند کالا را با هم مقایسه می‌کند و بهترین گزینه را پیشنهاد می‌دهد.</li>
+    <li>هوش مصنوعی به‌تنهایی پول نمی‌دهد و سفارش ثبت نمی‌کند؛ پول و سفارش همیشه با تایید خودت انجام می‌شود.</li>
+  </ul>
+</div>
+
+<!-- Support checklist: which AIs work now -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">کدام هوش مصنوعی‌ها وصل می‌شوند؟</h2>
+  <ul class="space-y-2.5">
+    {% for s in sections %}
+    <li class="flex items-start gap-2.5 text-xs sm:text-sm">
+      <span class="shrink-0 font-black {% if s.supported %}theme-accent{% else %}theme-text-muted{% endif %}">{% if s.supported %}✓{% else %}✗{% endif %}</span>
+      <span>
+        <a href="#{{ s.slug }}" class="font-bold theme-text-main hover:underline">{{ s.ai_name }}</a>
+        <span class="theme-text-muted"> — {{ s.support_note }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<!-- Table of contents -->
+<div class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">فهرست</h2>
+  <ol class="space-y-2 text-xs sm:text-sm list-decimal pr-5">
+    {% for s in sections %}
+    <li><a href="#{{ s.slug }}" class="theme-accent font-semibold hover:underline">{{ s.title }}</a></li>
+    {% endfor %}
+  </ol>
+</div>
+
+<!-- One section per AI -->
+{% for s in sections %}
+<section id="{{ s.slug }}" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">{{ s.title }}</h2>
+  <div class="text-xs sm:text-sm theme-text-muted leading-relaxed space-y-3 guide-body">
+    {{ s.body | safe }}
+  </div>
+  <div class="mt-4 pt-3 border-t theme-border">
+    <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>
+  </div>
+</section>
+{% endfor %}
+
+<div class="text-center">
+  <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>
+</div>
+{% endblock %}

@@ -345,10 +345,52 @@
     }
   }
 
+  /* Copy buttons (MCP link on the landing boxes and the guide page):
+     clipboard API first, a hidden textarea as fallback for older
+     browsers; the button briefly says it worked. */
+  function wireCopyButtons() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-copy-text]");
+      if (!btn) return;
+      var text = btn.getAttribute("data-copy-text") || "";
+      if (!text) return;
+      var done = function () {
+        var original = btn.textContent;
+        btn.textContent = "کپی شد ✓";
+        setTimeout(function () {
+          btn.textContent = original;
+        }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {
+          fallbackCopy(text, done);
+        });
+      } else {
+        fallbackCopy(text, done);
+      }
+    });
+    function fallbackCopy(text, done) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try {
+        document.execCommand("copy");
+        done();
+      } catch (err) {
+        /* Copy failed; the user can select the link text by hand. */
+      }
+      document.body.removeChild(area);
+    }
+  }
+
   function wirePage() {
     applyTheme(getTheme());
     updateCartBadge();
     wireSearchPanel();
+    wireCopyButtons();
     updateActiveNav();
     var toggle = document.getElementById("theme-toggle");
     if (toggle) {
