@@ -404,6 +404,21 @@ async def main_async() -> None:
         assert all(t.token_hash != token1 for t in tokens)
     print("13. only the token hash is stored, never the plaintext")
 
+    # --- 14. an unknown category name falls back to a text search ---
+    # AI apps use nicer category names than the shop's own (ChatGPT
+    # asked for "ماشین لباسشویی" while the shop's category is "شستشو"
+    # and returned nothing, so it told the person the shop has no
+    # products). The fallback searches the name as text instead.
+    found = mcp_client.call_tool(
+        "search_products", {"query": "", "category": "ماشین لباسشویی"}
+    )
+    assert [p["name"] for p in found] == ["ماشین لباسشویی ۸ کیلویی"], found
+    found = mcp_client.call_tool(
+        "search_products", {"query": "", "category": "یخچال و فریزر"}
+    )
+    assert [p["name"] for p in found] == ["یخچال دو درب"], found
+    print("14. unknown category name falls back to text search")
+
     mcp_server.set_session_factory_for_tests(None)
     client.__exit__(None, None, None)
     print("ALL MCP CHECKS PASSED")

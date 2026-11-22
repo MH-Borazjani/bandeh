@@ -262,6 +262,57 @@ async def search_products(
         # category search goes through Directus like the website does.
         directus = await _directus(ctx)
         rows = await directus.list_products_by_category(category, limit=50)
+        if not rows:
+            # The category name did not match a real category. AI apps
+            # often use a nicer name than the shop's own (e.g. "ماشین
+            # لباسشویی" for the shop's "شستشو" category), and an exact
+            # match then returns nothing — so the AI tells the person
+            # the shop has no products, even though it does. Fall back
+            # to a text search with the category name as the query, so
+            # the products still come back. Only fall back when the
+            # name is not a real category at all; a real but empty
+            # category correctly returns nothing.
+            categories = await directus.list_categories()
+            real_names = {
+                str(c.get("name", "")).strip().lower()
+                for c in categories
+                if c.get("name")
+            }
+            if category.strip().lower() not in real_names:
+                # Try the full category name as a search term first,
+                # then each word of it on its own. A multi-word name
+                # like "یخچال و فریزر" never matches a product name as
+                # one substring, but its word "یخچال" does match the
+                # fridge. Skip the word "و" (and) and one-letter words.
+                terms: list[str] = []
+                full = category.strip()
+                if query.strip():
+                    full = f"{query.strip()} {full}"
+                terms.append(full)
+                for word in category.strip().split():
+                    if len(word) > 1 and word != "و" and word not in terms:
+                        terms.append(word)
+                seen: set[str] = set()
+                out: list[dict] = []
+                async with _db_session() as db:
+                    for term in terms:
+                        found = await search_service.search_products(
+                            db,
+                            term,
+                            limit=max(1, min(limit, 50)),
+                            condition=condition,
+                        )
+                        for product in found:
+                            key = str(product.id)
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            out.append(_product_view(product))
+                            if len(out) >= max(1, min(limit, 50)):
+                                break
+                        if len(out) >= max(1, min(limit, 50)):
+                            break
+                return out
         needle = query.strip().lower()
         out: list[dict] = []
         for row in rows:
