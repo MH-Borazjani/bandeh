@@ -1,0 +1,49 @@
+# Copyright (C) 2026 Mohammadhossein Borazjani
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Build the shop image in GitHub Actions and push it to GHCR.
+# The server runs this image; no code ever goes to the server.
+# Run it by hand when a new image is needed:
+#   gh workflow run build-image.yml --ref muse
+# (or from the repo's Actions tab: "Build shop image" -> Run workflow).
+# Tags: latest + the commit sha. The laptop token cannot push to GHCR
+# (no write:packages scope), so the cloud build is the push path.
+name: Build shop image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          tags: |
+            ghcr.io/mh-borazjani/bandeh:latest
+            ghcr.io/mh-borazjani/bandeh:${{ github.sha }}
