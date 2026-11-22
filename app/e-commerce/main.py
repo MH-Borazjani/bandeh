@@ -45,7 +45,7 @@ from core.templates import templates
 from integrations.http_client import create_http_client
 from integrations.mcp_server import build_mcp_endpoint, create_mcp_server
 from services.auth_service import mask_phone
-from services.scheduler import ReservationCleanupTask
+from services.scheduler import FailedPaymentReminderTask, ReservationCleanupTask
 
 logger = logging.getLogger("bandeh.main")
 
@@ -58,11 +58,14 @@ class HealthCheckRead(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Create the shared httpx client and start the reservation cleanup timer."""
+    """Create the shared httpx client and start the background timers."""
     app.state.http_client = create_http_client()
     cleanup_task = ReservationCleanupTask(interval_seconds=60.0)
     app.state.cleanup_task = cleanup_task
     cleanup_task.start()
+    reminder_task = FailedPaymentReminderTask(interval_seconds=60.0)
+    app.state.reminder_task = reminder_task
+    reminder_task.start()
     # The MCP endpoint is registered below as a direct route, but a
     # custom lifespan replaces the router lifespan that would normally
     # start the SDK app — so start its session manager explicitly, or
@@ -81,6 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             route.app = fresh_endpoint
     async with fresh_sdk_app.router.lifespan_context(fresh_sdk_app):
         yield
+    await reminder_task.stop()
     await cleanup_task.stop()
     await app.state.http_client.aclose()
 

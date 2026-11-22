@@ -256,12 +256,47 @@
       }
     };
 
-    /* Pre-search filters: one picked chip per group. The picked value
-       goes into the hidden input, so the form submit (Enter or the
-       button) and the live search both carry it to /search. */
-    var categoryInput = document.getElementById("pre-search-category");
+    /* Pre-search filters. Condition stays single-select: one picked
+       chip, its value in the hidden input. Categories are multi-select
+       toggles: each chip is on/off on its own, "همه" clears them all,
+       and one hidden input per picked category is kept inside
+       #pre-search-category-inputs — so the form submit (Enter or the
+       button) and the live search both carry repeated `category`
+       params to /search. */
+    var categoryInputs = document.getElementById("pre-search-category-inputs");
     var conditionInput = document.getElementById("pre-search-condition");
-    function pickChip(chip, attr, input) {
+    var selectedCategories = [];
+    function refreshCategoryChips() {
+      var chips = panel.querySelectorAll(
+        '[data-filter-group="category"] .pre-search-chip'
+      );
+      for (var i = 0; i < chips.length; i++) {
+        var value = chips[i].getAttribute("data-filter-category") || "";
+        var on =
+          value === ""
+            ? selectedCategories.length === 0
+            : selectedCategories.indexOf(value) !== -1;
+        chips[i].classList.toggle("theme-btn-accent", on);
+        chips[i].classList.toggle("theme-btn-secondary", !on);
+      }
+      if (categoryInputs) {
+        categoryInputs.innerHTML = "";
+        for (var j = 0; j < selectedCategories.length; j++) {
+          var hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = "category";
+          hidden.value = selectedCategories[j];
+          categoryInputs.appendChild(hidden);
+        }
+      }
+    }
+    function retriggerLiveSearch() {
+      // Re-run the live search with the new filters, if text is typed.
+      if (input && typeof htmx !== "undefined" && htmx.trigger) {
+        htmx.trigger(input, "input");
+      }
+    }
+    function pickChip(chip, attr, inputEl) {
       var group = chip.closest("[data-filter-group]");
       if (!group) return;
       var chips = group.querySelectorAll(".pre-search-chip");
@@ -271,21 +306,52 @@
       }
       chip.classList.add("theme-btn-accent");
       chip.classList.remove("theme-btn-secondary");
-      if (input) input.value = chip.getAttribute(attr) || "";
-      // Re-run the live search with the new filter, if text is typed.
-      if (input && typeof htmx !== "undefined" && htmx.trigger) {
-        htmx.trigger(input, "input");
-      }
+      if (inputEl) inputEl.value = chip.getAttribute(attr) || "";
+      retriggerLiveSearch();
     }
     panel.addEventListener("click", function (e) {
       var chip = e.target.closest(".pre-search-chip");
       if (!chip) return;
       if (chip.hasAttribute("data-filter-category")) {
-        pickChip(chip, "data-filter-category", categoryInput);
+        var value = chip.getAttribute("data-filter-category") || "";
+        if (value === "") {
+          selectedCategories = [];
+        } else {
+          var idx = selectedCategories.indexOf(value);
+          if (idx === -1) {
+            selectedCategories.push(value);
+          } else {
+            selectedCategories.splice(idx, 1);
+          }
+        }
+        refreshCategoryChips();
+        retriggerLiveSearch();
       } else if (chip.hasAttribute("data-filter-condition")) {
         pickChip(chip, "data-filter-condition", conditionInput);
       }
     });
+
+    /* Advanced search: land on /search carrying whatever the visitor
+       already typed or picked (query, picked categories, condition).
+       Without JS the link still lands on plain /search. */
+    var advancedLink = document.getElementById("advanced-search-link");
+    if (advancedLink) {
+      advancedLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        var params = new URLSearchParams();
+        if (input && input.value.trim()) {
+          params.set("q", input.value.trim());
+        }
+        for (var i = 0; i < selectedCategories.length; i++) {
+          params.append("category", selectedCategories[i]);
+        }
+        if (conditionInput && conditionInput.value) {
+          params.set("condition", conditionInput.value);
+        }
+        var qs = params.toString();
+        window.location.href = "/search" + (qs ? "?" + qs : "");
+      });
+    }
 
     panel.onclick = function (e) {
       e.stopPropagation();

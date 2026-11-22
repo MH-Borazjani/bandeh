@@ -54,6 +54,20 @@ CATEGORIES = FALLBACK_CATEGORIES
 SAMPLE_PRODUCTS = FALLBACK_PRODUCTS
 
 
+def _base_template(request: Request) -> str:
+    """Full base for a direct load, fragment base for an HTMX swap.
+
+    HTMX navigation swaps the response into ``<main>``; returning the
+    full page (header + footer) would nest a second header inside
+    ``<main>``. Same ``HX-Request`` check as ``products._wants_html``.
+    (``core/templates.py`` also sets this through a context processor;
+    passing it here makes the intent explicit per route.)
+    """
+    if request.headers.get("hx-request") == "true":
+        return "base_fragment.html"
+    return "base.html"
+
+
 @router.get("/", response_class=HTMLResponse)
 async def landing(
     request: Request,
@@ -73,6 +87,7 @@ async def landing(
         request=request,
         name="landing.html",
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
             "categories": content["categories"],
@@ -117,6 +132,7 @@ async def categories_page(
         request=request,
         name="categories.html",
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
             "categories": categories,
@@ -136,6 +152,7 @@ async def cart_page(
         request=request,
         name="cart.html",
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
         },
@@ -154,6 +171,7 @@ async def checkout_page(
         request=request,
         name="checkout.html",
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
         },
@@ -187,6 +205,7 @@ async def _render_legal_page(
             request=request,
             name="legal_page.html",
             context={
+                "base_template": _base_template(request),
                 "phone": phone,
                 "masked": mask_phone(phone) if phone is not None else None,
                 "page": page,
@@ -198,6 +217,7 @@ async def _render_legal_page(
         request=request,
         name=fallback_template,
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
         },
@@ -273,6 +293,7 @@ async def mcp_guide_page(
         request=request,
         name="mcp_guide.html",
         context={
+            "base_template": _base_template(request),
             "phone": phone,
             "masked": mask_phone(phone) if phone is not None else None,
             "sections": sections,

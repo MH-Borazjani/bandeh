@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base, TimestampMixin
@@ -105,6 +107,20 @@ class Product(Base, TimestampMixin):
     condition_stars: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
+    )
+    # Per-product attribute values, e.g. {"screen_size_inch": 55} for a
+    # TV or {"capacity_kg": 8} for a washer. The keys are defined per
+    # category in Directus (categories.filter_attributes); the values
+    # live in Directus products.specs and are synced into this column.
+    # JSONB on Postgres (with a GIN index, see migration 011); plain
+    # JSON on SQLite, so the check scripts (in-memory SQLite) keep
+    # working — postgresql.JSONB does not run on SQLite. The variant
+    # goes INSIDE as_mutable: the other way round (as_mutable on each
+    # side) loads plain dicts on SQLite and in-place edits are lost.
+    specs: Mapped[dict] = mapped_column(
+        MutableDict.as_mutable(JSONB().with_variant(JSON(), "sqlite")),
+        nullable=False,
+        default=dict,
     )
 
     @property

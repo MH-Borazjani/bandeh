@@ -6,12 +6,12 @@
      Mobile-first, dark theme default, light theme supported,
      amber gold as the one accent color for prices and main buttons. -->
 
-<div class="mb-5 flex items-center justify-between">
-  <div>
+<div class="mb-5 flex items-center justify-between gap-3">
+  <div class="min-w-0">
     <h1 class="text-xl sm:text-2xl font-black theme-text-main">مدیریت سفارش</h1>
-    <p class="text-xs theme-text-muted mt-1 font-mono">{{ order.id }}</p>
+    <p class="text-xs theme-text-muted mt-1 font-mono break-all">{{ order.id }}</p>
   </div>
-  <a href="/admin/orders" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
+  <a href="/admin/orders" class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1 shrink-0">
     <span>بازگشت به لیست</span>
     <span>←</span>
   </a>
@@ -44,9 +44,9 @@
     <span class="theme-text-main font-medium">{{ order.created_at_formatted }}</span>
   </div>
   {% if order.tracking_code %}
-  <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
-    <span class="theme-text-muted">کد رهگیری پستی فعلی:</span>
-    <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
+  <div class="flex items-center justify-between gap-2 text-xs mt-2 pt-2 border-t theme-border">
+    <span class="theme-text-muted shrink-0">کد رهگیری پستی فعلی:</span>
+    <span class="theme-accent font-mono font-bold break-all min-w-0 text-left">{{ order.tracking_code }}</span>
   </div>
   {% endif %}
 </div>
@@ -120,7 +120,7 @@
   <div class="p-4 rounded-xl theme-bg-card-subtle text-xs text-center space-y-1">
     <p class="font-bold theme-text-main">✓ این سفارش با موفقیت تحویل مشتری گردیده است.</p>
     {% if order.tracking_code %}
-    <p class="theme-text-muted font-mono">کد رهگیری: {{ order.tracking_code }}</p>
+    <p class="theme-text-muted font-mono break-all">کد رهگیری: {{ order.tracking_code }}</p>
     {% endif %}
   </div>
 

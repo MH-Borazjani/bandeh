@@ -5,16 +5,16 @@
 <!-- Order Detail Page (Bandeh Shop - Responsive 2-column on desktop)
      Amber accent: #d97706, dark theme default, light theme supported. -->
 
-<div class="mb-5 flex items-center justify-between">
-  <div>
+<div class="mb-5 flex items-center justify-between gap-3">
+  <div class="min-w-0">
     <h1 class="text-xl sm:text-2xl lg:text-3xl font-black theme-text-main">جزئیات سفارش</h1>
-    <p class="text-xs sm:text-sm theme-text-muted mt-1 font-mono">{{ order.id }}</p>
+    <p class="text-xs sm:text-sm theme-text-muted mt-1 font-mono break-all">{{ order.id }}</p>
   </div>
   <a href="/orders"
      hx-get="/orders"
      hx-target="main"
      hx-push-url="true"
-     class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1">
+     class="theme-btn-secondary text-xs font-semibold rounded-xl px-3.5 py-2 min-h-[44px] flex items-center gap-1 shrink-0">
     <span>بازگشت</span>
     <span>←</span>
   </a>
@@ -104,9 +104,9 @@
         <span class="theme-text-main font-medium">{{ order.created_at_formatted }}</span>
       </div>
       {% if order.tracking_code %}
-      <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t theme-border">
-        <span class="theme-text-muted">کد رهگیری پستی:</span>
-        <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
+      <div class="flex items-center justify-between gap-2 text-xs mt-2 pt-2 border-t theme-border">
+        <span class="theme-text-muted shrink-0">کد رهگیری پستی:</span>
+        <span class="theme-accent font-mono font-bold break-all min-w-0 text-left">{{ order.tracking_code }}</span>
       </div>
       {% endif %}
     </div>
@@ -131,9 +131,9 @@
           <span class="theme-text-main">{{ order.payment_attempt.gateway_label }}</span>
         </div>
         {% if order.payment_attempt.track_id %}
-        <div class="flex items-center justify-between">
-          <span class="theme-text-muted">شناسه پیگیری درگاه:</span>
-          <span class="font-mono font-semibold theme-text-main">{{ order.payment_attempt.track_id }}</span>
+        <div class="flex items-center justify-between gap-2">
+          <span class="theme-text-muted shrink-0">شناسه پیگیری درگاه:</span>
+          <span class="font-mono font-semibold theme-text-main break-all min-w-0 text-left">{{ order.payment_attempt.track_id }}</span>
         </div>
         {% endif %}
         {% endif %}

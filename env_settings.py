@@ -51,12 +51,40 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
-    # SMS Provider Configuration (Kavenegar)
-    kavenegar_api_key: SecretStr | None = Field(
-        default=None, description="Kavenegar SMS API key"
+    # SMS Provider Configuration (Meli Payamak). The ApiKey is the web
+    # service password from the panel developer menu — NOT the panel
+    # login password. Never log it.
+    meli_sms_username: str | None = Field(
+        default=None, description="Meli Payamak panel username"
     )
-    kavenegar_sender: str | None = Field(
-        default=None, description="Kavenegar SMS sender number"
+    meli_sms_api_key: SecretStr | None = Field(
+        default=None,
+        description="Meli Payamak ApiKey (web service password)",
+    )
+    meli_sms_from: str | None = Field(
+        default=None, description="Meli Payamak sender number"
+    )
+    meli_sms_owner_phone: str | None = Field(
+        default=None,
+        description="Shop owner phone for order/low-stock alerts",
+    )
+
+    # Meli Payamak pattern codes (bodyId). Each pattern is created by
+    # the user in the panel (Special tools -> Service web service) and
+    # approved there; the code is per pattern, never hardcoded.
+    # Low-stock alerts reuse the owner pattern; payment reminders reuse
+    # the order pattern (see services/sms_service.py).
+    meli_sms_otp_body_id: int | None = Field(
+        default=None, description="Pattern code for the OTP message"
+    )
+    meli_sms_order_body_id: int | None = Field(
+        default=None, description="Pattern code for the order-paid message"
+    )
+    meli_sms_tracking_body_id: int | None = Field(
+        default=None, description="Pattern code for the tracking message"
+    )
+    meli_sms_owner_body_id: int | None = Field(
+        default=None, description="Pattern code for owner alerts"
     )
 
     # Dynamic database connection URL construction

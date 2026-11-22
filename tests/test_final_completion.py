@@ -15,7 +15,7 @@
 """Unit and integration tests for final completion features:
 - Admin order fulfillment (status change paid -> shipped -> delivered + tracking code)
 - Scheduled expired reservations timer freeing stock holds
-- Kavenegar SMS client and order notifications
+- Meli Payamak SMS client and order notifications
 - Rate limiting middleware for public API routes
 - HTML error pages (404 and 500), robots.txt, and sitemap.xml
 - Enamad and Samandehi trust seal placeholder slots in footer
@@ -33,6 +33,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -55,15 +56,13 @@ from db.base import Base  # noqa: E402
 from db.models.order import Order, OrderItem, OrderStatus  # noqa: E402
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus  # noqa: E402
 from db.models.product import Product  # noqa: E402
+from db.models.sms_log import SmsLog  # noqa: E402
 from db.models.user import User, UserRole  # noqa: E402
 from db.session import get_db  # noqa: E402
 from integrations.sms import (  # noqa: E402
     _DEV_SENT_MESSAGES,
-    KavenegarClient,
-    KavenegarError,
-    send_order_paid,
-    send_order_shipped,
-    send_otp,
+    MeliPayamakClient,
+    MeliPayamakError,
 )
 from main import app  # noqa: E402
 from services.order_service import create_order  # noqa: E402
@@ -252,15 +251,32 @@ class FinalCompletionTests(unittest.TestCase):
         self.assertEqual(updated["status"], "shipped")
         self.assertEqual(updated["tracking_code"], "IRPOST1234567890")
 
-        # Verify shipped SMS was dispatched via the unified SMS interface
+        # Verify shipped SMS was dispatched via the SMS service: the
+        # pattern send is logged in sms_log and recorded in the dev log.
+        async def shipped_sms_state() -> list[SmsLog]:
+            async with self.Session() as s:
+                rows = (
+                    await s.execute(
+                        select(SmsLog).where(
+                            SmsLog.message_type == "order_tracking",
+                            SmsLog.reference == str(order.id),
+                        )
+                    )
+                ).scalars().all()
+                return list(rows)
+
+        shipped_rows = asyncio.run(shipped_sms_state())
+        self.assertEqual(len(shipped_rows), 1)
+        self.assertEqual(shipped_rows[0].status, "sent")
         shipped_messages = [
-            m for m in _DEV_SENT_MESSAGES if m.get("type") == "order_shipped"
+            m
+            for m in _DEV_SENT_MESSAGES
+            if "IRPOST1234567890" in m.get("message", "")
         ]
         self.assertGreaterEqual(len(shipped_messages), 1)
         last_sms = shipped_messages[-1]
         self.assertEqual(last_sms["phone"], "09128888888")
-        self.assertEqual(last_sms["tracking_code"], "IRPOST1234567890")
-        self.assertIn("IRPOST1234567890", last_sms["message"])
+        self.assertEqual(last_sms["type"], "pattern")
 
         # 4. Fulfillment status change: shipped -> delivered
         deliv_resp = self.client.post(
@@ -383,69 +399,83 @@ class FinalCompletionTests(unittest.TestCase):
         finally:
             dbsess._sessionmaker = orig_factory
 
-    # 3. Kavenegar SMS Client Tests --------------------------------------------
-    def test_kavenegar_client_dev_fallback_and_notifications(self) -> None:
-        """When no key is configured, uses dev fallback for OTP, order paid, and shipped."""
-        client = KavenegarClient(api_key=None)
+    # 3. Meli Payamak SMS Client Tests --------------------------------------------
+    def test_meli_payamak_client_dev_fallback(self) -> None:
+        """When no credentials are configured, sends fall back to the dev log."""
+        client = MeliPayamakClient(username=None, api_key=None)
         self.assertFalse(client.is_configured)
 
         _DEV_SENT_MESSAGES.clear()
-        send_otp("09121112233", "54321")
-        send_order_paid("09121112233", "order-uuid-99", 500_000)
-        send_order_shipped("09121112233", "order-uuid-99", "TRACK998877")
 
+        async def run_dev() -> None:
+            pattern_id = await client.send_pattern("09121112233", 101, ["54321"])
+            plain_id = await client.send_sms("09121112233", "سفارش شما پرداخت شد.")
+            self.assertEqual(pattern_id, "dev")
+            self.assertEqual(plain_id, "dev")
+
+        asyncio.run(run_dev())
         types = [m["type"] for m in _DEV_SENT_MESSAGES]
-        self.assertIn("otp", types)
-        self.assertIn("order_paid", types)
-        self.assertIn("order_shipped", types)
+        self.assertIn("pattern", types)
+        self.assertIn("general", types)
 
-    def test_kavenegar_client_with_key_http_request(self) -> None:
-        """With key configured, dispatches HTTP POST to Kavenegar API."""
+    def test_meli_payamak_client_with_credentials_http_request(self) -> None:
+        """With credentials configured, dispatches a form POST to the panel API."""
         captured_requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured_requests.append(request)
-            if "test-api-key" in request.url.path:
+            if request.url.path == "/api/SendSMS/BaseServiceNumber":
                 return httpx.Response(
                     200,
-                    json={
-                        "return": {"status": 200, "message": "تایید شد"},
-                        "entries": [{"messageid": 990011, "status": 1}],
-                    },
+                    json={"Value": "123456", "RetStatus": 1, "StrRetStatus": "Ok"},
                 )
-            return httpx.Response(401, json={"return": {"status": 401, "message": "Invalid key"}})
+            return httpx.Response(404, json={})
 
         mock_http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        client = KavenegarClient(api_key="test-api-key", sender="10008888")
+        client = MeliPayamakClient(
+            username="test-user",
+            api_key="test-apikey",
+            sender="10008888",
+            http_client=mock_http,
+        )
         self.assertTrue(client.is_configured)
 
         async def run_sms() -> None:
-            ok = await client.send_sms_async("09129999999", "تست ارسال", http_client=mock_http)
-            self.assertTrue(ok)
+            provider_id = await client.send_pattern(
+                "09129999999", 123, ["msg", "test123"]
+            )
+            self.assertEqual(provider_id, "123456")
 
         asyncio.run(run_sms())
         self.assertEqual(len(captured_requests), 1)
         req = captured_requests[0]
-        self.assertIn("/test-api-key/sms/send.json", req.url.path)
+        self.assertEqual(req.url.path, "/api/SendSMS/BaseServiceNumber")
         content_str = req.content.decode("utf-8")
-        self.assertIn("receptor=09129999999", content_str)
-        self.assertIn("sender=10008888", content_str)
+        self.assertIn("username=test-user", content_str)
+        self.assertIn("password=test-apikey", content_str)
+        self.assertIn("to=09129999999", content_str)
+        self.assertIn("text=msg%3Btest123", content_str)
+        self.assertIn("bodyId=123", content_str)
 
-    def test_kavenegar_client_error_handling(self) -> None:
-        """Kavenegar API returning status != 200 raises KavenegarError."""
+    def test_meli_payamak_client_error_handling(self) -> None:
+        """Panel returning RetStatus != 1 raises MeliPayamakError with the code."""
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(
                 200,
-                json={"return": {"status": 411, "message": "شماره گیرنده نامعتبر است"}},
+                json={
+                    "Value": "",
+                    "RetStatus": 0,
+                    "StrRetStatus": "InvalidUsernameOrPassword",
+                },
             )
 
         mock_http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        client = KavenegarClient(api_key="valid-key")
+        client = MeliPayamakClient(username="bad", api_key="bad", http_client=mock_http)
 
         async def run_err() -> None:
-            with self.assertRaises(KavenegarError) as ctx:
-                await client.send_sms_async("09120000000", "پیام", http_client=mock_http)
-            self.assertEqual(ctx.exception.status, 411)
+            with self.assertRaises(MeliPayamakError) as ctx:
+                await client.send_pattern("09120000000", 123, ["msg"])
+            self.assertEqual(ctx.exception.status, 0)
 
         asyncio.run(run_err())
 

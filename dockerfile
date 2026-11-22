@@ -14,10 +14,17 @@ FROM python:3.12-slim-bookworm
 # - UV_COMPILE_BYTECODE=1: Compiles installed packages to bytecode during the build phase for faster cold starts.
 # - UV_LINK_MODE=copy: Ensures uv copies files instead of hardlinking across distinct filesystem boundaries.
 # - PATH: Prefixes the container's PATH with uv's virtual environment directory so binaries run transparently.
+# - UV_PYTHON: Force uv to use the base image's Python 3.12. Without this,
+#   uv downloads the newest Python that satisfies requires-python (>=3.12,
+#   so 3.14) as a managed install under /root/.local/share/uv/python, and
+#   the venv symlinks to it. That install is incomplete/unreadable for the
+#   non-root app user, so the container dies on start with
+#   "ModuleNotFoundError: No module named 'encodings'".
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_PYTHON=/usr/local/bin/python3.12 \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app:/app/app/e-commerce"
 

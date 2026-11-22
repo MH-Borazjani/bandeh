@@ -22,6 +22,7 @@ from db.models.personal_access_token import PersonalAccessToken
 from db.models.product import Product
 from db.models.refresh_token import RefreshToken
 from db.models.session import UserSession
+from db.models.sms_log import SmsLog, SmsMessageType, SmsStatus
 from db.models.user import User, UserRole
 
 __all__ = [
@@ -35,6 +36,9 @@ __all__ = [
     "PersonalAccessToken",
     "Product",
     "RefreshToken",
+    "SmsLog",
+    "SmsMessageType",
+    "SmsStatus",
     "User",
     "UserRole",
     "UserSession",

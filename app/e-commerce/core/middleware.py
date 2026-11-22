@@ -203,6 +203,19 @@ async def security_headers_middleware(
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers[name] = value
+    # One URL returns two different bodies: the full page for a direct
+    # load and the fragment for an HTMX swap (see core/templates.py).
+    # Without this, a browser that cached the full page may serve it
+    # for a later HTMX request — and HTMX would swap a second header
+    # (and footer) into <main>. Vary keeps the two variants in
+    # separate cache entries. (CORS appends Origin to Vary afterwards.)
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith(("text/html", "application/json")):
+        vary = response.headers.get("vary", "")
+        parts = [part.strip() for part in vary.split(",") if part.strip()]
+        if "HX-Request" not in parts:
+            parts.append("HX-Request")
+            response.headers["Vary"] = ", ".join(parts)
     return response
 
 

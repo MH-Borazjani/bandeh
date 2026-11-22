@@ -28,7 +28,7 @@ import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlencode
+from urllib.parse import quote_plus, urlencode
 
 import httpx
 from fastapi import (
@@ -118,6 +118,7 @@ def _product_dict_from_read(p_read: ProductRead, category: str) -> dict:
         "image_path": p_read.image_path,
         "condition": p_read.condition,
         "condition_stars": p_read.condition_stars,
+        "specs": dict(p_read.specs or {}),
     }
 
 
@@ -143,25 +144,232 @@ def _product_dict_from_cms(cp: dict, category: str) -> dict:
         "image_path": cp.get("image_path"),
         "condition": condition,
         "condition_stars": stars,
+        "specs": cp.get("specs") if isinstance(cp.get("specs"), dict) else {},
     }
 
 
-def _resolve_category_name(
-    category: str | None, categories_list: list[dict]
-) -> str | None:
-    """Resolve a category filter value (id or name) to its display name.
+# --- Filter panel (Phase 4) -------------------------------------------------
+# The category page and /search share one param contract:
+#   spec_<key>=<value> (repeatable, one checkbox per distinct value),
+#   price_min / price_max (int Toman), condition (new/used),
+#   in_stock=1. The helpers below parse those params, match one
+#   product dict against them, and build the panel data (definitions +
+#   the distinct values actually present among the products). There is
+#   NO brand filter: products carry no brand field, so no brand data
+#   exists to filter by.
 
-    The search chips pass names; older links may pass ids. Unknown
-    values pass through unchanged (they simply match nothing).
-    """
-    if not category or not category.strip():
+_SPEC_PARAM_PREFIX = "spec_"
+
+
+def _parse_price_param(value: str | None) -> int | None:
+    """A price bound in Toman, or None when absent / not a number."""
+    if value is None:
         return None
-    raw = category.strip()
-    if raw.isdigit():
-        for c in categories_list:
-            if str(c.get("id")) == raw and isinstance(c.get("name"), str):
-                return str(c.get("name"))
-    return raw
+    raw = value.strip().replace(",", "")
+    if not raw or not raw.isdigit():
+        return None
+    return int(raw)
+
+
+def _parse_in_stock_param(value: str | None) -> bool:
+    """True only for an explicit in-stock ask (the checkbox sends 1)."""
+    return isinstance(value, str) and value.strip().lower() in ("1", "true", "yes")
+
+
+def _parse_spec_filters_from_params(params) -> dict[str, list[str]]:
+    """Collect every ``spec_<key>`` param and clean it.
+
+    Keys and values go through ``clean_spec_filters`` (Phase 3), so a
+    bad key or an empty value list means "no filter for that
+    attribute", never an error.
+    """
+    raw: dict[str, list[object]] = {}
+    for key in params.keys():
+        if key.startswith(_SPEC_PARAM_PREFIX):
+            raw[key[len(_SPEC_PARAM_PREFIX):]] = params.getlist(key)
+    return search_service.clean_spec_filters(raw)
+
+
+def _parse_filter_params(params) -> dict:
+    """All Phase 4 filter params from a request's query params."""
+    spec_filters = _parse_spec_filters_from_params(params)
+    price_min = _parse_price_param(params.get("price_min"))
+    price_max = _parse_price_param(params.get("price_max"))
+    condition = search_service.clean_condition(params.get("condition"))
+    in_stock = _parse_in_stock_param(params.get("in_stock"))
+    has_filters = bool(
+        spec_filters
+        or price_min is not None
+        or price_max is not None
+        or condition is not None
+        or in_stock
+    )
+    return {
+        "spec_filters": spec_filters,
+        "price_min": price_min,
+        "price_max": price_max,
+        "condition": condition,
+        "in_stock": in_stock,
+        "has_filters": has_filters,
+    }
+
+
+def _matches_product_filters(
+    product: dict,
+    spec_filters: dict[str, list[str]],
+    price_min: int | None,
+    price_max: int | None,
+    condition: str | None,
+    in_stock: bool,
+) -> bool:
+    """True when one product dict passes every active filter.
+
+    Specs: the product's value for each picked attribute must be one
+    of the picked values (IN per key, AND across keys). A product
+    with no specs matches nothing once a spec filter is active.
+    Price: inclusive bounds on ``price_toman``. In-stock means
+    ``available > 0``. Values compare as strings because Directus
+    specs hold numbers (55) while the URL carries text ("55").
+    """
+    specs = product.get("specs")
+    if not isinstance(specs, dict):
+        specs = {}
+    for key, values in spec_filters.items():
+        value = specs.get(key)
+        if value is None or str(value) not in values:
+            return False
+    price = product.get("price_toman")
+    if price_min is not None and (
+        not isinstance(price, (int, float)) or isinstance(price, bool)
+        or price < price_min
+    ):
+        return False
+    if price_max is not None and (
+        not isinstance(price, (int, float)) or isinstance(price, bool)
+        or price > price_max
+    ):
+        return False
+    if condition is not None and product.get("condition") != condition:
+        return False
+    if in_stock and (product.get("available") or 0) <= 0:
+        return False
+    return True
+
+
+def _apply_product_filters(products: list[dict], filters: dict) -> list[dict]:
+    """Keep the products that pass every active filter (no-op if none)."""
+    if not filters["has_filters"]:
+        return list(products)
+    return [
+        p
+        for p in products
+        if _matches_product_filters(
+            p,
+            filters["spec_filters"],
+            filters["price_min"],
+            filters["price_max"],
+            filters["condition"],
+            filters["in_stock"],
+        )
+    ]
+
+
+def _sort_spec_values(values: list[str]) -> list[str]:
+    """Distinct values, numbers first in numeric order, then text."""
+
+    def _key(value: str) -> tuple[int, object]:
+        try:
+            return (0, float(value))
+        except ValueError:
+            return (1, value)
+
+    return sorted(values, key=_key)
+
+
+def _distinct_spec_values(
+    products: list[dict], definitions: list[dict]
+) -> list[dict]:
+    """One panel group per attribute definition.
+
+    The values are the distinct values actually present among the
+    given products — never hardcoded, so a new TV size shows up as a
+    checkbox with no code change. A definition with no values among
+    these products is left out (nothing to pick).
+    """
+    groups: list[dict] = []
+    for definition in definitions:
+        key = definition.get("key")
+        if not isinstance(key, str) or not key:
+            continue
+        seen: dict[str, object] = {}
+        for product in products:
+            specs = product.get("specs")
+            if not isinstance(specs, dict):
+                continue
+            value = specs.get(key)
+            if value is None or value == "":
+                continue
+            seen.setdefault(str(value), value)
+        if not seen:
+            continue
+        ordered = _sort_spec_values(list(seen.keys()))
+        groups.append(
+            {
+                "key": key,
+                "label": definition.get("label") or key,
+                "unit": definition.get("unit") or "",
+                "options": [seen[text] for text in ordered],
+            }
+        )
+    return groups
+
+
+async def _category_filter_definitions(
+    directus: DirectusClient, cat_id: int | None
+) -> list[dict]:
+    """The attribute definitions for one category id, or [].
+
+    Read live from Directus via ``get_category_filter_attributes``
+    (Phase 3). Any failure — CMS down, client without the method —
+    means "no attribute filters", never a 500.
+    """
+    if cat_id is None:
+        return []
+    try:
+        all_definitions = await directus.get_category_filter_attributes()
+    except Exception:
+        return []
+    if not isinstance(all_definitions, dict):
+        return []
+    found = all_definitions.get(cat_id)
+    if found is None:
+        found = all_definitions.get(str(cat_id))
+    return list(found) if isinstance(found, list) else []
+
+
+def _resolve_category_names(
+    categories: list[str] | None, categories_list: list[dict]
+) -> list[str]:
+    """Resolve category filter values (id or name) to display names.
+
+    Each value is resolved on its own: a numeric value that matches a
+    known category id becomes that category's name, anything else passes
+    through unchanged (unknown values simply match nothing). Empty
+    values are dropped, so ``?category=`` behaves like no filter.
+    """
+    resolved: list[str] = []
+    for category in categories or []:
+        if not category or not category.strip():
+            continue
+        raw = category.strip()
+        if raw.isdigit():
+            for c in categories_list:
+                if str(c.get("id")) == raw and isinstance(c.get("name"), str):
+                    raw = str(c.get("name"))
+                    break
+        if raw not in resolved:
+            resolved.append(raw)
+    return resolved
 
 
 @router.get("/api/search-live", response_class=HTMLResponse)
@@ -170,14 +378,15 @@ async def live_search_endpoint(
     db: DbSessionDep,
     directus: DirectusClientDep,
     q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
-    category: Annotated[str, Query()] = "",
+    category: Annotated[list[str] | None, Query()] = None,
     condition: Annotated[str, Query()] = "",
 ) -> HTMLResponse:
     """Live search dropdown panel fragment for HTMX.
 
-    The header panel sends the pre-search filters (category + condition)
-    with every keystroke, so the dropdown only shows products that
-    match the filters the visitor picked before typing.
+    The header panel sends the pre-search filters (categories +
+    condition) with every keystroke, so the dropdown only shows
+    products that match the filters the visitor picked before typing.
+    ``category`` is repeatable: ``?category=A&category=B``.
     """
     query = q.strip()
     if not query:
@@ -189,14 +398,22 @@ async def live_search_endpoint(
 
     # The pre-search filters: an unknown condition means "all".
     cond = search_service.clean_condition(condition)
-    cat_name = category.strip() or None
+    try:
+        categories_list = await directus.list_categories()
+    except Exception:
+        categories_list = [
+            {"id": idx + 1, "name": c["name"], "description": c["desc"]}
+            for idx, c in enumerate(FALLBACK_CATEGORIES)
+        ]
+    cat_names = _resolve_category_names(category, categories_list)
+    cat_lower = {name.lower() for name in cat_names}
 
     matched: list[dict[str, object]] = []
     # A category filter needs the CMS: the SQLAlchemy Product model does
     # not map the category column, so the database cannot tell which
     # category a row belongs to. With a category picked, skip the DB
     # path and read from Directus (which does know the category).
-    if cat_name is None:
+    if not cat_names:
         try:
             db_products = await search_service.search_products(
                 db, query, limit=6, condition=cond
@@ -225,9 +442,9 @@ async def live_search_endpoint(
                 if cond is not None and cp.get("condition") != cond:
                     continue
                 if (
-                    cat_name is not None
+                    cat_names
                     and isinstance(cp.get("category"), str)
-                    and cp["category"].strip().lower() != cat_name.lower()
+                    and cp["category"].strip().lower() not in cat_lower
                 ):
                     continue
                 name_match = q_lower in cp.get("name", "").lower()
@@ -254,20 +471,12 @@ async def live_search_endpoint(
     # The hardcoded fallback products have no category at all, so they
     # must never answer a category-filtered search — that would show a
     # fridge inside the TV category, with a broken /products/None link.
-    if not matched and cat_name is None:
+    if not matched and not cat_names:
         from integrations.directus_client import FALLBACK_PRODUCTS
 
         q_lower = query.lower()
         for fp in FALLBACK_PRODUCTS:
             if cond is not None and fp.get("condition") != cond:
-                continue
-            fp_category = fp.get("category")
-            if (
-                cat_name is not None
-                and isinstance(fp_category, str)
-                and fp_category.strip()
-                and fp_category.strip().lower() != cat_name.lower()
-            ):
                 continue
             name_val = str(fp.get("name", ""))
             desc_val = str(fp.get("description", ""))
@@ -288,12 +497,13 @@ async def live_search_endpoint(
                 if len(matched) >= 6:
                     break
 
-    # The "see all results" link carries the same pre-search filters.
-    search_params: dict[str, str] = {"q": query}
-    if cat_name is not None:
-        search_params["category"] = cat_name
+    # The "see all results" link carries the same pre-search filters,
+    # with every picked category as its own repeated param.
+    search_params: list[tuple[str, str]] = [("q", query)]
+    for cat in cat_names:
+        search_params.append(("category", cat))
     if cond is not None:
-        search_params["condition"] = cond
+        search_params.append(("condition", cond))
     return templates.TemplateResponse(
         request=request,
         name="_search_live.html",
@@ -344,7 +554,7 @@ async def search_products_endpoint(
     directus: DirectusClientDep,
     phone: CurrentUserDep,
     q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
-    category: Annotated[str | None, Query()] = None,
+    category: Annotated[list[str] | None, Query()] = None,
     condition: Annotated[str | None, Query()] = None,
     limit: Annotated[
         int, Query(ge=1, le=search_service.MAX_LIMIT)
@@ -352,14 +562,16 @@ async def search_products_endpoint(
 ) -> list[ProductRead] | HTMLResponse:
     """Public: search products by name or description, with filters.
 
-    Filters combine: a text query, one category, and the condition
-    (``new`` / ``used`` — only offered when the site sells used goods).
-    When requested with Accept: text/html, an HTMX request, or
+    Filters combine: a text query, one or more categories (repeatable
+    ``category`` param, e.g. ``?category=A&category=B``), and the
+    condition (``new`` / ``used`` — only offered when the site sells
+    used goods). When requested with Accept: text/html, an HTMX request, or
     format=html, renders the HTML search page; otherwise returns JSON
     list[ProductRead] for existing search API callers.
     """
     if not _wants_html(request):
         cond = search_service.clean_condition(condition)
+        filters = _parse_filter_params(request.query_params)
         if q.strip():
             products = await search_service.search_products(
                 db, q, limit, condition=cond
@@ -372,7 +584,21 @@ async def search_products_endpoint(
             )
         else:
             products = await search_service.search_products(db, q, limit)
-        return [ProductRead.model_validate(p) for p in products]
+        reads = [ProductRead.model_validate(p) for p in products]
+        if not filters["has_filters"]:
+            return reads
+        return [
+            product
+            for product in reads
+            if _matches_product_filters(
+                _product_dict_from_read(product, "لوازم خانگی"),
+                filters["spec_filters"],
+                filters["price_min"],
+                filters["price_max"],
+                filters["condition"],
+                filters["in_stock"],
+            )
+        ]
 
     # HTML view: resolve categories and results
     try:
@@ -384,30 +610,52 @@ async def search_products_endpoint(
         ]
 
     cond = search_service.clean_condition(condition)
-    cat_name = _resolve_category_name(category, categories_list)
+    filters = _parse_filter_params(request.query_params)
+    cat_names = _resolve_category_names(category, categories_list)
+    cat_lower = {name.lower() for name in cat_names}
+    # The DB rows carry no category (the Product model does not map
+    # that column), so a DB result is labelled with the first picked
+    # category — the same fallback the single-category path used.
+    db_fallback_category = cat_names[0] if cat_names else "لوازم خانگی"
     matched_products: list[dict] = []
     has_query = bool(q.strip())
-    has_category = bool(cat_name)
+    has_category = bool(cat_names)
     has_condition = cond is not None
-    searched = has_query or has_category or has_condition
+    searched = (
+        has_query or has_category or has_condition or filters["has_filters"]
+    )
 
     def _matches_filters(p: dict) -> bool:
-        """Category (exact name) + condition, applied after any source."""
-        if cat_name is not None and (p.get("category") or "").strip().lower() != cat_name.lower():
+        """Category (membership in the picked set) + condition.
+
+        An empty picked set means "no category filter". When more than
+        one category is picked, only filters shared by all of them
+        apply (price, condition, brand); per-category attribute
+        filters show only when exactly one category is picked — see
+        ``single_category`` in the template context below.
+        """
+        if cat_names and (p.get("category") or "").strip().lower() not in cat_lower:
             return False
         if cond is not None and p.get("condition") != cond:
             return False
         return True
 
     if has_query:
-        db_products = await search_service.search_products(
-            db, q, limit, condition=cond
-        )
-        for p in db_products:
-            p_read = ProductRead.model_validate(p)
-            matched_products.append(
-                _product_dict_from_read(p_read, cat_name or "لوازم خانگی")
+        # A category filter needs the CMS: the DB rows carry no
+        # category (the Product model does not map that column), so
+        # with categories picked the DB path is skipped entirely —
+        # otherwise an unknown category would "match" DB rows that
+        # were merely labelled with the picked name. Same rule as the
+        # live search endpoint.
+        if not cat_names:
+            db_products = await search_service.search_products(
+                db, q, limit, condition=cond
             )
+            for p in db_products:
+                p_read = ProductRead.model_validate(p)
+                matched_products.append(
+                    _product_dict_from_read(p_read, db_fallback_category)
+                )
         if not matched_products:
             try:
                 cms_products = await directus.list_products(limit=50)
@@ -417,27 +665,34 @@ async def search_products_endpoint(
                     desc_match = q_lower in (cp.get("description") or "").lower()
                     if name_match or desc_match:
                         matched_products.append(
-                            _product_dict_from_cms(cp, cat_name or "لوازم خانگی")
+                            _product_dict_from_cms(cp, db_fallback_category)
                         )
             except Exception:
                 pass
         matched_products = [p for p in matched_products if _matches_filters(p)]
-    elif has_category or has_condition:
+    elif has_category or has_condition or filters["has_filters"]:
         try:
-            if cat_name is not None:
+            if len(cat_names) == 1:
                 cms_products = await directus.list_products_by_category(
-                    cat_name, limit=limit
+                    cat_names[0], limit=limit
                 )
             else:
+                # Several categories (or none, condition-only): fetch
+                # the list and keep the rows whose category is in the
+                # picked set — Directus has no multi-category filter.
                 cms_products = await directus.list_products(limit=limit)
             for cp in cms_products:
                 matched_products.append(
-                    _product_dict_from_cms(cp, cat_name or "لوازم خانگی")
+                    _product_dict_from_cms(cp, db_fallback_category)
                 )
         except Exception:
             pass
 
-        if not matched_products:
+        # No CMS rows: fall back to the DB only when no category was
+        # picked. DB rows carry no category, so they must never answer
+        # a category-filtered search — an unknown category matches
+        # nothing instead of "matching" every DB row.
+        if not matched_products and not cat_names:
             try:
                 db_all = await search_service.list_products(
                     db, limit=limit, condition=cond
@@ -448,11 +703,61 @@ async def search_products_endpoint(
             for p in db_all:
                 p_read = ProductRead.model_validate(p)
                 matched_products.append(
-                    _product_dict_from_read(p_read, cat_name or "لوازم خانگی")
+                    _product_dict_from_read(p_read, db_fallback_category)
                 )
         matched_products = [p for p in matched_products if _matches_filters(p)]
 
+    # Phase 4 filter panel. Attribute filters show only when exactly
+    # one category is picked (the shared-vs-attribute rule): the
+    # definitions come from that category, and the checkbox values are
+    # the distinct values among ALL of the category's products — not
+    # just the ones matching the text query — so typing a query never
+    # shrinks the checkboxes. With several categories, or none, only
+    # the shared filters (price, condition, in-stock) apply.
+    filter_definitions: list[dict] = []
+    if len(cat_names) == 1:
+        single_cat_id: int | None = None
+        for c in categories_list:
+            if isinstance(c.get("name"), str) and c["name"] == cat_names[0]:
+                cid = c.get("id")
+                if isinstance(cid, int) and not isinstance(cid, bool):
+                    single_cat_id = cid
+                elif isinstance(cid, str) and cid.isdigit():
+                    single_cat_id = int(cid)
+                break
+        definitions = await _category_filter_definitions(
+            directus, single_cat_id
+        )
+        value_source: list[dict] = []
+        try:
+            cat_rows = await directus.list_products_by_category(
+                cat_names[0], limit=limit
+            )
+            value_source = [
+                _product_dict_from_cms(cp, db_fallback_category)
+                for cp in cat_rows
+            ]
+        except Exception:
+            value_source = []
+        if not value_source:
+            value_source = matched_products
+        filter_definitions = _distinct_spec_values(value_source, definitions)
+
+    matched_products = _apply_product_filters(matched_products, filters)
     total_count_formatted = str(len(matched_products)).translate(_FA_DIGITS)
+
+    # The panel form is separate from the search form, so it carries
+    # the query and the picked categories (and the condition, which on
+    # /search lives in the chip row above) as hidden inputs — changing
+    # a filter never drops them.
+    filter_extra_hidden: list[tuple[str, str]] = []
+    if q:
+        filter_extra_hidden.append(("q", q))
+    for c in cat_names:
+        filter_extra_hidden.append(("category", c))
+    if cond is not None:
+        filter_extra_hidden.append(("condition", cond))
+    filter_clear_url = "/search" + (("?q=" + quote_plus(q)) if q else "")
 
     return templates.TemplateResponse(
         request=request,
@@ -460,12 +765,29 @@ async def search_products_endpoint(
         context={
             "phone": phone,
             "q": q,
-            "selected_category": cat_name or "",
+            "selected_categories": cat_names,
+            "single_category": len(cat_names) == 1,
             "selected_condition": cond or "",
             "categories": categories_list,
             "products": matched_products,
             "searched": searched,
             "total_count_formatted": total_count_formatted,
+            "filter_definitions": filter_definitions,
+            "selected_specs": filters["spec_filters"],
+            "price_min": (
+                str(filters["price_min"])
+                if filters["price_min"] is not None
+                else ""
+            ),
+            "price_max": (
+                str(filters["price_max"])
+                if filters["price_max"] is not None
+                else ""
+            ),
+            "in_stock": filters["in_stock"],
+            "has_filters": filters["has_filters"],
+            "filter_clear_url": filter_clear_url,
+            "filter_extra_hidden": filter_extra_hidden,
         },
     )
 
@@ -479,7 +801,14 @@ async def category_page_endpoint(
     directus: DirectusClientDep,
     phone: CurrentUserDep,
 ) -> HTMLResponse:
-    """Public: category detail page showing products from Directus."""
+    """Public: category detail page showing products from Directus.
+
+    Phase 4 filters (``spec_<key>``, ``price_min`` / ``price_max``,
+    ``condition``, ``in_stock``) narrow the list; the count reflects
+    the filtered list. The panel state comes from the URL params, so
+    an HTMX swap re-renders it identically to a full load.
+    """
+    filters = _parse_filter_params(request.query_params)
     category_map = await directus.get_category_map()
     cat_name = category_identifier
     cat_desc = ""
@@ -539,6 +868,26 @@ async def category_page_endpoint(
             # Both sources failed: show the empty state, not a 500.
             logger.warning("Category DB fallback failed: %s", exc)
             db_all = []
+        # DB fallback, Postgres: narrow by specs in the database
+        # itself (filter_products_by_specs, Phase 3) before the
+        # name/category match below; price and in-stock are applied
+        # with the other filters afterwards, on the same dicts as the
+        # Directus path. On SQLite the spec filter cannot run (see
+        # docs/product-attributes.md), so the Python matcher does it.
+        if filters["spec_filters"] and db_all:
+            dialect = getattr(getattr(db, "bind", None), "dialect", None)
+            if dialect is not None and dialect.name == "postgresql":
+                try:
+                    db_all = await search_service.filter_products_by_specs(
+                        db,
+                        filters["spec_filters"],
+                        limit=50,
+                        condition=filters["condition"],
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Category DB spec filter failed, using list: %s", exc
+                    )
         for p in db_all:
             p_read = ProductRead.model_validate(p)
             if cat_name.lower() in (p_read.name or "").lower() or (
@@ -575,10 +924,16 @@ async def category_page_endpoint(
                 "image_path": p.get("image_path"),
                 "condition": condition,
                 "condition_stars": stars,
+                "specs": p.get("specs") if isinstance(p.get("specs"), dict) else {},
             }
         )
 
-    total_count_formatted = str(len(formatted_products)).translate(_FA_DIGITS)
+    # Attribute definitions for this category, with the distinct
+    # values actually present among its (unfiltered) products.
+    definitions = await _category_filter_definitions(directus, cat_id)
+    filter_definitions = _distinct_spec_values(formatted_products, definitions)
+    filtered_products = _apply_product_filters(formatted_products, filters)
+    total_count_formatted = str(len(filtered_products)).translate(_FA_DIGITS)
 
     return templates.TemplateResponse(
         request=request,
@@ -590,8 +945,27 @@ async def category_page_endpoint(
                 "name": cat_name,
                 "description": cat_desc,
             },
-            "products": formatted_products,
+            "products": filtered_products,
             "total_count_formatted": total_count_formatted,
+            "filter_definitions": filter_definitions,
+            "selected_specs": filters["spec_filters"],
+            "selected_condition": filters["condition"] or "",
+            "price_min": (
+                str(filters["price_min"])
+                if filters["price_min"] is not None
+                else ""
+            ),
+            "price_max": (
+                str(filters["price_max"])
+                if filters["price_max"] is not None
+                else ""
+            ),
+            "in_stock": filters["in_stock"],
+            "has_filters": filters["has_filters"],
+            # The bare category URL (this request's path, no query):
+            # clear-all goes here and resets the panel.
+            "filter_clear_url": str(request.url.path),
+            "filter_extra_hidden": [],
         },
     )
 

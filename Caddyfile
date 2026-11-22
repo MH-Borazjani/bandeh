@@ -1,10 +1,30 @@
 # ==============================================================================
 # Caddy Configuration for Bandeh E-Commerce Platform
 # ==============================================================================
-# Automatic HTTPS via Let's Encrypt / ZeroSSL with domain as placeholder variable.
-# Pass the production domain using DOMAIN environment variable (e.g. DOMAIN=bandeh.ir).
+# Pass the production domain using DOMAIN environment variable (e.g. DOMAIN=genabay.ir).
+
+# Plain-HTTP site: serves ACME HTTP-01 challenge files WITHOUT redirecting
+# (Let's Encrypt fetches the challenge over plain HTTP; a redirect to HTTPS
+# would make Arvan fetch it from the origin over TLS, which fails while the
+# origin cert is self-signed). Everything else redirects to HTTPS.
+http://{$DOMAIN:localhost} {
+    handle_path /.well-known/acme-challenge/* {
+        root * /srv/acme-challenges
+        file_server
+    }
+    handle {
+        redir https://{host}{uri} permanent
+    }
+}
 
 {$DOMAIN:localhost} {
+    # Origin cert (2026-11-22): a real Let's Encrypt cert, issued on the
+    # laptop (the server cannot reach Let's Encrypt itself — outbound
+    # network dead). The files live in ./caddy-certs on the server.
+    # Remove this line to go back to automatic HTTPS once the outbound
+    # network recovers.
+    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+
     # Encode responses using modern compression algorithms
     encode zstd gzip
 

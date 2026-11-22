@@ -31,9 +31,9 @@ import time
 from dataclasses import dataclass
 
 try:
-    from integrations.sms import send_otp
+    from services.sms_service import send_otp_sync
 except ImportError:
-    from sms import send_otp
+    from sms_service import send_otp_sync  # type: ignore[no-redef]
 
 # Persian (۰-۹) and Arabic (٠-٩) digits mapped to standard ASCII 0-9
 _PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
@@ -139,7 +139,7 @@ def request_otp(raw_phone: str) -> str:
     )
     recent.append(now)
 
-    send_otp(phone, code)
+    send_otp_sync(phone, code)
     return phone
 
 

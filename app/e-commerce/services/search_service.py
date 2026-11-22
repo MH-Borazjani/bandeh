@@ -29,9 +29,19 @@ wildcards.
 
 Both paths are always limited (default 20, max 50) — an unbounded
 search is a full-table scan handed to strangers.
+
+Spec filtering (Phase 3, Postgres only): products carry attribute
+values in ``specs`` (JSONB, e.g. {"screen_size_inch": 55}); the keys
+come from the category's definitions in Directus
+(categories.filter_attributes). ``apply_spec_filters`` adds one
+``specs ->> 'key' IN (...)`` clause per attribute, with bound
+parameters only. The statement is built, not run, so tests compile it
+against the Postgres dialect without a live Postgres.
 """
 
 from __future__ import annotations
+
+import re
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,13 +206,102 @@ async def list_products(
     return list(result.scalars().all())
 
 
+# Attribute keys are snake_case identifiers from the category's
+# definitions in Directus (e.g. screen_size_inch, capacity_kg). A key
+# outside this shape is dropped — it can never be a real attribute.
+_SPEC_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def clean_spec_filters(
+    filters: dict[str, list[object]] | None,
+) -> dict[str, list[str]]:
+    """Keep only usable spec filters: {key: [values]}.
+
+    A key must be a plain identifier; a value list must be non-empty.
+    Values are stringified because ``specs ->> 'key'`` returns text —
+    a stored number 55 compares as the string "55". ``None`` values
+    are dropped; anything else (a bad key, an empty list) means "no
+    filter for that attribute", never an error.
+    """
+    cleaned: dict[str, list[str]] = {}
+    if not isinstance(filters, dict):
+        return cleaned
+    for key, values in filters.items():
+        if not isinstance(key, str) or not _SPEC_KEY_RE.match(key):
+            continue
+        if not isinstance(values, list):
+            continue
+        kept = [str(v) for v in values if v is not None and str(v) != ""]
+        if kept:
+            cleaned[key] = kept
+    return cleaned
+
+
+def apply_spec_filters(
+    stmt: Select[Product], filters: dict[str, list[object]] | None
+) -> Select[Product]:
+    """Add JSONB spec WHERE clauses to a product statement (Postgres).
+
+    One clause per attribute: ``specs ->> 'key' IN ('55', ...)`` — a
+    product must match every attribute given (AND), and any one of the
+    values for that attribute (IN). Keys and values are bound
+    parameters, never pasted SQL. A product with no specs (``{}``)
+    matches nothing when a filter is given, because ``->>`` on a
+    missing key is NULL.
+    """
+    for key, values in clean_spec_filters(filters).items():
+        stmt = stmt.where(Product.specs[key].astext.in_(values))
+    return stmt
+
+
+def build_spec_filter_statement(
+    filters: dict[str, list[object]] | None,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
+) -> Select[Product]:
+    """Active products matching the spec filters (built, not run).
+
+    Separated from execution so tests can compile it against the
+    Postgres dialect and inspect the SQL without a live Postgres.
+    No filters means "all active products" — the same as no condition.
+    """
+    stmt = (
+        select(Product)
+        .where(Product.is_active == True)  # noqa: E712
+        .order_by(Product.created_at.desc())
+        .limit(_normalise_limit(limit))
+    )
+    stmt = apply_spec_filters(stmt, filters)
+    cond = clean_condition(condition)
+    if cond is not None:
+        stmt = stmt.where(Product.condition == cond)
+    return stmt
+
+
+async def filter_products_by_specs(
+    db: AsyncSession,
+    filters: dict[str, list[object]] | None,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
+) -> list[Product]:
+    """Run the spec-filter statement. Postgres only — callers check first."""
+    result = await db.execute(
+        build_spec_filter_statement(filters, limit, condition=condition)
+    )
+    return list(result.scalars().all())
+
+
 __all__ = [
     "CONDITIONS",
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
     "MAX_QUERY_LENGTH",
+    "apply_spec_filters",
     "build_fulltext_statement",
+    "build_spec_filter_statement",
     "clean_condition",
+    "clean_spec_filters",
+    "filter_products_by_specs",
     "list_products",
     "search_products",
     "search_products_fulltext",

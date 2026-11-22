@@ -145,13 +145,15 @@ async def payment_callback(
             oid = uuid.UUID(result["order_id"])
             order_record = await payment_service.load_order(db, oid)
             if order_record:
-                target_phone = order_record.recipient_phone or (
-                    order_record.user.phone if order_record.user else None
+                from services.sms_service import (
+                    check_low_stock_after_payment,
+                    send_order_paid_sms,
+                    send_owner_order_paid_sms,
                 )
-                if target_phone:
-                    from integrations.sms import send_order_paid
 
-                    send_order_paid(target_phone, order_record.id, order_record.total_toman)
+                await send_order_paid_sms(db, order_record)
+                await send_owner_order_paid_sms(db, order_record)
+                await check_low_stock_after_payment(db, order_record)
         except Exception:
             pass
 

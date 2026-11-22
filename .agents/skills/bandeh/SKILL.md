@@ -29,4 +29,4 @@ Read this skill FIRST, before changing any file. Repo docs in `docs/` are the de
 
 - Directus is the source of truth for content (products, categories). SQLAlchemy keeps only stock/reserved, search, orders, payments, users, sessions.
 - Zibal is the payment gateway. Amounts in Rial; `toman_to_rial` is the single conversion. Verify is the truth — callback is only a hint. Idempotency key is ours (UUID, saved with the order). Zibal has no idempotency field.
-- SMS via the Kavenegar client; dev-print fallback when no key is set. Never ask for the key.
+- SMS via the Meli Payamak client: patterns over the shared service line (BaseServiceNumber, one bodyId per message type from env); plain SendSMS is a documented fallback only. Never ask for the ApiKey.

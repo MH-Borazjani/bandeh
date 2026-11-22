@@ -1,0 +1,111 @@
+{# Shared filter panel (Phase 4) — used by category.html and search.html.
+   Context the endpoint must pass:
+     filter_action      URL the form submits to (/category/<id> or /search)
+     filter_definitions [{key, label, unit, options}] — attribute groups;
+                        empty on /search unless exactly one category is
+                        picked (the shared-vs-attribute rule)
+     selected_specs     {key: [values]} — the picked spec values, as strings
+     price_min / price_max  strings ("" when unset)
+     selected_condition "" / "new" / "used"
+     in_stock           bool
+     has_filters        bool — any filter active (shows the clear-all link)
+     filter_clear_url   bare URL the clear-all link goes to
+     filter_extra_hidden [(name, value)] — params the form must carry
+                        (q + categories on /search; condition there too,
+                        because on /search it lives in the chip row)
+     show_condition     bool — True on the category page (no other
+                        condition UI there); False on /search, where the
+                        condition chips above already cover it.
+   Behaviour: every change submits via HTMX (hx-trigger change, plus
+   the submit button) and swaps <main>, with hx-push-url so the URL
+   always reflects the filters — a copied link reproduces the view.
+   The panel state comes from the URL params on every render, so it
+   keeps working when HTMX re-renders it. No brand filter: products
+   carry no brand field, so there is no brand data to filter by. #}
+<form action="{{ filter_action }}" method="get"
+      hx-get="{{ filter_action }}" hx-target="main" hx-push-url="true"
+      hx-trigger="change, submit"
+      data-filter-panel
+      class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6 space-y-4">
+  {% for name, value in filter_extra_hidden %}
+  <input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}
+
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-bold theme-text-main">فیلترها</h2>
+    {% if has_filters %}
+    <a href="{{ filter_clear_url }}"
+       hx-get="{{ filter_clear_url }}"
+       hx-target="main"
+       hx-push-url="true"
+       class="theme-btn-secondary rounded-full px-3 py-1.5 text-xs font-semibold">پاک کردن فیلترها</a>
+    {% endif %}
+  </div>
+
+  {# Attribute filters: one checkbox per distinct value actually
+     present among the category's products (never hardcoded). #}
+  {% for group in filter_definitions %}
+  {% set picked = selected_specs.get(group.key, []) %}
+  <fieldset>
+    <legend class="text-xs font-bold theme-text-main mb-2">{{ group.label }}{% if group.unit %} ({{ group.unit }}){% endif %}</legend>
+    <div class="flex flex-wrap items-center gap-2">
+      {% for v in group.options %}
+      <label class="flex items-center gap-1.5 theme-btn-secondary rounded-full px-3 py-1.5 text-xs font-semibold cursor-pointer">
+        <input type="checkbox"
+               name="spec_{{ group.key }}"
+               value="{{ v }}"
+               {% if (v|string) in picked %}checked{% endif %}
+               class="w-4 h-4 accent-amber-600">
+        <span>{{ v }}{% if group.unit %} {{ group.unit }}{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {% endfor %}
+
+  {# Shared filters: price range, condition, in-stock. #}
+  <fieldset>
+    <legend class="text-xs font-bold theme-text-main mb-2">قیمت (تومان)</legend>
+    <div class="flex items-center gap-2">
+      <input type="number" name="price_min" value="{{ price_min }}" min="0" inputmode="numeric"
+             placeholder="حداقل"
+             class="w-full theme-input rounded-xl px-3 py-2 text-sm min-h-[44px]">
+      <span class="theme-text-muted text-xs shrink-0">تا</span>
+      <input type="number" name="price_max" value="{{ price_max }}" min="0" inputmode="numeric"
+             placeholder="حداکثر"
+             class="w-full theme-input rounded-xl px-3 py-2 text-sm min-h-[44px]">
+    </div>
+  </fieldset>
+
+  {% if show_condition and site.settings.sells_used %}
+  <fieldset>
+    <legend class="text-xs font-bold theme-text-main mb-2">وضعیت</legend>
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <label class="flex items-center gap-1.5 theme-btn-secondary rounded-full px-3 py-1.5 font-semibold cursor-pointer">
+        <input type="radio" name="condition" value="" {% if not selected_condition %}checked{% endif %} class="w-4 h-4 accent-amber-600">
+        <span>همه</span>
+      </label>
+      <label class="flex items-center gap-1.5 theme-btn-secondary rounded-full px-3 py-1.5 font-semibold cursor-pointer">
+        <input type="radio" name="condition" value="new" {% if selected_condition == 'new' %}checked{% endif %} class="w-4 h-4 accent-amber-600">
+        <span>نو</span>
+      </label>
+      <label class="flex items-center gap-1.5 theme-btn-secondary rounded-full px-3 py-1.5 font-semibold cursor-pointer">
+        <input type="radio" name="condition" value="used" {% if selected_condition == 'used' %}checked{% endif %} class="w-4 h-4 accent-amber-600">
+        <span>دست دوم</span>
+      </label>
+    </div>
+  </fieldset>
+  {% endif %}
+
+  <label class="flex items-center gap-2 text-xs font-semibold theme-text-main cursor-pointer">
+    <input type="checkbox" name="in_stock" value="1" {% if in_stock %}checked{% endif %} class="w-4 h-4 accent-amber-600">
+    <span>فقط کالاهای موجود</span>
+  </label>
+
+  <div>
+    <button type="submit"
+            class="theme-btn-accent font-bold rounded-xl px-4 py-2.5 text-xs min-h-[44px]">
+      اعمال فیلترها
+    </button>
+  </div>
+</form>

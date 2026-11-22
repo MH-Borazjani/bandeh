@@ -38,7 +38,6 @@ from db.models.session import UserSession
 from db.models.user import User
 from db.session import DbSessionDep
 from integrations.directus_client import _FA_DIGITS, format_toman_price
-from integrations.sms import send_order_shipped
 from schema.admin import (
     AdminOrderItemRead,
     AdminOrderListItem,
@@ -280,6 +279,10 @@ async def admin_update_order_status(
         raise HTTPException(status_code=404, detail="order not found")
 
     status_before = order_before.status
+    # The tracking SMS goes out ONLY the first time a tracking code is
+    # set: capture the code before this update (order_before and the
+    # updated order are the same ORM identity, so read it now).
+    tracking_before = order_before.tracking_code
 
     try:
         updated_order = await update_order_fulfillment(
@@ -295,20 +298,19 @@ async def admin_update_order_status(
             request, order_before, staff.phone, error_message=exc.detail
         )
 
-    # If order moved to shipped, send SMS notification
-    if target_status == "shipped" and status_before != "shipped":
-        notify_phone = updated_order.recipient_phone or (
-            updated_order.user.phone if updated_order.user else None
-        )
-        if notify_phone:
-            try:
-                send_order_shipped(
-                    notify_phone,
-                    updated_order.id,
-                    updated_order.tracking_code,
-                )
-            except Exception:
-                pass
+    # If order moved to shipped, send SMS notification — only when the
+    # order had no tracking code before this update.
+    if (
+        target_status == "shipped"
+        and status_before != "shipped"
+        and not tracking_before
+    ):
+        try:
+            from services.sms_service import send_tracking_sms
+
+            await send_tracking_sms(db, updated_order)
+        except Exception:
+            pass
 
     if is_json_request or (
         "application/json" in accept and "text/html" not in accept
@@ -354,6 +356,10 @@ async def admin_patch_order_fulfillment(
         raise HTTPException(status_code=404, detail="order not found")
 
     status_before = order_before.status
+    # Same first-time-only guard as the form endpoint above: the
+    # tracking SMS fires only when the order had no tracking code
+    # before this update.
+    tracking_before = order_before.tracking_code
 
     try:
         updated_order = await update_order_fulfillment(
@@ -365,19 +371,17 @@ async def admin_patch_order_fulfillment(
     except OrderError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
 
-    if payload.status == "shipped" and status_before != "shipped":
-        notify_phone = updated_order.recipient_phone or (
-            updated_order.user.phone if updated_order.user else None
-        )
-        if notify_phone:
-            try:
-                send_order_shipped(
-                    notify_phone,
-                    updated_order.id,
-                    updated_order.tracking_code,
-                )
-            except Exception:
-                pass
+    if (
+        payload.status == "shipped"
+        and status_before != "shipped"
+        and not tracking_before
+    ):
+        try:
+            from services.sms_service import send_tracking_sms
+
+            await send_tracking_sms(db, updated_order)
+        except Exception:
+            pass
 
     return AdminOrderRead(
         id=updated_order.id,

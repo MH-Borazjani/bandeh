@@ -20,25 +20,19 @@ Maintained for backwards compatibility. Implementation is located in ``integrati
 from integrations.sms import (
     _DEV_LAST_CODE,
     _DEV_SENT_MESSAGES,
-    KAVENEGAR_BASE_URL,
-    KavenegarClient,
-    KavenegarError,
+    MELI_BASE_URL,
+    MeliPayamakClient,
+    MeliPayamakError,
     SmsClientDep,
     get_sms_client,
-    send_order_paid,
-    send_order_shipped,
-    send_otp,
 )
 
 __all__ = [
-    "KAVENEGAR_BASE_URL",
-    "KavenegarClient",
-    "KavenegarError",
+    "MELI_BASE_URL",
+    "MeliPayamakClient",
+    "MeliPayamakError",
     "SmsClientDep",
     "_DEV_LAST_CODE",
     "_DEV_SENT_MESSAGES",
     "get_sms_client",
-    "send_order_paid",
-    "send_order_shipped",
-    "send_otp",
 ]

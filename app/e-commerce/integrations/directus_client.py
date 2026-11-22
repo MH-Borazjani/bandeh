@@ -715,7 +715,8 @@ class DirectusClient:
         """
         try:
             rows = await self._get_items(
-                "categories", ["id", "name", "description", "icon", "sort"]
+                "categories",
+                ["id", "name", "description", "icon", "sort", "filter_attributes"],
             )
             rows.sort(key=_sort_value)
             return rows
@@ -728,9 +729,35 @@ class DirectusClient:
                     "description": c["desc"],
                     "icon": c["icon"],
                     "sort": c["sort"],
+                    "filter_attributes": [],
                 }
                 for idx, c in enumerate(FALLBACK_CATEGORIES)
             ]
+
+    async def get_category_filter_attributes(
+        self,
+    ) -> dict[int | str, list[dict]]:
+        """Attribute definitions per category, from Directus.
+
+        Returns ``{category id: [definitions]}`` where each definition
+        is a dict like {"key": "screen_size_inch", "label": "اندازه صفحه",
+        "unit": "اینچ", "type": "number"}. The filter panel (Phase 4)
+        reads the definitions for the visitor's category from here;
+        categories without definitions map to []. Empty when Directus
+        is unreachable (the fallback categories have no attributes).
+        """
+        definitions: dict[int | str, list[dict]] = {}
+        for row in await self.list_categories():
+            cid = row.get("id")
+            if not isinstance(cid, int | str) or isinstance(cid, bool):
+                continue
+            attrs = _clean_filter_attributes_value(row.get("filter_attributes"))
+            definitions[cid] = attrs
+            if isinstance(cid, int):
+                definitions[str(cid)] = attrs
+            elif isinstance(cid, str) and cid.isdigit():
+                definitions[int(cid)] = attrs
+        return definitions
 
     async def get_site_content(self) -> SiteContent:
         """Return the site content: cache first, then Directus, then fallback.
@@ -1139,6 +1166,29 @@ def _clean_stars_value(value: object) -> int | None:
     return None
 
 
+def _clean_specs_value(value: object) -> dict:
+    """Coerce a CMS specs value to a dict; anything else is {} (no attributes)."""
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _clean_filter_attributes_value(value: object) -> list:
+    """Coerce a CMS filter_attributes value to a list; anything else is [].
+
+    Each definition is a dict like {"key": "screen_size_inch",
+    "label": "اندازه صفحه", "unit": "اینچ", "type": "number"}.
+    Rows that are not dicts, or dicts without a string "key", are dropped.
+    """
+    if not isinstance(value, list):
+        return []
+    cleaned: list[dict] = []
+    for item in value:
+        if isinstance(item, dict) and isinstance(item.get("key"), str):
+            cleaned.append(dict(item))
+    return cleaned
+
+
 def _sort_value(row: dict[str, object]) -> int:
     """The CMS ``sort`` value of a row (lower first); missing → 0."""
     sort = row.get("sort")
@@ -1227,6 +1277,10 @@ def _product_row(
     if condition != "used":
         stars = None
 
+    # Attribute values, e.g. {"screen_size_inch": 55}. Directus JSON
+    # field; anything that is not an object becomes {} (no attributes).
+    specs = _clean_specs_value(row.get("specs"))
+
     return {
         "id": pid_str,
         "name": name,
@@ -1241,6 +1295,7 @@ def _product_row(
         "tag": tag,
         "condition": condition,
         "condition_stars": stars,
+        "specs": specs,
     }
 
 
@@ -1260,6 +1315,7 @@ PRODUCT_READ_FIELDS = [
     "created_at",
     "condition",
     "condition_stars",
+    "specs",
 ]
 
 

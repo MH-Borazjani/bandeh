@@ -14,7 +14,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """External third-party service integrations."""
 
-from .sms import _DEV_LAST_CODE, send_otp
+from .sms import _DEV_LAST_CODE, _DEV_SENT_MESSAGES, get_sms_client
 
-__all__ = ["_DEV_LAST_CODE", "send_otp"]
-
+__all__ = ["_DEV_LAST_CODE", "_DEV_SENT_MESSAGES", "get_sms_client"]

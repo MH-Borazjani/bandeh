@@ -12,7 +12,7 @@
 </div>
 
 <!-- Search & Filter Form -->
-<form action="/search" method="get" hx-get="/search" hx-target="main" hx-push-url="true" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6 space-y-3.5">
+<form action="/search" method="get" hx-get="/search" hx-target="main" hx-push-url="true" data-single-category="{{ 'true' if single_category else 'false' }}" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6 space-y-3.5">
   <!-- Search query box -->
   <div class="relative flex items-center">
     <input type="search"
@@ -32,50 +32,100 @@
       جستجو
     </button>
   </div>
-  <!-- Keep the active filters when the user types a new query. -->
-  {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+  <!-- Keep the active filters when the user types a new query: one
+       hidden input per picked category, so the form submits repeated
+       `category` params and the URL stays shareable. -->
+  {% for c in selected_categories %}<input type="hidden" name="category" value="{{ c }}">{% endfor %}
   {% if selected_condition %}<input type="hidden" name="condition" value="{{ selected_condition }}">{% endif %}
+  {# Filter params the chip links must carry so toggling a category
+     or the condition never silently drops the price / in-stock
+     picks. Spec params are NOT carried by the category chips:
+     changing the picked set resets the per-category attribute
+     picks (the shared-vs-attribute rule); the condition chips do
+     carry them, because the category set stays the same there. #}
+  {% set shared_filter_params = [] %}
+  {% if price_min %}{% set _ = shared_filter_params.append('price_min=' ~ price_min) %}{% endif %}
+  {% if price_max %}{% set _ = shared_filter_params.append('price_max=' ~ price_max) %}{% endif %}
+  {% if in_stock %}{% set _ = shared_filter_params.append('in_stock=1') %}{% endif %}
+  {% set spec_filter_params = [] %}
+  {% for k, vals in selected_specs.items() %}{% for v in vals %}{% set _ = spec_filter_params.append('spec_' ~ k ~ '=' ~ (v | urlencode)) %}{% endfor %}{% endfor %}
 
-  <!-- Category quick list: tappable chips (no dropdown). Each chip stays
-       on /search and keeps the query and the other filter. -->
+  <!-- Category quick list: toggle chips (multi-select). Clicking a
+       chip adds or removes that category; the URL carries one repeated
+       `category` param per picked category, so a copied link
+       reproduces the selection. -->
   <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
     <span class="theme-text-muted shrink-0 font-medium">دسته‌بندی:</span>
-    <a href="/search{% if q or selected_condition %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_condition %}&{% endif %}{% if selected_condition %}condition={{ selected_condition }}{% endif %}{% endif %}"
-       hx-get="/search{% if q or selected_condition %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_condition %}&{% endif %}{% if selected_condition %}condition={{ selected_condition }}{% endif %}{% endif %}"
+    {% set clear_params = [] %}
+    {% if q %}{% set _ = clear_params.append('q=' ~ (q | urlencode)) %}{% endif %}
+    {% if selected_condition %}{% set _ = clear_params.append('condition=' ~ selected_condition) %}{% endif %}
+    {% for fp in shared_filter_params %}{% set _ = clear_params.append(fp) %}{% endfor %}
+    {% set clear_url = '/search' ~ (('?' ~ (clear_params | join('&'))) if clear_params else '') %}
+    <a href="{{ clear_url }}"
+       hx-get="{{ clear_url }}"
        hx-target="main"
        hx-push-url="true"
-       class="rounded-full px-3 py-1.5 font-semibold {% if not selected_category %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه دسته‌ها</a>
+       class="rounded-full px-3 py-1.5 font-semibold {% if not selected_categories %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه دسته‌ها</a>
     {% for cat in categories %}
-    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}category={{ cat.name | urlencode }}{% if selected_condition %}&condition={{ selected_condition }}{% endif %}"
-       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}category={{ cat.name | urlencode }}{% if selected_condition %}&condition={{ selected_condition }}{% endif %}"
+    {% set chip_cats = [] %}
+    {% for c in selected_categories %}
+      {% if c != cat.name %}{% set _ = chip_cats.append(c) %}{% endif %}
+    {% endfor %}
+    {% if cat.name not in selected_categories %}{% set _ = chip_cats.append(cat.name) %}{% endif %}
+    {% set chip_params = [] %}
+    {% if q %}{% set _ = chip_params.append('q=' ~ (q | urlencode)) %}{% endif %}
+    {% for c in chip_cats %}{% set _ = chip_params.append('category=' ~ (c | urlencode)) %}{% endfor %}
+    {% if selected_condition %}{% set _ = chip_params.append('condition=' ~ selected_condition) %}{% endif %}
+    {% for fp in shared_filter_params %}{% set _ = chip_params.append(fp) %}{% endfor %}
+    {% set chip_url = '/search' ~ (('?' ~ (chip_params | join('&'))) if chip_params else '') %}
+    <a href="{{ chip_url }}"
+       hx-get="{{ chip_url }}"
        hx-target="main"
        hx-push-url="true"
-       class="rounded-full px-3 py-1.5 font-semibold {% if selected_category == cat.name %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">{{ cat.name }}</a>
+       class="rounded-full px-3 py-1.5 font-semibold {% if cat.name in selected_categories %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">{{ cat.name }}</a>
     {% endfor %}
   </div>
 
-  <!-- Condition filter: only on a site that sells used goods. -->
+  <!-- Condition filter: only on a site that sells used goods. Keeps
+       every picked category in the link. -->
   {% if site.settings.sells_used %}
+  {% set cond_base = [] %}
+  {% if q %}{% set _ = cond_base.append('q=' ~ (q | urlencode)) %}{% endif %}
+  {% for c in selected_categories %}{% set _ = cond_base.append('category=' ~ (c | urlencode)) %}{% endfor %}
+  {% for fp in shared_filter_params %}{% set _ = cond_base.append(fp) %}{% endfor %}
+  {% for fp in spec_filter_params %}{% set _ = cond_base.append(fp) %}{% endfor %}
+  {% set cond_clear_url = '/search' ~ (('?' ~ (cond_base | join('&'))) if cond_base else '') %}
+  {% set cond_new_params = cond_base + ['condition=new'] %}
+  {% set cond_used_params = cond_base + ['condition=used'] %}
   <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
     <span class="theme-text-muted shrink-0 font-medium">وضعیت:</span>
-    <a href="/search{% if q or selected_category %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_category %}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}{% endif %}{% endif %}"
-       hx-get="/search{% if q or selected_category %}?{% if q %}q={{ q | urlencode }}{% endif %}{% if q and selected_category %}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}{% endif %}{% endif %}"
+    <a href="{{ cond_clear_url }}"
+       hx-get="{{ cond_clear_url }}"
        hx-target="main"
        hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if not selected_condition %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">همه</a>
-    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=new"
-       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=new"
+    <a href="/search?{{ cond_new_params | join('&') }}"
+       hx-get="/search?{{ cond_new_params | join('&') }}"
        hx-target="main"
        hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if selected_condition == 'new' %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">نو</a>
-    <a href="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=used"
-       hx-get="/search?{% if q %}q={{ q | urlencode }}&{% endif %}{% if selected_category %}category={{ selected_category | urlencode }}&{% endif %}condition=used"
+    <a href="/search?{{ cond_used_params | join('&') }}"
+       hx-get="/search?{{ cond_used_params | join('&') }}"
        hx-target="main"
        hx-push-url="true"
        class="rounded-full px-3 py-1.5 font-semibold {% if selected_condition == 'used' %}theme-btn-accent{% else %}theme-btn-secondary{% endif %}">دست دوم</a>
   </div>
   {% endif %}
 </form>
+
+<!-- Filter panel (Phase 4): on /search the attribute filters show
+     only when exactly one category is picked; otherwise only the
+     shared filters (price, in-stock) — the condition lives in the
+     chip row above and is carried as a hidden input, so changing a
+     filter never drops it. -->
+{% set filter_action = '/search' %}
+{% set show_condition = false %}
+{% include "_filter_panel.html" %}
 
 <!-- Results Section -->
 {% if searched %}
@@ -85,9 +135,9 @@
       {% if q %}
       <span class="theme-accent font-semibold">«{{ q }}»</span>
       {% endif %}
-      {% if selected_category %}
-      <span class="text-xs theme-badge rounded-lg px-2 py-0.5">{{ selected_category }}</span>
-      {% endif %}
+      {% for c in selected_categories %}
+      <span class="text-xs theme-badge rounded-lg px-2 py-0.5">{{ c }}</span>
+      {% endfor %}
       {% if selected_condition == 'new' %}
       <span class="text-xs theme-badge-success rounded-lg px-2 py-0.5">نو</span>
       {% elif selected_condition == 'used' %}
@@ -192,8 +242,8 @@
     <p class="text-xs theme-text-muted mb-4 leading-relaxed">
       با کلمات کلیدی دیگر جستجو کنید یا فیلتر دسته‌بندی را تغییر دهید.
     </p>
-    <a href="/search"
-       hx-get="/search"
+    <a href="{{ filter_clear_url }}"
+       hx-get="{{ filter_clear_url }}"
        hx-target="main"
        hx-push-url="true"
        class="inline-flex items-center justify-center theme-btn-secondary text-xs font-semibold rounded-xl px-4 py-2.5 min-h-[44px]">

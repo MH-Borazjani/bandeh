@@ -419,7 +419,7 @@ async def main_async() -> None:
     assert r.status_code == 200, r.status_code
     assert 'id="pre-search-form"' in r.text, "header panel must be a form to /search"
     assert 'action="/search"' in r.text
-    assert 'id="pre-search-category"' in r.text
+    assert 'id="pre-search-category-inputs"' in r.text, "header panel must hold one hidden input per picked category"
     assert 'id="pre-search-condition"' in r.text
     for cat in ("آشپزخانه", "تلویزیون و صدا", "شستشو"):
         assert f'data-filter-category="{cat}"' in r.text, f"missing pre-search chip {cat}"

@@ -32,6 +32,13 @@
   </div>
 </div>
 
+<!-- Filter panel (Phase 4): attribute checkboxes for this
+     category + shared price / condition / in-stock filters.
+     Submits via HTMX into <main>; the URL carries the filters. -->
+{% set filter_action = '/category/' ~ (category.id if category.id is not none else category.name) %}
+{% set show_condition = true %}
+{% include "_filter_panel.html" %}
+
 <!-- Product list header -->
 <div class="flex items-center justify-between mb-4 px-1">
   <h2 class="text-sm sm:text-base font-bold theme-text-main">کالاهای این دسته</h2>
@@ -125,10 +132,19 @@
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
     </svg>
   </div>
-  <h3 class="text-base font-bold theme-text-main mb-1.5">کالایی در این دسته موجود نیست</h3>
+  <h3 class="text-base font-bold theme-text-main mb-1.5">{% if has_filters %}کالایی با این فیلترها یافت نشد{% else %}کالایی در این دسته موجود نیست{% endif %}</h3>
   <p class="text-xs theme-text-muted mb-4 leading-relaxed">
-    به زودی کالاهای جدید به این دسته‌بندی افزوده خواهند شد.
+    {% if has_filters %}فیلترها را تغییر دهید یا آن‌ها را پاک کنید.{% else %}به زودی کالاهای جدید به این دسته‌بندی افزوده خواهند شد.{% endif %}
   </p>
+  {% if has_filters %}
+  <a href="{{ filter_clear_url }}"
+     hx-get="{{ filter_clear_url }}"
+     hx-target="main"
+     hx-push-url="true"
+     class="inline-flex items-center justify-center theme-btn-accent text-xs font-bold rounded-xl px-4 py-2.5 min-h-[44px]">
+    پاک کردن فیلترها
+  </a>
+  {% else %}
   <a href="/"
      hx-get="/"
      hx-target="main"
@@ -136,6 +152,7 @@
      class="inline-flex items-center justify-center theme-btn-accent text-xs font-bold rounded-xl px-4 py-2.5 min-h-[44px]">
     مشاهده سایر محصولات فروشگاه
   </a>
+  {% endif %}
 </div>
 {% endif %}
 

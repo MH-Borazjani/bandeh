@@ -53,9 +53,9 @@
 
     <!-- Order summary info -->
     <div class="space-y-2 mb-4 text-xs">
-      <div class="flex items-center justify-between">
-        <span class="theme-text-muted">شناسه سفارش:</span>
-        <span class="font-mono font-semibold theme-text-main text-[11px]">{{ order.id }}</span>
+      <div class="flex items-center justify-between gap-2">
+        <span class="theme-text-muted shrink-0">شناسه سفارش:</span>
+        <span class="font-mono font-semibold theme-text-main text-[11px] break-all min-w-0 text-left">{{ order.id }}</span>
       </div>
       <div class="flex items-center justify-between">
         <span class="theme-text-muted">خریدار / تحویل‌گیرنده:</span>
@@ -66,9 +66,9 @@
         <span class="font-bold theme-text-main">{{ order.items_count | persian_digits }} کالا</span>
       </div>
       {% if order.tracking_code %}
-      <div class="flex items-center justify-between pt-1">
-        <span class="theme-text-muted">کد رهگیری پستی:</span>
-        <span class="theme-accent font-mono font-bold">{{ order.tracking_code }}</span>
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <span class="theme-text-muted shrink-0">کد رهگیری پستی:</span>
+        <span class="theme-accent font-mono font-bold break-all min-w-0 text-left">{{ order.tracking_code }}</span>
       </div>
       {% endif %}
     </div>

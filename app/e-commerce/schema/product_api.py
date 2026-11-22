@@ -67,6 +67,9 @@ class ProductRead(BaseModel):
     # old rows (and old Directus dicts without these fields) valid.
     condition: str = "new"
     condition_stars: int | None = None
+    # Attribute values, e.g. {"screen_size_inch": 55}. Keys are defined
+    # per category in Directus (categories.filter_attributes).
+    specs: dict[str, object] = {}
 
     @computed_field
     @property

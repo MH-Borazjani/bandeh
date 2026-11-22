@@ -82,6 +82,14 @@
       color: var(--text-main);
     }
 
+    /* Safety net: no page ever scrolls sideways. The real fixes are the
+       break-all / min-w-0 rules on the long order-id and tracking-code
+       rows; this only clips anything a future template might still push
+       past the edge. `clip` (not `hidden`) keeps the sticky header working. */
+    html, body {
+      overflow-x: clip;
+    }
+
     /* Core Design System Classes */
     .theme-bg-page { background-color: var(--bg-page); }
     .theme-bg-card { background-color: var(--bg-card); }
@@ -281,13 +289,32 @@
                   </svg>
                 </div>
               </div>
+              <!-- Search button sits directly under the input, above the
+                   filter chips, so it is always visible without scrolling
+                   past the categories. -->
+              <button type="submit"
+                      class="w-full theme-btn-accent font-bold rounded-xl px-4 py-2 text-xs min-h-[36px] mb-2">
+                جستجو
+              </button>
+              <a href="/search"
+                 id="advanced-search-link"
+                 class="w-full theme-btn-secondary font-semibold rounded-xl px-4 py-2 text-xs min-h-[36px] flex items-center justify-center mb-2">
+                جستجوی پیشرفته
+              </a>
               <div id="pre-search-filters" class="space-y-2 mb-2">
                 <div class="flex flex-wrap items-center gap-1.5 text-xs" data-filter-group="category">
                   <span class="theme-text-muted shrink-0 font-medium">دسته‌بندی:</span>
                   <button type="button" data-filter-category="" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-accent">همه</button>
                   {% for cat in site.categories %}
-                  <button type="button" data-filter-category="{{ cat.name }}" class="pre-search-chip rounded-full px-2.5 py-1 font-semibold theme-btn-secondary">{{ cat.name }}</button>
+                  {% set is_extra = loop.index > 3 %}
+                  <button type="button" data-filter-category="{{ cat.name }}" class="pre-search-chip{% if is_extra %} pre-search-category-extra hidden{% endif %} rounded-full px-2.5 py-1 font-semibold theme-btn-secondary">{{ cat.name }}</button>
                   {% endfor %}
+                  {% if site.categories | length > 3 %}
+                  <button type="button"
+                          id="toggle-more-pre-search-categories"
+                          onclick="var extras = document.querySelectorAll('.pre-search-category-extra'); var willShow = extras[0] && extras[0].classList.contains('hidden'); extras.forEach(function(el){ el.classList.toggle('hidden', !willShow); }); this.querySelector('span').textContent = willShow ? 'کمتر' : 'بیشتر';"
+                          class="rounded-full px-2.5 py-1 font-semibold theme-btn-secondary"><span>بیشتر</span></button>
+                  {% endif %}
                 </div>
                 {% if site.settings.sells_used %}
                 <div class="flex flex-wrap items-center gap-1.5 text-xs" data-filter-group="condition">
@@ -298,12 +325,11 @@
                 </div>
                 {% endif %}
               </div>
-              <input type="hidden" name="category" id="pre-search-category" value="">
+              <!-- One hidden input per picked category (multi-select):
+                   the form submits repeated `category` params, and the
+                   live search includes them the same way. -->
+              <span id="pre-search-category-inputs"></span>
               <input type="hidden" name="condition" id="pre-search-condition" value="">
-              <button type="submit"
-                      class="w-full theme-btn-accent font-bold rounded-xl px-4 py-2 text-xs min-h-[36px]">
-                جستجو
-              </button>
             </form>
             <div id="search-live-results" class="min-h-[60px] mt-2">
               <div class="py-4 text-center text-xs theme-text-muted">نام کالا یا برند را تایپ کنید...</div>
