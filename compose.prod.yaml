@@ -30,6 +30,7 @@ services:
       - ./caddy-certs:/etc/caddy/certs:ro
       - ./acme-challenges:/srv/acme-challenges:ro
       - ./directus-pwa:/srv/bandeh/app/directus-pwa:ro
+      - ./enamad:/srv/bandeh/app/enamad:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

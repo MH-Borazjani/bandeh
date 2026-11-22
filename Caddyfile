@@ -20,6 +20,14 @@ http://{$DOMAIN:localhost} {
     }
     @via_https header X-Forwarded-Proto https
     handle @via_https {
+        # Enamad domain-ownership file (2026-11-23): an empty file that must
+        # answer at https://genabay.ir/45228717.txt. Served here so the
+        # app never needs a code change for it.
+        @enamad path /45228717.txt
+        handle @enamad {
+            root * /srv/bandeh/app/enamad
+            file_server
+        }
         reverse_proxy web:80 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
