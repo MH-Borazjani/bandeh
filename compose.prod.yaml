@@ -38,9 +38,10 @@ services:
   # ---------------------------------------------------------------------------
   web:
     container_name: fastapi-e-commerce
-    build:
-      context: .
-      dockerfile: dockerfile
+    # Image-only deploy: the image is built in GitHub Actions and pushed to
+    # GHCR. Never switch this back to build: on the server — the server
+    # holds no code.
+    image: ghcr.io/mh-borazjani/bandeh:latest
     restart: unless-stopped
     expose:
       - "80"
