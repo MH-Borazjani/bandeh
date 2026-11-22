@@ -43,6 +43,16 @@ http://{$DOMAIN:localhost} {
 http://directus.{$DOMAIN:localhost} {
     @via_https header X-Forwarded-Proto https
     handle @via_https {
+        # Corrected PWA manifest + icons (2026-11-22): Directus ships a
+        # broken manifest whose icons point to a 16x16 .ico, so Chrome
+        # refuses to install. Serve a correct manifest + real 192/512
+        # PNG icons from local files instead. The service worker
+        # (/pwa/sw.js) still comes from Directus.
+        @directus_pwa path /pwa/manifest.json /pwa/icon-192.png /pwa/icon-512.png
+        handle @directus_pwa {
+            root * /srv/bandeh/app/directus-pwa
+            file_server
+        }
         reverse_proxy directus:8055 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
