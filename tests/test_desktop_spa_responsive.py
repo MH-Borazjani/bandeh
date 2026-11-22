@@ -210,7 +210,7 @@ class DesktopAndSpaTests(unittest.TestCase):
         self.assertNotIn("<header", html)
         self.assertNotIn("<footer", html)
         self.assertIn("<title>", html)
-        self.assertIn("بنده", html)
+        self.assertIn("گنابِی", html)
 
         # 2. Cart page with HTMX
         resp_cart = self.client.get("/cart", headers={"HX-Request": "true"})

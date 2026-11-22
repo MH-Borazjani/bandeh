@@ -255,7 +255,7 @@ FALLBACK_PRODUCTS: list[ProductContent] = [
 # header, footer, trust boxes and seal cards render exactly as today.
 FALLBACK_SITE_CONTENT: SiteContent = {
     "settings": {
-        "site_title": "بنده",
+        "site_title": "گنابِی",
         "site_tagline": "ضمانت اصالت و ارسال مستقیم با بهترین قیمت",
         "hero_title": "خانه‌ی مدرن، زندگی بهتر",
         "hero_subtitle": "وسایل ضروری مدرن برای هر لحظه از روز",
@@ -271,10 +271,10 @@ FALLBACK_SITE_CONTENT: SiteContent = {
         "mcp_chatgpt_url": "https://chatgpt.com/plugins",
         "mcp_gemini_url": "https://gemini.google.com/customize/connectors",
         "mcp_guide_intro": (
-            "وصل کردن هوش مصنوعی به فروشگاه یعنی دیگر سرچ نمی‌کنی؛ می‌پرسی. هوش مصنوعی به‌جای تو در"
-            "فروشگاه می‌گردد، قیمت و موجودی را"
-            "می‌گوید و بهترین گزینه را پیشنهاد می‌کند. پول و سفارش"
-            "همیشه با تایید خودت انجام می‌شود."
+            "لازم نیست بین صدها کالا بگردی. هوش مصنوعی‌ات را یک بار به فروشگاه وصل کن؛"
+            " از آن به بعد فقط سؤال بپرس: خودش کالا پیدا می‌کند، قیمت و موجودی را می‌گوید،"
+            " به سبد خرید اضافه می‌کند و پیش‌نویس سفارش می‌سازد. و خیالت راحت: پرداخت"
+            " همیشه دستی است — هیچ پولی بدون دست خودت جابه‌جا نمی‌شود."
         ),
         "instagram_title": "ما را در اینستاگرام دنبال کنید",
         "instagram_text": "تخفیف‌ها، کالاهای جدید و ویدیوهای فروشگاه را اول در اینستاگرام می‌بینید.",
@@ -300,22 +300,29 @@ FALLBACK_SITE_CONTENT: SiteContent = {
 }
 
 # Fallback MCP guide sections, used ONLY when Directus cannot answer.
-# Same steps the guide shows from the CMS; verified against the
-# official docs on 2026-11-21. The CMS seed holds the fuller text.
+# Clean end-user text, synced with the rewritten guide artifact
+# («وصل کردن هوش مصنوعی به فروشگاه گنابِی», Tracker id 110).
+# No internal notes, no screenshot mentions, no research or status
+# text — only the steps a normal visitor needs. Order: Claude,
+# ChatGPT, Gemini, Codex, Gemini CLI, Antigravity, Claude Code
+# (Gemini above Codex). The CMS seed holds the same text.
 FALLBACK_GUIDE_SECTIONS: list[GuideSection] = [
     {
         "slug": "claude",
         "ai_name": "Claude",
-        "title": "Claude — بهترین گزینه؛ رایگان و فقط با لینک",
-        "support_note": "پشتیبانی می‌کند — حساب رایگان هم کافی است (۱ اتصال)",
+        "title": "Claude — ساده‌ترین راه ⭐",
+        "support_note": "رایگان و فقط با لینک — ساده‌ترین راه",
         "body": (
-            "<p>کلود ساده‌ترین راه است: فقط لینک را می‌چسبانید، بدون کد و بدون فایل.</p><ol><li>به"
-            "آدرس <b>claude.ai</b> بروید و وارد حساب شوید.</li><li>روی <b>Customize</b> بزنید، بعد"
-            "<b>Connectors</b>.</li><li>روی <b>+ Add</b> بزنید، بعد <b>Add custom"
-            "connector</b>.</li><li>یک نام بنویسید و لینک فروشگاه را در قسمت آدرس بچسبانید، بعد"
-            "<b>Continue</b> و <b>Add</b>.</li><li>در هر گفتگو با دکمه <b>+</b> پایین صفحه، از"
-            "<b>Connectors</b> آن را روشن کنید.</li></ol><p>فقط لینک لازم است؛ فایل تنظیمات"
-            "نمی‌خواهد. سرور باید آدرس عمومی و امن (https) باشد.</p>"
+            "<p>در Claude وصل کردن فروشگاه رایگان است و فقط یک لینک می‌خواهد — نه"
+            " فایل، نه کدنویسی. حساب رایگان اجازه یک کانکتور را می‌دهد و همین برای"
+            " فروشگاه کافی است.</p><ol><li>لینک فروشگاه را از جعبه بالای همین صفحه کپی"
+            " کن.</li><li>در Claude برو به <b>Customize &gt; Connectors</b>.</li><li>روی"
+            " <b>+ Add</b> بزن و <b>Add custom connector</b> را انتخاب کن.</li><li>یک اسم"
+            " بنویس (مثلاً «گنابِی»)، لینک را بچسبان و <b>Continue</b> را بزن.</li><li>در"
+            " پایان <b>Add</b> را بزن. تمام شد!</li><li>در هر گفتگو، با دکمه <b>+</b>"
+            " پایین صفحه، از بخش <b>Connectors</b> کانکتور فروشگاه را روشن کن و سؤالت"
+            " را بپرس.</li></ol><p>چرا Claude راحت است؟ حساب رایگان کافی است، فقط با"
+            " لینک وصل می‌شود و هیچ تنظیم اضافه‌ای نمی‌خواهد.</p>"
         ),
         "supported": True,
         "sort": 1,
@@ -323,92 +330,117 @@ FALLBACK_GUIDE_SECTIONS: list[GuideSection] = [
     {
         "slug": "chatgpt",
         "ai_name": "ChatGPT",
-        "title": "ChatGPT — صفحه اضافه کردن روی حساب رایگان هم باز می‌شود",
-        "support_note": (
-            "پشتیبانی می‌کند — صفحه Add custom MCP server روی حساب رایگان هم"
-            "باز می‌شود؛ استفاده کامل طبق مستندات رسمی برای طرح‌های کاری است"
-        ),
+        "title": "ChatGPT — فقط در وب 💻",
+        "support_note": "فقط در وب (نه موبایل) و با چسباندن لینک",
         "body": (
-            "<p>صفحه اضافه کردن سرور MCP در چت‌جی‌پی‌تی روی حساب رایگان هم"
-            "باز می‌شود (با اسکرین‌شات تایید شده). ولی مستندات رسمی می‌گوید"
-            "استفاده کامل MCP برای Business و Enterprise و Edu است و Pro فقط"
-            "خواندن (جستجو، قیمت، موجودی). پس اگر روی حساب رایگان دکمه"
-            "Create کار نکرد یا فقط خواندن جواب داد، همان محدودیت است.</p>"
-            "<ol><li>مستقیم به <b>chatgpt.com/plugins</b>"
-            "بروید (یا در وب چت‌جی‌پی‌تی به <b>Plugins</b>).</li>"
-            "<li>روی دکمه <b>+</b> بزنید، بعد <b>Add custom MCP server</b>.</li><li>نام"
-            "بنویسید و لینک فروشگاه را در قسمت <b>Connection</b> بچسبانید.</li><li>تیک <b>I"
-            "understand and want to continue</b>"
-            "را بزنید، بعد <b>Create as a plugin</b>.</li><li>در"
-            "چت با <b>@</b> افزونه را انتخاب کنید.</li></ol><p>فقط در وب کار می‌کند، نه در موبایل."
-            "در فضای کاری، فقط مدیر می‌تواند آن را بسازد و منتشر کند.</p>"
+            "<p>قبل از شروع بدان: ChatGPT فقط در وب کار می‌کند، نه در موبایل. در فضای"
+            " کاری، فقط مدیر می‌تواند آن را بسازد و منتشر کند.</p><ol><li>لینک فروشگاه"
+            " را کپی کن و در مرورگر، <b>chatgpt.com</b> را باز کن.</li><li>برو به"
+            " <b>Plugins</b> و دکمه <b>Add</b> را بزن؛ بعد <b>Add custom MCP server</b>"
+            " را انتخاب کن.</li><li>در فیلد <b>Name</b> بنویس «گنابِی».</li><li>در بخش"
+            " <b>Connection</b> گزینه <b>Server URL</b> را نگه دار و لینک فروشگاه را"
+            " بچسبان.</li><li>هشدار روی فرم را بخوان (یک هشدار استاندارد است — پایین"
+            " صفحه در بخش «آیا امن است؟» توضیحش داده‌ایم)، تیک <b>I understand and"
+            " want to continue</b> را بزن.</li><li><b>Create as a plugin</b> را"
+            " بزن.</li><li>برای استفاده: یک گفتگوی تازه باز کن، در کادر پیام <b>@</b>"
+            " بزن و پلاگین فروشگاه را انتخاب کن.</li></ol><p>یک نکته صادقانه درباره"
+            " پلن‌ها: فرم افزودن روی حساب رایگان هم باز می‌شود و می‌توانی لینک را وارد"
+            " کنی. اما راهنمای رسمی OpenAI می‌گوید اتصال کامل برای حساب‌های Business /"
+            " Enterprise / Edu است و پلن Pro فقط می‌تواند بخواند (جستجو، قیمت و موجودی)."
+            " پس اگر روی حسابت جایی متوقف شد، از محدودیت پلن است، نه از خرابی لینک"
+            " فروشگاه.</p>"
         ),
         "supported": True,
         "sort": 2,
     },
     {
-        "slug": "codex",
-        "ai_name": "Codex",
-        "title": "Codex — رایگان؛ ولی ابزار برنامه‌نویس‌هاست",
-        "support_note": "پشتیبانی می‌کند — در طرح‌های ChatGPT از جمله رایگان؛ فقط در اپ دسکتاپ",
+        "slug": "gemini",
+        "ai_name": "Gemini",
+        "title": "Gemini — در اپ وب گوگل ✨",
+        "support_note": "در اپ وب گوگل با چند کلیک؛ بعد از وصل شدن، روی موبایل هم کار می‌کند",
         "body": (
-            "<p>کودکس در اپ دسکتاپ خودش سرور MCP"
-            "می‌پذیرد، ولی ابزار برنامه‌نویسی است؛ برای خرید کردن"
-            "ساخته نشده است.</p><ol><li>اپ دسکتاپ Codex را باز کنید.</li><li>به <b>Settings</b>"
-            "بروید، بعد <b>MCP servers</b>.</li><li>روی"
-            "<b>Add server</b> بزنید.</li><li>نام بنویسید،"
-            "گزینه <b>Streamable HTTP</b> را انتخاب کنید و لینک فروشگاه را بچسبانید.</li><li>ذخیره"
-            "کنید، بعد <b>Restart</b>"
-            "بزنید.</li></ol><p>برای کسانی که کد می‌نویسند، تنظیمات با فایل"
-            "هم ممکن است (در مستندات، فایل"
-            "<b>config.toml</b>)؛ ولی برای خرید، کلود ساده‌تر است.</p>"
+            "<p>Gemini هم فقط با لینک وصل می‌شود. وصل کردن در اپ وب انجام می‌شود، ولی"
+            " خبر خوب این است: بعد از وصل شدن، در اپ موبایل Gemini هم در دسترس"
+            " است.</p><ol><li>لینک فروشگاه را کپی کن و در مرورگر برو به"
+            " <b>gemini.google.com</b>.</li><li>از نوار کناری <b>Customize</b> را بزن"
+            " (اگر این گزینه را ندیدی، اول <b>More</b> را بزن).</li><li>بالای صفحه"
+            " <b>Connectors</b> را بزن.</li><li><b>+ Custom</b> را بزن تا پنجره"
+            " <b>Connect to an MCP server</b> باز شود.</li><li>لینک فروشگاه را در فیلد"
+            " <b>MCP Server URL</b> بچسبان — لینک باید با <b>https://</b> شروع شود —"
+            " و <b>Next</b> را بزن.</li><li>بعد از وصل شدن، در گفتگو <b>@</b> بزن و"
+            " اپ فروشگاه را انتخاب کن تا Gemini از همان استفاده کند.</li></ol><p>شرط‌های"
+            " Gemini: برای این قابلیت باید با حساب شخصی گوگل وارد شده باشی (حساب کاری"
+            " یا مدرسه‌ای نمی‌شود)، بالای ۱۸ سال باشی، History حسابت روشن باشد، و فعلاً"
+            " این بخش فقط به زبان انگلیسی کار می‌کند.</p>"
         ),
         "supported": True,
         "sort": 3,
     },
     {
-        "slug": "gemini",
-        "ai_name": "Gemini",
-        "title": "Gemini — در اپ وب، با دکمه Custom وصل می‌شود",
-        "support_note": "پشتیبانی می‌کند — در اپ وب با دکمه Custom؛ فقط حساب شخصی گوگل",
+        "slug": "codex",
+        "ai_name": "Codex",
+        "title": "Codex — ابزار کدنویسی 🛠️",
+        "support_note": "ابزار برنامه‌نویسی OpenAI است، نه ابزار خرید",
         "body": (
-            "<p>اپ وب جمنای هم سرور MCP شخصی می‌پذیرد (با اسکرین‌شات تایید شده):</p>"
-            "<ol><li>به <b>gemini.google.com</b> بروید و وارد حساب گوگل شوید.</li>"
-            "<li>در منوی کناری روی <b>Customize</b> بزنید، بعد بالای صفحه <b>Connectors</b>.</li>"
-            "<li>روی دکمه <b>+ Custom</b> بزنید؛ پنجره"
-            " <b>Connect to an MCP server</b> باز می‌شود.</li>"
-            "<li>لینک فروشگاه را در قسمت <b>MCP Server URL</b> بچسبانید"
-            " (باید با https:// شروع شود)،"
-            " بعد <b>Next</b>.</li></ol>"
-            "<p>شرط‌های سند گوگل: حساب شخصی گوگل (نه حساب کاری یا مدرسه)،"
-            " بالای ۱۸ سال، History روشن و زبان انگلیسی. سند گوگل درباره رایگان یا Pro بودن"
-            " چیزی نمی‌گوید.</p><p>اگر برنامه‌نویس هستید، <b>Gemini CLI</b> هم این کار را می‌کند"
-            " (ترمینال و فایل تنظیمات): در فایل تنظیمات این متن را"
-            " بگذارید:</p><pre>{\n  \"mcpServers\":"
-            " {\n    \"shop\": {\n      \"httpUrl\":"
-            " \"https://genabay.ir/mcp\"\n    }\n  }\n}</pre><p>دقت"
-            " کنید: در Gemini CLI فیلد درست <b>httpUrl</b> است، نه <b>url</b>.</p>"
+            "<p>Codex ابزار برنامه‌نویسی OpenAI است، نه ابزار خرید؛ برای خرید روزمره"
+            " سراغ سه برنامه اول برو. این بخش فقط برای کامل بودن راهنماست، برای کسانی"
+            " که با Codex کار می‌کنند.</p><ol><li>در اپ دسکتاپ Codex برو به <b>Settings"
+            " &gt; MCP servers</b>.</li><li><b>Add server</b> را بزن، یک اسم بنویس و"
+            " <b>Streamable HTTP</b> را انتخاب کن.</li><li>لینک فروشگاه را بچسبان،"
+            " ذخیره کن و <b>Restart</b> را بزن.</li></ol><p>یا همین متن را در فایل"
+            " <b>config.toml</b> بگذار:</p><pre>[mcp_servers.genabay]\nurl ="
+            " \"https://genabay.ir/mcp\"</pre>"
         ),
         "supported": True,
         "sort": 4,
     },
     {
-        "slug": "antigravity",
-        "ai_name": "Antigravity",
-        "title": "Antigravity — پشتیبانی می‌کند؛ ولی با ویرایش فایل",
-        "support_note": "پشتیبانی می‌کند — طرح رایگان هم دارد؛ ولی اتصال شخصی فقط با فایل تنظیمات",
+        "slug": "gemini-cli",
+        "ai_name": "Gemini CLI",
+        "title": "Gemini CLI — فقط توسعه‌دهنده‌ها ⌨️",
+        "support_note": "ابزار ترمینال گوگل؛ برای برنامه‌نویس‌هاست",
         "body": (
-            "<p>در اپ Antigravity دکمه <b>Add MCP Server</b> فقط سرورهای آماده فروشگاه خودش را نصب"
-            "می‌کند. برای سرور شخصی فروشگاه ما باید فایل تنظیمات را ویرایش کنید:</p><pre>{\n "
-            "\"mcpServers\": {\n    \"shop\": {\n"
-            "     \"serverUrl\": \"https://genabay.ir/mcp/\"\n  "
-            "}\n  }\n}</pre><p>مسیر فایل را از"
-            "بخش <b>Customizations</b> و گزینه <b>Copy Config File"
-            "Path</b> پیدا کنید. دقت کنید: در Antigravity فیلد درست <b>serverUrl</b> است؛ فیلد"
-            "<b>httpUrl</b> اینجا کار نمی‌کند (برعکس Gemini CLI).</p>"
+            "<p>این ابزار ترمینال گوگل است و فقط به درد برنامه‌نویس‌ها می‌خورد. کاربر"
+            " عادی از خود اپ Gemini وصل می‌شود (بخش Gemini در بالا). سریع‌ترین راه،"
+            " این دستور است:</p><pre>gemini mcp add --transport http genabay"
+            " https://genabay.ir/mcp</pre><p>یا این متن را در فایل"
+            " <b>~/.gemini/settings.json</b> بگذار. دقت کن: فیلد درست <b>httpUrl</b>"
+            " است.</p><pre>{\n  \"mcpServers\": {\n    \"genabay\": {\n      \"httpUrl\":"
+            " \"https://genabay.ir/mcp\",\n      \"timeout\": 5000\n    }\n  }\n}</pre>"
         ),
         "supported": True,
         "sort": 5,
+    },
+    {
+        "slug": "antigravity",
+        "ai_name": "Antigravity",
+        "title": "Antigravity — فقط توسعه‌دهنده‌ها 🚀",
+        "support_note": "محیط کدنویسی گوگل؛ فقط برای توسعه‌دهنده‌ها",
+        "body": (
+            "<p>Antigravity محیط کدنویسی گوگل است و این بخش هم فقط برای توسعه‌دهنده‌هاست."
+            " اینجا سرور فروشگاه با چسباندن لینک در یک فرم اضافه نمی‌شود؛ باید متن زیر"
+            " را در فایل <b>mcp_config.json</b> بگذاری. مسیر دقیق فایل را داخل برنامه،"
+            " از دکمه <b>Copy Config File Path</b> در بخش سرورهای MCP بردار. دقت کن:"
+            " اینجا فیلد درست <b>serverUrl</b> است.</p><pre>{\n  \"mcpServers\":"
+            " {\n    \"genabay\": {\n      \"serverUrl\": \"https://genabay.ir/mcp/\"\n"
+            "    }\n  }\n}</pre><p>ابزارها در Antigravity به‌صورت پیش‌فرض در حالت"
+            " Ask اجرا می‌شوند؛ یعنی قبل از هر کاری از تو اجازه می‌گیرد.</p>"
+        ),
+        "supported": True,
+        "sort": 6,
+    },
+    {
+        "slug": "claude-code",
+        "ai_name": "Claude Code",
+        "title": "Claude Code — برای کامل بودن 👨‍💻",
+        "support_note": "اگر کانکتور را در Claude اضافه کرده باشی، خودکار در دسترس است",
+        "body": (
+            "<p>اگر کانکتور فروشگاه را در Claude اضافه کرده باشی، در Claude Code هم"
+            " خودکار در دسترس است. دستور مستقیمش هم این است:</p><pre>claude mcp add"
+            " --transport http genabay https://genabay.ir/mcp</pre>"
+        ),
+        "supported": True,
+        "sort": 7,
     },
 ]
 

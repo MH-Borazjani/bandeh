@@ -6,11 +6,49 @@
 # Plain-HTTP site: serves ACME HTTP-01 challenge files WITHOUT redirecting
 # (Let's Encrypt fetches the challenge over plain HTTP; a redirect to HTTPS
 # would make Arvan fetch it from the origin over TLS, which fails while the
-# origin cert is self-signed). Everything else redirects to HTTPS.
+# origin cert is self-signed). Everything else redirects to HTTPS — EXCEPT
+# requests that already came through Arvan over HTTPS (they carry
+# X-Forwarded-Proto: https). Redirecting those back to HTTPS is the
+# infinite redirect loop (2026-11-22): Arvan connects to the origin on
+# port 80, Caddy redirects to https://genabay.ir/, Arvan passes the 301
+# to the visitor, the visitor re-requests https://genabay.ir/, and it
+# loops forever. So: proxy those through to the app instead.
 http://{$DOMAIN:localhost} {
     handle_path /.well-known/acme-challenge/* {
         root * /srv/acme-challenges
         file_server
+    }
+    @via_https header X-Forwarded-Proto https
+    handle @via_https {
+        reverse_proxy web:80 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+            health_uri /health
+            health_interval 10s
+            health_timeout 3s
+        }
+    }
+    handle {
+        redir https://{host}{uri} permanent
+    }
+}
+
+# Directus admin panel on a subdomain (no port needed):
+# https://directus.genabay.ir — Arvan's wildcard cert (*.genabay.ir)
+# covers it at the edge; Arvan connects to the origin on port 80,
+# so the origin only needs this plain-HTTP block (same pattern as the
+# shop: proxy X-Forwarded-Proto https through, redirect the rest).
+http://directus.{$DOMAIN:localhost} {
+    @via_https header X-Forwarded-Proto https
+    handle @via_https {
+        reverse_proxy directus:8055 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+        }
     }
     handle {
         redir https://{host}{uri} permanent

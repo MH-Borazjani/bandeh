@@ -51,7 +51,7 @@ def main() -> None:
     # 1. Guest landing: 200, shop name, login link, no account link.
     r = guest.get("/")
     assert r.status_code == 200, r.status_code
-    assert "بنده" in r.text
+    assert "گنابِی" in r.text
     assert 'href="/auth/login"' in r.text, "guest must see the login link"
     assert 'href="/auth/account"' not in r.text, r.text
 

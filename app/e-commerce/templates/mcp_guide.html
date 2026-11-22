@@ -59,6 +59,9 @@
     {% for s in sections %}
     <li><a href="#{{ s.slug }}" class="theme-accent font-semibold hover:underline">{{ s.title }}</a></li>
     {% endfor %}
+    <li><a href="#safety" class="theme-accent font-semibold hover:underline">آیا امن است؟</a></li>
+    <li><a href="#privacy" class="theme-accent font-semibold hover:underline">حریم خصوصی — سرور چه می‌بیند و چه نمی‌بیند</a></li>
+    <li><a href="#tools" class="theme-accent font-semibold hover:underline">سرور دقیقاً چه کارهایی می‌کند؟</a></li>
   </ol>
 </div>
 
@@ -74,6 +77,74 @@
   </div>
 </section>
 {% endfor %}
+
+<!-- Is it safe? -->
+<section id="safety" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">آیا امن است؟ 🔒</h2>
+  <div class="text-xs sm:text-sm theme-text-muted leading-relaxed space-y-3">
+    <p>سؤال خوبی است — و جوابش را ساده و شفاف می‌گوییم تا با خیال راحت تصمیم بگیری.</p>
+    <p><b class="theme-text-main">آن هشدار ترسناک موقع وصل کردن چیست؟</b> وقتی می‌خواهی یک سرور سفارشی اضافه کنی، برنامه‌ات یک هشدار نشان می‌دهد؛ چیزی شبیه «این سرور می‌تواند خطرناک باشد». نترس: این یک <b class="theme-text-main">هشدار استاندارد</b> است که برای <b class="theme-text-main">هر</b> سرور سفارشی می‌آید — هر فروشگاه و هر سرویسی در دنیا که بخواهی وصل کنی، همین هشدار را می‌بینی. این هشدار مخصوص سرور ما نیست و یعنی «خودت داری یک سرور بیرونی اضافه می‌کنی، حواست باشد»، نه این‌که سرور ما مشکلی داشته باشد.</p>
+    <p><b class="theme-text-main">پرداخت همیشه دستی است.</b> سرور فروشگاه <b class="theme-text-main">هیچ‌وقت خودش پول پرداخت نمی‌کند</b>. نهایت کاری که می‌کند این است: یک <b class="theme-text-main">لینک پرداخت زیبال</b> به تو می‌دهد؛ تو روی آن می‌زنی، وارد صفحه بانک می‌شوی و <b class="theme-text-main">خودت</b> پرداخت می‌کنی — دقیقاً مثل خرید عادی از سایت. تا خودت در صفحه بانک پرداخت نکنی، هیچ پولی جابه‌جا نمی‌شود.</p>
+    <p><b class="theme-text-main">هر لحظه خواستی، قطعش کن.</b> اتصال را در همان برنامه، با <b class="theme-text-main">یک کلیک</b> می‌توانی حذف کنی. و اگر کلید شخصی‌ات (همان که با <code dir="ltr">gbpat_</code> شروع می‌شود) را در حساب فروشگاه حذف کنی، دسترسی <b class="theme-text-main">همان لحظه</b> قطع می‌شود — لازم نیست به کسی خبر بدهی یا صبر کنی.</p>
+    <p><b class="theme-text-main">کد فروشگاه متن‌باز است.</b> کد فروشگاه و سرورش برای همه باز است؛ هر کسی — خودت یا هر برنامه‌نویسی — می‌تواند بخواند و ببیند سرور دقیقاً چه کار می‌کند و چه کار نمی‌کند. چیزی پنهان نیست.</p>
+    <p><b class="theme-text-main">سرور فقط چه چیزی را می‌بیند؟</b> فقط همان چیزهایی که درباره خرید از هوش مصنوعی می‌پرسی: مثلاً «یخچال زیر ۳۰ میلیون دارید؟». نه به بقیه گفتگوهایت دسترسی دارد، نه به فایل‌هایت، نه به حسابت در جاهای دیگر. و فهرست کامل کارهایی که می‌تواند بکند همین ۹ ابزار بخش بعدی است — <b class="theme-text-main">نه یک کار بیشتر</b>.</p>
+  </div>
+  <div class="mt-4 pt-3 border-t theme-border">
+    <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>
+  </div>
+</section>
+
+<!-- Privacy: what the server sees and what it never sees -->
+<section id="privacy" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">حریم خصوصی — سرور چه می‌بیند و چه نمی‌بیند 👀</h2>
+  <div class="text-xs sm:text-sm theme-text-muted leading-relaxed space-y-3">
+    <p>حق داری شکاک باشی — ما هم همین‌طوریم. پس اینجا دقیق و ساده می‌گوییم سرور فروشگاه چه چیزی را می‌بیند، چه چیزی را نگه می‌دارد و چه کارهایی را هیچ‌وقت نمی‌کند. بدون حرف اضافه.</p>
+    <div class="rounded-xl border p-3 sm:p-4" style="border-color:#34d399; background-color:rgba(52,211,153,0.08);">
+      <p class="font-bold theme-text-main mb-1">🤝 قول ما به شما</p>
+      <p class="theme-text-main">ما سؤال‌های خرید شما را فراتر از پاسخ دادن به آن‌ها ثبت، ذخیره یا مطالعه نمی‌کنیم.</p>
+    </div>
+    <p><b class="theme-text-main">سرور چه چیزی را می‌بیند؟</b> فقط همان سؤال‌های خریدی را که در آن گفتگو از هوش مصنوعی می‌پرسی؛ مثلاً: «یک تلویزیون ۵۵ اینچ نشانم بده». همین. <b class="theme-text-main">هیچ چیز دیگری</b> — نه بقیه گفتگوهایت، نه فایل‌هایت، نه هیچ جای دیگر حسابت.</p>
+    <p><b class="theme-text-main">چه چیزهایی را هیچ‌وقت نمی‌بیند.</b> سرور به <b class="theme-text-main">بقیه گفتگوهایت</b>، <b class="theme-text-main">فایل‌هایت</b> و <b class="theme-text-main">اطلاعات پرداختت</b> هیچ دسترسی‌ای ندارد. شماره کارتت اصلاً به سرور ما نمی‌رسد — پرداخت روی صفحه بانک انجام می‌شود و ما آن را نه می‌بینیم، نه نگه می‌داریم.</p>
+    <p><b class="theme-text-main">سرور چه چیزی را نگه می‌دارد؟</b> فقط دو چیز: <b class="theme-text-main">کالاهای سبد خریدت</b> و <b class="theme-text-main">پیش‌نویس سفارش‌هایت</b> — دقیقاً همان چیزهایی که هر فروشگاه اینترنتی عادی هم نگه می‌دارد، وگرنه خرید اصلاً ممکن نیست.</p>
+    <p><b class="theme-text-main">سؤال‌هایت ذخیره نمی‌شود.</b> سرور سؤال‌هایی را که از هوش مصنوعی می‌پرسی <b class="theme-text-main">ذخیره نمی‌کند</b>. سؤالت می‌آید، جوابش برمی‌گردد، تمام. هیچ آرشیوی از حرف‌هایت پیش ما نمی‌ماند.</p>
+    <p><b class="theme-text-main">کلید شخصی‌ات فقط به‌صورت هش نگه داشته می‌شود.</b> کلید شخصی تو (همان که با <code dir="ltr">gbpat_</code> شروع می‌شود) روی سرور فقط به‌صورت <b class="theme-text-main">هش SHA256</b> ذخیره می‌شود — یعنی خودِ کلید پیش ما نیست و از روی هش هم نمی‌شود آن را برگرداند. کلید کامل فقط <b class="theme-text-main">یک بار</b>، موقع ساختن، به خودت نشان داده می‌شود و هر وقت خواستی می‌توانی از حسابت <b class="theme-text-main">حذفش کنی</b>.</p>
+    <p><b class="theme-text-main">هیچ‌وقت خودش پول نمی‌دهد و بدون تأیید تو سفارش نمی‌دهد.</b> سرور <b class="theme-text-main">هیچ‌وقت خودش پرداخت نمی‌کند</b> و <b class="theme-text-main">بدون تأیید تو سفارشی ثبت نمی‌کند</b>. سفارش تا وقتی خودت تأییدش نکنی فقط یک <b class="theme-text-main">پیش‌نویس</b> است؛ و پرداخت هم همیشه روی <b class="theme-text-main">صفحه بانک</b> و با دست خودت انجام می‌شود.</p>
+    <p><b class="theme-text-main">درباره آن هشدار موقع وصل کردن.</b> هشداری که موقع اضافه کردن سرور می‌بینی، یک <b class="theme-text-main">هشدار استاندارد</b> است که برای <b class="theme-text-main">هر سرور سفارشی</b> می‌آید — نه فقط سرور ما. هر فروشگاه یا سرویسی را هم که بخواهی وصل کنی، همان هشدار را می‌بینی.</p>
+    <p><b class="theme-text-main">کد سرور باز است — خودت بخوانش.</b> به حرف ما اعتماد نکن — خودت کد را بخوان. کد سرور برای همه منتشر شده تا اگر خودت یا یک آدم فنی خواستید، دقیق ببینید سرور چه کار می‌کند: <a href="https://github.com/MH-Borazjani/bandeh/blob/main/app/e-commerce/integrations/mcp_server.py" target="_blank" rel="noopener" class="theme-accent hover:underline" dir="ltr">mcp_server.py</a> — خودِ سرور و ابزارهایش، <a href="https://github.com/MH-Borazjani/bandeh/blob/main/app/e-commerce/services/pat_service.py" target="_blank" rel="noopener" class="theme-accent hover:underline" dir="ltr">pat_service.py</a> — کلید شخصی و هش کردنش، <a href="https://github.com/MH-Borazjani/bandeh/blob/main/app/e-commerce/services/cart_service.py" target="_blank" rel="noopener" class="theme-accent hover:underline" dir="ltr">cart_service.py</a> — سبد خرید.</p>
+    <p><b class="theme-text-main">قطع کردن دسترسی — قدم‌به‌قدم.</b> هر وقت خواستی، دو کار ساده کافی است: اتصال را در برنامه هوش مصنوعی حذف کن و کلیدت را در حساب فروشگاه پاک کن. <b class="theme-text-main">هر دو همان لحظه</b> اثر می‌کنند و سرور فوراً از کار می‌افتد. در Claude: <b>Customize &gt; Connectors</b>، کانکتور فروشگاه (گنابِی) را باز کن و <b>Remove</b> را بزن. در ChatGPT: <b>chatgpt.com</b> و بخش <b>Plugins</b>، پلاگین فروشگاه را پیدا کن و <b>Remove</b> را بزن. در Gemini: <b>gemini.google.com</b>، از نوار کناری <b>Customize</b> و بعد <b>Connectors</b>، اتصال فروشگاه را پیدا کن و <b>Disconnect</b> را بزن. برای حذف کلید، برو به صفحه حسابت <a href="/auth/account" class="theme-accent hover:underline" dir="ltr">genabay.ir/auth/account</a>، کلید شخصی‌ات را پیدا کن و دکمه حذف را بزن؛ از همان لحظه، حتی اگر اتصال در برنامه هوش مصنوعی مانده باشد، دیگر کار نمی‌کند.</p>
+  </div>
+  <div class="mt-4 pt-3 border-t theme-border">
+    <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>
+  </div>
+</section>
+
+<!-- What exactly can the server do? The 9 tools. -->
+<section id="tools" class="theme-bg-card theme-border border rounded-2xl p-4 sm:p-5 mb-6">
+  <h2 class="text-base sm:text-lg font-bold theme-text-main mb-3">سرور دقیقاً چه کارهایی می‌کند؟ 🧰</h2>
+  <div class="text-xs sm:text-sm theme-text-muted leading-relaxed space-y-3">
+    <p>این فهرست کامل است: سرور فروشگاه فقط همین ۹ کار را بلد است. هر کاری خارج از این فهرست، به‌سادگی برایش تعریف نشده و نمی‌تواند انجامش بدهد.</p>
+    <p><b class="theme-text-main">بدون کلید — برای همه آزاد است:</b></p>
+    <ul class="list-disc pr-5 space-y-1.5">
+      <li><code dir="ltr">search_products</code> — بین کالاهای فروشگاه جستجو می‌کند.</li>
+      <li><code dir="ltr">get_product</code> — جزئیات یک کالا را نشان می‌دهد: قیمت، موجودی و مشخصات.</li>
+      <li><code dir="ltr">list_categories</code> — فهرست دسته‌بندی‌های فروشگاه را می‌آورد.</li>
+    </ul>
+    <p><b class="theme-text-main">با کلید شخصی — فقط برای خودت:</b> سه کار بالا برای همه آزاد است، ولی سبد خرید و سفارش مال خودت است؛ برای همین این شش کار فقط با «کلید شخصی» تو انجام می‌شود:</p>
+    <ul class="list-disc pr-5 space-y-1.5">
+      <li><code dir="ltr">get_cart</code> — سبد خریدت را نشان می‌دهد.</li>
+      <li><code dir="ltr">add_to_cart</code> — یک کالا به سبدت اضافه می‌کند.</li>
+      <li><code dir="ltr">remove_from_cart</code> — یک کالا از سبدت حذف می‌کند.</li>
+      <li><code dir="ltr">create_order_draft</code> — از سبدت یک پیش‌نویس سفارش می‌سازد (هنوز سفارش نهایی و پرداخت نیست).</li>
+      <li><code dir="ltr">cancel_order</code> — یک سفارش را لغو می‌کند.</li>
+      <li><code dir="ltr">get_payment_link</code> — لینک پرداخت زیبال را می‌سازد تا خودت در صفحه بانک پرداخت کنی.</li>
+    </ul>
+    <p><b class="theme-text-main">کلید شخصی را از کجا بگیرم؟</b> در صفحه حساب فروشگاه ساخته می‌شود: <a href="/auth/account" class="theme-accent hover:underline" dir="ltr">genabay.ir/auth/account</a>. کلید با <code dir="ltr">gbpat_</code> شروع می‌شود و مثل رمز عبور توست؛ به کسی نده. فقط <b class="theme-text-main">یک بار</b> نشان داده می‌شود؛ همان موقع کپی و نگهش دار. هر وقت خواستی، از همان صفحه حساب <b class="theme-text-main">باطلش کن</b>؛ با باطل شدنش دسترسی هوش مصنوعی همان لحظه قطع می‌شود.</p>
+    <p>یک نکته کوچک: سبدی که با هوش مصنوعی پر می‌شود، فعلاً با سبد خرید داخل سایت یکی نیست؛ دو سبد جدا هستند.</p>
+  </div>
+  <div class="mt-4 pt-3 border-t theme-border">
+    <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>
+  </div>
+</section>
 
 <div class="text-center">
   <a href="#top" class="text-xs font-semibold theme-accent hover:underline">بازگشت به بالا ↑</a>

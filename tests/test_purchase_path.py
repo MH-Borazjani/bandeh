@@ -369,7 +369,7 @@ class PurchasePathTests(unittest.TestCase):
         self.assertIn(str(order_id), html)
         self.assertIn("99887766", html)
         self.assertIn("مراحل بعدی سفارش شما", html)
-        self.assertIn("انبار مرکزی بنده", html)
+        self.assertIn("انبار مرکزی گنابِی", html)
         self.assertIn("بازگشت به فروشگاه", html)
 
     def test_payment_result_page_renders_failure_state(self) -> None:

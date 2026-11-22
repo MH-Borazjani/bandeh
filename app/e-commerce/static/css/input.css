@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Readability on phones: the shop's body copy uses text-xs / text-sm,
+   which is 12px / 14px — too small to read comfortably on a phone.
+   On narrow screens (<640px) bump them one step so body text is
+   clearly readable. Desktop sizes are unchanged: the sm: variants
+   take over at 640px and up, and this rule does not apply there.
+   Spacing and layout are untouched — only font sizes move. */
+@media (max-width: 639px) {
+  .text-xs {
+    font-size: 0.875rem;
+    line-height: 1.375rem;
+  }
+  .text-sm {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+}

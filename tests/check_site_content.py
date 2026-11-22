@@ -369,7 +369,7 @@ async def main_async() -> None:
     dead = _make_dead_client()
     r = dead.get("/")
     assert r.status_code == 200, r.status_code
-    assert "بنده" in r.text, "fallback must render the hardcoded site title"
+    assert "گنابِی" in r.text, "fallback must render the hardcoded site title"
     assert "ضمانت اصالت" in r.text, "fallback must render the hardcoded trust badges"
     r = dead.get("/terms")
     assert r.status_code == 200, r.status_code
@@ -481,9 +481,9 @@ async def main_async() -> None:
     dead = _make_dead_client()
     r = dead.get("/mcp-guide")
     assert r.status_code == 200, r.status_code
-    assert "Claude — بهترین گزینه" in r.text
-    assert "Gemini — در اپ وب، با دکمه Custom وصل می‌شود" in r.text
-    assert "chatgpt.com/plugins" in r.text
+    assert "Claude — ساده‌ترین راه" in r.text
+    assert "Gemini — در اپ وب گوگل" in r.text
+    assert "chatgpt.com" in r.text
     print("13. MCP + Instagram boxes above hero; /mcp-guide with checklist, TOC, back-to-top")
 
     print("ALL SITE-CONTENT CHECKS PASSED")
