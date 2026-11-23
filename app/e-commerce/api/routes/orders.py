@@ -26,6 +26,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -34,7 +35,11 @@ from core.security import CurrentDbUserDep, RequireDbUserDep
 from core.templates import templates
 from db.models.order import Order
 from db.session import DbSessionDep
-from integrations.directus_client import _FA_DIGITS, format_toman_price
+from integrations.directus_client import (
+    _FA_DIGITS,
+    DirectusClientDep,
+    format_toman_price,
+)
 from schema.order_api import OrderCreate, OrderRead
 from services.order_service import (
     OrderError,
@@ -165,6 +170,7 @@ async def create_order_endpoint(
     data: OrderCreate,
     user: RequireDbUserDep,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> OrderRead:
     """Checkout: freeze the cart into an order (prices fixed at this moment)."""
     try:
@@ -188,12 +194,19 @@ async def create_order_endpoint(
             db,
             user,
             data.items,
+            directus,
             recipient_name=data.recipient_name,
             recipient_phone=data.recipient_phone,
             delivery_address=resolved_address,
         )
     except OrderError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
+    except httpx.HTTPError as exc:
+        # Prices live in Directus: when the catalogue cannot be
+        # reached, checkout cannot price the order.
+        raise HTTPException(
+            status_code=503, detail="product catalogue is unavailable"
+        ) from exc
     return OrderRead.model_validate(order)
 
 
@@ -202,9 +215,10 @@ async def checkout_endpoint(
     data: OrderCreate,
     user: RequireDbUserDep,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> OrderRead:
     """Checkout: create order with delivery address."""
-    return await create_order_endpoint(data, user, db)
+    return await create_order_endpoint(data, user, db, directus)
 
 
 @router.get("/orders", response_model=None)

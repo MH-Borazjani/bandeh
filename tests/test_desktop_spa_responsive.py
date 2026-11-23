@@ -16,11 +16,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import sys
 import unittest
 import uuid
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app" / "e-commerce"
@@ -28,7 +30,11 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 
+from db.base import Base  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
+from db.session import get_db  # noqa: E402
 from integrations.directus_client import get_directus_client  # noqa: E402
 from main import app  # noqa: E402
 
@@ -77,12 +83,49 @@ class DesktopAndSpaTests(unittest.TestCase):
     """Test suite verifying desktop responsive layout, SPA feel and new address fields."""
 
     def setUp(self) -> None:
+        # Product reads attach stock from the database now, so the
+        # routes need a session even when Directus is mocked: an
+        # in-memory SQLite database with a stock row for the sample.
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+
+        async def init_db() -> None:
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            async_session = async_sessionmaker(
+                self.engine, expire_on_commit=False, class_=AsyncSession
+            )
+            async with async_session() as s:
+                s.add(
+                    ProductStock(
+                        directus_product_id="123e4567-e89b-12d3-a456-426614174000",
+                        stock=5,
+                    )
+                )
+                await s.commit()
+
+        asyncio.run(init_db())
+        self.Session = async_sessionmaker(
+            self.engine, expire_on_commit=False, class_=AsyncSession
+        )
+
+        async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+            async with self.Session() as session:
+                try:
+                    yield session
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    raise
+
+        app.dependency_overrides[get_db] = override_get_db
         self.client = TestClient(app)
         self.mock_directus = MockDirectusClient()
         app.dependency_overrides[get_directus_client] = lambda: self.mock_directus
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_directus_client, None)
+        app.dependency_overrides.pop(get_db, None)
+        asyncio.run(self.engine.dispose())
 
     def test_desktop_container_and_padding_classes(self) -> None:
         """Main, header and footer grow to 1200px max on desktop with increased padding."""

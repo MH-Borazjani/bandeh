@@ -63,12 +63,12 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from core.cache import get_cache
-from db.models.product import Product
 from db.models.user import User
 from db.session import get_session_factory
 from integrations.directus_client import DirectusClient
 from integrations.zibal_client import ZibalClient
 from services import cart_service, order_service, pat_service, payment_service
+from services import stock_service
 from services.auth_service import normalize_phone
 from services.cart_service import CartError
 from services.order_service import OrderError, OrderItemInput
@@ -189,24 +189,26 @@ async def _directus(ctx: Context) -> DirectusClient:
     return DirectusClient(http_client, cache=await get_cache())
 
 
-def _product_view(row: dict | Product) -> dict:
-    """One product as the AI sees it: id, name, price, condition, stock."""
-    if isinstance(row, dict):
-        return {
-            "id": str(row.get("id")),
-            "name": row.get("name"),
-            "price_toman": row.get("price_toman"),
-            "condition": row.get("condition", "new"),
-            "condition_stars": row.get("condition_stars"),
-            "in_stock": bool(row.get("is_active", True)),
-        }
+def _product_view(row: dict) -> dict:
+    """One product as the AI sees it: id, name, price, condition, stock.
+
+    ``row`` is a Directus product dict with its real stock attached
+    (see services.stock_service.attach_stock). A product with no
+    stock row has zero available, so it shows as out of stock.
+    """
+    available = row.get("available")
+    if available is None:
+        available = max(
+            0,
+            (row.get("stock") or 0) - (row.get("reserved") or 0),
+        )
     return {
-        "id": str(row.id),
-        "name": row.name,
-        "price_toman": row.price_toman,
-        "condition": row.condition,
-        "condition_stars": row.condition_stars,
-        "in_stock": row.available > 0,
+        "id": str(row.get("id")),
+        "name": row.get("name"),
+        "price_toman": row.get("price_toman"),
+        "condition": row.get("condition", "new"),
+        "condition_stars": row.get("condition_stars"),
+        "in_stock": available > 0,
     }
 
 
@@ -217,22 +219,27 @@ async def _load_user(db: AsyncSession, user_id: str) -> User:
     return user
 
 
-async def _cart_view(db: AsyncSession, user: User) -> dict:
+async def _cart_view(db: AsyncSession, user: User, directus: DirectusClient) -> dict:
     """The customer's cart with names, prices and totals (all Toman)."""
     lines = await cart_service.get_cart_items(db, user)
+    rows = await directus.get_products_by_ids(
+        [line.product_id for line in lines]
+    )
+    await stock_service.attach_stock(db, rows)
+    by_id = {str(row.get("id")): row for row in rows}
     items: list[dict] = []
     total_toman = 0
     for line in lines:
-        product = await db.get(Product, line.product_id)
-        if product is None:
+        row = by_id.get(str(line.product_id))
+        if row is None:
             continue
-        line_total = product.price_toman * line.quantity
+        line_total = (row.get("price_toman") or 0) * line.quantity
         total_toman += line_total
         items.append(
             {
                 "product_id": str(line.product_id),
-                "name": product.name,
-                "price_toman": product.price_toman,
+                "name": row.get("name"),
+                "price_toman": row.get("price_toman"),
                 "quantity": line.quantity,
                 "line_total_toman": line_total,
             }
@@ -257,10 +264,10 @@ async def search_products(
     """
     from services import search_service
 
+    directus = await _directus(ctx)
+    limit = max(1, min(limit, 50))
     if category:
-        # The database model does not map the category column, so a
-        # category search goes through Directus like the website does.
-        directus = await _directus(ctx)
+        # Category search goes through Directus, like the website does.
         rows = await directus.list_products_by_category(category, limit=50)
         if not rows:
             # The category name did not match a real category. AI apps
@@ -294,25 +301,27 @@ async def search_products(
                         terms.append(word)
                 seen: set[str] = set()
                 out: list[dict] = []
-                async with _db_session() as db:
-                    for term in terms:
-                        found = await search_service.search_products(
-                            db,
-                            term,
-                            limit=max(1, min(limit, 50)),
-                            condition=condition,
-                        )
-                        for product in found:
-                            key = str(product.id)
-                            if key in seen:
-                                continue
-                            seen.add(key)
-                            out.append(_product_view(product))
-                            if len(out) >= max(1, min(limit, 50)):
-                                break
-                        if len(out) >= max(1, min(limit, 50)):
+                found_rows: list[dict] = []
+                for term in terms:
+                    found = await search_service.search_products(
+                        directus,
+                        term,
+                        limit=limit,
+                        condition=condition,
+                    )
+                    for row in found:
+                        key = str(row.get("id"))
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        found_rows.append(row)
+                        if len(found_rows) >= limit:
                             break
-                return out
+                    if len(found_rows) >= limit:
+                        break
+                async with _db_session() as db:
+                    await stock_service.attach_stock(db, found_rows)
+                return [_product_view(row) for row in found_rows]
         needle = query.strip().lower()
         out: list[dict] = []
         for row in rows:
@@ -320,15 +329,18 @@ async def search_products(
                 continue
             if condition and row.get("condition", "new") != condition:
                 continue
-            out.append(_product_view(row))
-            if len(out) >= max(1, min(limit, 50)):
+            out.append(row)
+            if len(out) >= limit:
                 break
-        return out
+        async with _db_session() as db:
+            await stock_service.attach_stock(db, out)
+        return [_product_view(row) for row in out]
+    found = await search_service.search_products(
+        directus, query, limit=limit, condition=condition
+    )
     async with _db_session() as db:
-        found = await search_service.search_products(
-            db, query, limit=max(1, min(limit, 50)), condition=condition
-        )
-        return [_product_view(p) for p in found]
+        await stock_service.attach_stock(db, found)
+    return [_product_view(row) for row in found]
 
 
 async def get_product(ctx: Context, product_id: str) -> dict | None:
@@ -344,13 +356,13 @@ async def get_product(ctx: Context, product_id: str) -> dict | None:
     row = await directus.get_product(pid)
     if row is None:
         return None
+    async with _db_session() as db:
+        stock_row = await stock_service.get_stock(db, pid)
+        await stock_service.attach_stock_one(db, row)
     view = _product_view(row)
     view["description"] = row.get("description")
-    async with _db_session() as db:
-        product = await db.get(Product, pid)
-        view["in_stock"] = bool(product is not None and product.available > 0)
-        if product is not None:
-            view["stock_available"] = product.available
+    if stock_row is not None:
+        view["stock_available"] = stock_row.available
     return view
 
 
@@ -371,9 +383,10 @@ async def list_categories(ctx: Context) -> list[dict]:
 async def get_cart(ctx: Context) -> dict:
     """The customer's own server-side cart, with totals. Needs the login token."""
     user_id = _require_user(ctx)
+    directus = await _directus(ctx)
     async with _db_session() as db:
         user = await _load_user(db, user_id)
-        return await _cart_view(db, user)
+        return await _cart_view(db, user, directus)
 
 
 async def add_to_cart(
@@ -385,13 +398,14 @@ async def add_to_cart(
         pid = uuid.UUID(product_id)
     except ValueError:
         raise RuntimeError("that is not a product id") from None
+    directus = await _directus(ctx)
     async with _db_session() as db:
         user = await _load_user(db, user_id)
         try:
-            await cart_service.add_to_cart(db, user, pid, quantity)
+            await cart_service.add_to_cart(db, user, pid, directus, quantity)
         except CartError as exc:
             raise RuntimeError(str(exc)) from exc
-        return await _cart_view(db, user)
+        return await _cart_view(db, user, directus)
 
 
 async def remove_from_cart(
@@ -406,6 +420,7 @@ async def remove_from_cart(
         pid = uuid.UUID(product_id)
     except ValueError:
         raise RuntimeError("that is not a product id") from None
+    directus = await _directus(ctx)
     async with _db_session() as db:
         user = await _load_user(db, user_id)
         try:
@@ -414,7 +429,7 @@ async def remove_from_cart(
             raise RuntimeError(str(exc)) from exc
         if not removed:
             raise RuntimeError("that product is not in the cart")
-        return await _cart_view(db, user)
+        return await _cart_view(db, user, directus)
 
 
 async def create_order_draft(
@@ -433,6 +448,7 @@ async def create_order_draft(
         phone = normalize_phone(recipient_phone)
     except ValueError:
         raise RuntimeError("that phone number is not valid") from None
+    directus = await _directus(ctx)
     async with _db_session() as db:
         user = await _load_user(db, user_id)
         lines = await cart_service.get_cart_items(db, user)
@@ -447,6 +463,7 @@ async def create_order_draft(
                 db,
                 user,
                 items,
+                directus,
                 recipient_name=recipient_name.strip(),
                 recipient_phone=phone,
                 delivery_address=delivery_address.strip(),

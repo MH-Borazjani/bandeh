@@ -1183,6 +1183,44 @@ class DirectusClient:
         category_map = await self.get_category_map()
         return _product_row(row, category_map=category_map)
 
+    async def get_products_by_ids(
+        self, product_ids: list[uuid.UUID | str]
+    ) -> list[dict]:
+        """Several products by id, in one request (cart + order views).
+
+        Uses Directus ``filter[id][_in]``. Unknown ids are simply
+        absent from the result — the caller decides what that means.
+        Empty input means an empty list, never a request.
+        """
+        ids = [str(pid) for pid in product_ids]
+        if not ids:
+            return []
+        response = await self._http.get(
+            f"{self._base_url}/items/products",
+            headers=self._headers(),
+            params={
+                "fields": ",".join(PRODUCT_READ_FIELDS),
+                "filter[id][_in]": ",".join(ids),
+                "limit": max(1, len(ids)),
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Directus products returned non-object JSON")
+        rows = data.get("data")
+        if not isinstance(rows, list) or not all(
+            isinstance(row, dict) for row in rows
+        ):
+            raise ValueError("Directus products returned no 'data' list")
+        category_map = await self.get_category_map()
+        by_id = {
+            str(row["id"]): _product_row(row, category_map=category_map)
+            for row in rows
+            if row.get("id") is not None
+        }
+        return [by_id[pid] for pid in ids if pid in by_id]
+
 
 def _clean_condition_value(value: object) -> str:
     """Coerce a CMS condition value to 'new' or 'used'; anything else is 'new'."""
@@ -1250,17 +1288,15 @@ def _product_row(
     if not isinstance(price, int) or isinstance(price, bool):
         raise ValueError("Directus product price_toman must be an integer")
 
-    stock = row.get("stock")
-    if stock is None:
-        stock = 0
-    elif not isinstance(stock, int) or isinstance(stock, bool):
-        raise ValueError("Directus product stock must be an integer")
-
-    reserved = row.get("reserved")
-    if reserved is None:
-        reserved = 0
-    elif not isinstance(reserved, int) or isinstance(reserved, bool):
-        raise ValueError("Directus product reserved must be an integer")
+    # Stock lives in the shop's product_stock table, NOT in Directus
+    # (Directus has no row lock, so it cannot own stock). The
+    # stock/reserved columns still exist on the shared products table,
+    # but they are dead: callers overwrite these two numbers with the
+    # stock table's values via services.stock_service.attach_stock
+    # before anything is shown or sold. Zero here means "no stock
+    # attached yet", never a real count.
+    stock = 0
+    reserved = 0
 
     is_active = row.get("is_active")
     if is_active is None:

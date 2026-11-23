@@ -51,7 +51,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from core.security import SESSION_COOKIE_NAME, create_session  # noqa: E402
 from db.base import Base  # noqa: E402
 from db.models.order import Order  # noqa: E402
-from db.models.product import Product  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
 from db.models.user import User, UserRole  # noqa: E402
 from db.session import get_db  # noqa: E402
 from integrations.directus_client import get_directus_client  # noqa: E402
@@ -120,7 +120,7 @@ class PurchasePathTests(unittest.TestCase):
     Session: async_sessionmaker[AsyncSession]
     client: TestClient
     user: User
-    product: Product
+    product_id: uuid.UUID
     session_cookie: str
     zibal_state: dict
 
@@ -167,24 +167,22 @@ class PurchasePathTests(unittest.TestCase):
             httpx.AsyncClient(transport=mock_transport)
         )
 
-        # Seed user and product
+        # Seed user + stock. The product itself lives in the fake
+        # Directus below (name + price); only its stock is here.
+        cls.product_id = uuid.uuid4()
+
         async def seed() -> None:
             async with cls.Session() as s:
                 u = User(phone="09123456780", role=UserRole.CUSTOMER, is_active=True)
-                p = Product(
-                    name="ماشین ظرفشویی ۱۴ نفره بنده",
-                    description="سه سبد، تمام استیل با موتور اینورتر",
-                    price_toman=25000000,
-                    stock=10,
-                    reserved=0,
-                    is_active=True,
+                s.add(u)
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(cls.product_id), stock=10
+                    )
                 )
-                s.add_all([u, p])
                 await s.commit()
                 await s.refresh(u)
-                await s.refresh(p)
                 cls.user = u
-                cls.product = p
 
                 db_sess = await create_database_session(s, u)
                 await s.commit()
@@ -196,12 +194,21 @@ class PurchasePathTests(unittest.TestCase):
 
         fake_cms = FakeDirectusClient(
             products={
-                str(cls.product.id): {
-                    "id": str(cls.product.id),
-                    "name": cls.product.name,
-                    "price_toman": cls.product.price_toman,
-                    "stock": cls.product.stock,
-                    "reserved": cls.product.reserved,
+                str(cls.product_id): {
+                    "id": str(cls.product_id),
+                    "name": "ماشین ظرفشویی ۱۴ نفره بنده",
+                    "description": "سه سبد، تمام استیل با موتور اینورتر",
+                    "price_toman": 25000000,
+                    "stock": 0,
+                    "reserved": 0,
+                    "image_path": None,
+                    "is_active": True,
+                    "created_at": "2026-11-14T12:00:00+00:00",
+                    "category": None,
+                    "tag": None,
+                    "condition": "new",
+                    "condition_stars": None,
+                    "specs": {},
                 }
             }
         )
@@ -273,7 +280,7 @@ class PurchasePathTests(unittest.TestCase):
         """POST /orders must store recipient name, phone, and delivery address."""
         self.client.cookies.set(SESSION_COOKIE_NAME, self.session_cookie)
         payload = {
-            "items": [{"product_id": str(self.product.id), "quantity": 2}],
+            "items": [{"product_id": str(self.product_id), "quantity": 2}],
             "recipient_name": "سارا احمدی",
             "recipient_phone": "09129876543",
             "delivery_address": "تهران، میدان انقلاب، خیابان کارگر شمالی، پلاک ۱۲، واحد ۴",
@@ -326,7 +333,7 @@ class PurchasePathTests(unittest.TestCase):
         order_resp = self.client.post(
             "/orders",
             json={
-                "items": [{"product_id": str(self.product.id), "quantity": 1}],
+                "items": [{"product_id": str(self.product_id), "quantity": 1}],
                 "recipient_name": "رضا باقری",
                 "recipient_phone": "09121112233",
                 "delivery_address": "مشهد، بلوار سجاد",
@@ -380,7 +387,7 @@ class PurchasePathTests(unittest.TestCase):
         order_resp = self.client.post(
             "/orders",
             json={
-                "items": [{"product_id": str(self.product.id), "quantity": 1}],
+                "items": [{"product_id": str(self.product_id), "quantity": 1}],
                 "recipient_name": "مریم حسینی",
                 "recipient_phone": "09124445566",
                 "delivery_address": "اصفهان، خیابان چهارباغ",
@@ -431,7 +438,7 @@ class PurchasePathTests(unittest.TestCase):
         order_resp = self.client.post(
             "/orders",
             json={
-                "items": [{"product_id": str(self.product.id), "quantity": 1}],
+                "items": [{"product_id": str(self.product_id), "quantity": 1}],
             },
         )
         order_id = order_resp.json()["id"]

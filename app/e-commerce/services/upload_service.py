@@ -74,7 +74,9 @@ async def save_upload(file: UploadFile, upload_dir: Path) -> str:
     """Validate and save an uploaded image. Returns the server-made filename.
 
     Raises UploadError (415 wrong type, 400 fake content, 413 too big).
-    The caller stores the returned name in ``Product.image_path``.
+    No route calls this anymore (product photos live in Directus);
+    the validator is kept because /uploads still serves files already
+    on disk, and a future Directus-aware upload can reuse it.
     """
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:

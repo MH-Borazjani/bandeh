@@ -65,8 +65,9 @@ from core.datetime_utils import utcnow
 from core.money import toman_to_rial
 from db.models.agent_session import AgentCheckoutSession
 from db.models.order import Order, OrderStatus
-from db.models.product import Product
+from integrations.directus_client import DirectusClient
 from integrations.zibal_client import ZibalClient, ZibalError
+from services import search_service, stock_service
 from services.auth_service import normalize_phone
 from services.order_service import OrderError, OrderItemInput, create_order, load_order
 from services.payment_service import cancel_payment, start_payment
@@ -190,14 +191,15 @@ def _parse_product_id(raw: object) -> uuid.UUID | None:
 
 
 async def _resolve_items(
-    db: AsyncSession, raw_items: object
-) -> list[tuple[Product, int]]:
-    """Turn agent cart lines into (Product, quantity) pairs.
+    db: AsyncSession, raw_items: object, directus: DirectusClient
+) -> list[tuple[dict, int]]:
+    """Turn agent cart lines into (Directus row, quantity) pairs.
 
     Raises AgentError 422 when the cart is empty, an id is not a
     product, a product is inactive, or the quantity beats availability.
     Availability is checked here AND again at ``complete`` (the order
-    service re-checks under the payment lock).
+    service re-checks under the payment lock). Each row carries its
+    real stock as ``row["available"]`` (from the stock table).
     """
     if not isinstance(raw_items, list) or not raw_items:
         raise AgentError(422, "at least one line item is required")
@@ -212,16 +214,18 @@ async def _resolve_items(
         if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
             raise AgentError(422, "quantity must be an integer of at least 1")
         merged[pid] = merged.get(pid, 0) + quantity
-    resolved: list[tuple[Product, int]] = []
+    resolved: list[tuple[dict, int]] = []
     for pid, quantity in merged.items():
-        product = await db.get(Product, pid)
-        if product is None or not product.is_active:
+        row = await directus.get_product(pid)
+        if row is None or not row.get("is_active", True):
             raise AgentError(422, f"product {pid} is not available")
-        if quantity > product.available:
+        available = await stock_service.available_for(db, pid)
+        if quantity > available:
             raise AgentError(
-                422, f"only {product.available} of {product.name} available"
+                422, f"only {available} of {row.get('name')} available"
             )
-        resolved.append((product, quantity))
+        row["available"] = available
+        resolved.append((row, quantity))
     return resolved
 
 
@@ -234,11 +238,11 @@ def _as_utc(value: datetime.datetime | None) -> datetime.datetime | None:
     return value
 
 
-def _availability(product: Product) -> str:
-    """ACP availability_status for one product row."""
-    if product.available <= 0:
+def _availability(available: int) -> str:
+    """ACP availability_status for a free-units count."""
+    if available <= 0:
         return "out_of_stock"
-    if product.available <= 2:
+    if available <= 2:
         return "low_stock"
     return "in_stock"
 
@@ -389,7 +393,7 @@ def _ucp_line_items(state: dict) -> list[dict[str, Any]]:
 
 
 def _canonical_state(
-    resolved: list[tuple[Product, int]],
+    resolved: list[tuple[dict, int]],
     buyer: dict | None,
     fulfillment: dict | None,
     base_url: str,
@@ -397,22 +401,22 @@ def _canonical_state(
     """The stored cart: product snapshots + buyer + totals + messages."""
     items = []
     subtotal = 0
-    for product, quantity in resolved:
-        unit_rial = toman_to_rial(product.price_toman)
+    for row, quantity in resolved:
+        unit_rial = toman_to_rial(row.get("price_toman") or 0)
         subtotal += unit_rial * quantity
         items.append(
             {
-                "product_id": str(product.id),
-                "name": product.name,
-                "description": product.description or "",
+                "product_id": str(row.get("id")),
+                "name": row.get("name"),
+                "description": row.get("description") or "",
                 "image_url": (
-                    f"{base_url}/uploads/{product.image_path}"
-                    if product.image_path
+                    f"{base_url}/uploads/{row.get('image_path')}"
+                    if row.get("image_path")
                     else None
                 ),
                 "unit_rial": unit_rial,
                 "quantity": quantity,
-                "availability": _availability(product),
+                "availability": _availability(row.get("available", 0)),
             }
         )
     return {
@@ -621,6 +625,7 @@ def _fulfillment_details(payload: dict) -> dict | None:
 
 async def create_session(
     db: AsyncSession,
+    directus: DirectusClient,
     protocol: str,
     payload: dict,
     base_url: str,
@@ -631,7 +636,7 @@ async def create_session(
     replayed = await _find_create_replay(db, protocol, idempotency_key, raw_body)
     if replayed is not None:
         return (200, replayed, True)
-    resolved = await _resolve_items(db, _cart_lines(payload))
+    resolved = await _resolve_items(db, _cart_lines(payload), directus)
     buyer = payload.get("buyer") if isinstance(payload.get("buyer"), dict) else None
     fulfillment = _fulfillment_details(payload)
     state = _canonical_state(resolved, buyer, fulfillment, base_url)
@@ -642,7 +647,8 @@ async def create_session(
         currency=CURRENCY,
         buyer_json=buyer,
         items_json=[
-            {"product_id": str(p.id), "quantity": q} for p, q in resolved
+            {"product_id": str(item_row["id"]), "quantity": q}
+            for item_row, q in resolved
         ],
         state_json=state,
         expires_at=utcnow() + datetime.timedelta(hours=SESSION_TTL_HOURS),
@@ -657,6 +663,7 @@ async def create_session(
 
 async def update_session(
     db: AsyncSession,
+    directus: DirectusClient,
     row: AgentCheckoutSession,
     payload: dict,
     base_url: str,
@@ -671,14 +678,15 @@ async def update_session(
         raise AgentError(409, f"checkout session is {row.status}")
     state = row.state_json
     if _cart_lines(payload) is not None:
-        resolved = await _resolve_items(db, _cart_lines(payload))
+        resolved = await _resolve_items(db, _cart_lines(payload), directus)
         fresh = _canonical_state(
             resolved, state.get("buyer"), state.get("fulfillment"), base_url
         )
         state["items"] = fresh["items"]
         state["subtotal_rial"] = fresh["subtotal_rial"]
         row.items_json = [
-            {"product_id": str(p.id), "quantity": q} for p, q in resolved
+            {"product_id": str(item_row["id"]), "quantity": q}
+            for item_row, q in resolved
         ]
     if isinstance(payload.get("buyer"), dict):
         buyer = dict(state.get("buyer") or {})
@@ -738,6 +746,7 @@ def _payment_offer(payload: dict) -> dict[str, Any] | None:
 
 async def complete_session(
     db: AsyncSession,
+    directus: DirectusClient,
     row: AgentCheckoutSession,
     payload: dict,
     zibal: ZibalClient,
@@ -799,6 +808,7 @@ async def complete_session(
             db,
             user,
             items,
+            directus,
             recipient_name=_buyer_name(buyer),
             recipient_phone=phone,
             delivery_address=_delivery_address(buyer, state.get("fulfillment")),
@@ -987,36 +997,46 @@ async def emit_order_event(
 # ---------------------------------------------------------------- catalog
 
 
-def _catalog_product(product: Product, base_url: str) -> dict[str, Any]:
+def _catalog_product(row: dict, available: int, base_url: str) -> dict[str, Any]:
     """One catalog entry: price in Rial, availability, shop URL."""
     return {
-        "id": str(product.id),
-        "title": product.name,
-        "description": product.description or "",
-        "price": toman_to_rial(product.price_toman),
+        "id": str(row.get("id")),
+        "title": row.get("name"),
+        "description": row.get("description") or "",
+        "price": toman_to_rial(row.get("price_toman") or 0),
         "currency": CURRENCY,
-        "availability": _availability(product),
-        "url": f"{base_url}/products/{product.id}",
+        "availability": _availability(available),
+        "url": f"{base_url}/products/{row.get('id')}",
     }
 
 
 async def search_catalog(
-    db: AsyncSession, query: str | None, base_url: str, limit: int = 20
+    directus: DirectusClient,
+    db: AsyncSession,
+    query: str | None,
+    base_url: str,
+    limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Catalog search: name match (ilike, SQLite-safe) or the whole list."""
-    stmt = select(Product).where(Product.is_active.is_(True))
+    """Catalog search: name match or the whole list (Directus)."""
     if query:
-        like = f"%{query}%"
-        stmt = stmt.where(
-            (Product.name.ilike(like)) | (Product.description.ilike(like))
+        rows = await search_service.search_products(
+            directus, query, limit=max(1, min(limit, 50))
         )
-    stmt = stmt.order_by(Product.name).limit(max(1, min(limit, 50)))
-    products = (await db.execute(stmt)).scalars().all()
-    return [_catalog_product(p, base_url) for p in products]
+    else:
+        rows = await search_service.list_products(
+            directus, limit=max(1, min(limit, 50))
+        )
+    await stock_service.attach_stock(db, rows)
+    return [
+        _catalog_product(row, row.get("available", 0), base_url) for row in rows
+    ]
 
 
 async def lookup_catalog(
-    db: AsyncSession, raw_ids: object, base_url: str
+    directus: DirectusClient,
+    db: AsyncSession,
+    raw_ids: object,
+    base_url: str,
 ) -> list[dict[str, Any]]:
     """Catalog lookup: the products for the given ids, in request order."""
     if not isinstance(raw_ids, list):
@@ -1024,14 +1044,13 @@ async def lookup_catalog(
     wanted = [pid for pid in (_parse_product_id(v) for v in raw_ids) if pid is not None]
     if not wanted:
         return []
-    products = (
-        (await db.execute(select(Product).where(Product.id.in_(wanted))))
-        .scalars()
-        .all()
-    )
-    by_id = {p.id: p for p in products}
+    rows = await directus.get_products_by_ids(wanted)
+    await stock_service.attach_stock(db, rows)
+    by_id = {str(row.get("id")): row for row in rows}
     return [
-        _catalog_product(by_id[pid], base_url) for pid in wanted if pid in by_id
+        _catalog_product(by_id[str(pid)], by_id[str(pid)].get("available", 0), base_url)
+        for pid in wanted
+        if str(pid) in by_id
     ]
 
 

@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import (
 
 from core.cache import reset_cache_for_tests
 from db.base import Base
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.session import get_db
 from integrations import mcp_server
 from main import app
@@ -101,9 +101,13 @@ def _mock_handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"data": CATEGORIES})
     if path == "/items/products":
         cat = request.url.params.get("filter[category][_eq]")
+        ids = request.url.params.get("filter[id][_in]")
         rows = PRODUCTS
         if cat is not None:
             rows = [p for p in rows if str(p["category"]) == cat]
+        if ids is not None:
+            wanted = set(ids.split(","))
+            rows = [p for p in rows if p["id"] in wanted]
         return httpx.Response(200, json={"data": rows})
     if path.startswith("/items/products/"):
         pid = path.rsplit("/", 1)[-1]
@@ -227,39 +231,13 @@ async def main_async() -> None:
     mcp_client = McpClient(client)
 
     async with Session() as s:
+        # Content lives in the mocked Directus above; only the stock
+        # numbers live here (the stock table, keyed by Directus id).
         s.add_all(
             [
-                Product(
-                    id=FRIDGE_ID,
-                    name="یخچال دو درب",
-                    description="کم‌مصرف",
-                    price_toman=45_000_000,
-                    stock=5,
-                    image_path="product-fridge.jpg",
-                    is_active=True,
-                    condition="new",
-                ),
-                Product(
-                    id=TV_ID,
-                    name="تلویزیون ۵۵ اینچ",
-                    description="هوشمند",
-                    price_toman=32_000_000,
-                    stock=5,
-                    image_path="product-tv.jpg",
-                    is_active=True,
-                    condition="new",
-                ),
-                Product(
-                    id=WASHER_ID,
-                    name="ماشین لباسشویی ۸ کیلویی",
-                    description="کم‌صدا",
-                    price_toman=28_500_000,
-                    stock=5,
-                    image_path="product-washer.jpg",
-                    is_active=True,
-                    condition="used",
-                    condition_stars=4,
-                ),
+                ProductStock(directus_product_id=str(FRIDGE_ID), stock=5),
+                ProductStock(directus_product_id=str(TV_ID), stock=5),
+                ProductStock(directus_product_id=str(WASHER_ID), stock=5),
             ]
         )
         user, _ = await user_service.get_or_create_user_by_phone(s, "09123456789")

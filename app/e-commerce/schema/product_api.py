@@ -12,39 +12,26 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Product API schemas: the DB-backed shapes the real routes use.
+"""Product API schemas: the Directus-backed shapes the real routes use.
 
 This file is separate from ``schema/product.py`` on purpose. That file
 is the Pydantic lesson (Decimal prices, SKU, dimensions, int ids).
 This file is the shop's real product shape: int Toman prices, UUID ids,
 and the ``reserved`` counter the payment flow needs. Same idea, two
 jobs — do not merge them.
+
+Products are created and edited in Directus, not through this API —
+so there is no ProductCreate here. Stock is set through the staff
+stock endpoint (services/stock_service.set_stock), not through a
+product create.
 """
 
 from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
-
-
-class ProductCreate(BaseModel):
-    """What staff send to create a product. No id, no image yet."""
-
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    name: str = Field(min_length=2, max_length=200)
-    description: str | None = Field(default=None, max_length=2000)
-    price_toman: int = Field(ge=0, description="Price in Toman, integer.")
-    stock: int = Field(default=0, ge=0)
-    condition: Literal["new", "used"] = Field(
-        default="new", description="'new' or 'used' (second-hand)."
-    )
-    condition_stars: int | None = Field(
-        default=None, ge=1, le=5, description="Cleanliness stars, used only."
-    )
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class ProductRead(BaseModel):
@@ -78,11 +65,4 @@ class ProductRead(BaseModel):
         return f"/uploads/{self.image_path}" if self.image_path else None
 
 
-class ProductPhotoRead(BaseModel):
-    """Response returned after uploading a product photo."""
-
-    image_url: str
-    filename: str
-
-
-__all__ = ["ProductCreate", "ProductPhotoRead", "ProductRead"]
+__all__ = ["ProductRead"]

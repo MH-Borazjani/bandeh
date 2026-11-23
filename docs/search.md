@@ -2,22 +2,15 @@
 
 ## What exists
 
-- **ILIKE search** (`services/search_service.py`,
-  `search_products_ilike`) — substring search over name + description,
-  active products only. Works on every database and catches partial
-  words, which is what Persian shoppers type.
-- **Postgres full-text** (`build_fulltext_statement`,
-  `search_products_fulltext`) — `to_tsvector('simple', ...)` +
-  `plainto_tsquery('simple', ...)` matched with `@@`, ordered by
-  `ts_rank`. `simple` is the honest config: Postgres has no Persian
-  stemmer, so `simple` just tokenises. On Postgres the route tries
-  full-text first and falls back to ILIKE when it finds nothing; on
-  other databases it uses ILIKE directly. The statement is built
-  separately from execution so tests can compile it against the
-  Postgres dialect without a live Postgres.
-- **One rule for both** — the user's words are always a bound
-  parameter, never pasted into SQL. `%` and `_` inside the query are
-  escaped, so they match literally.
+- **Directus search** (`services/search_service.py`,
+  `search_products`) — substring search over name + description,
+  active products only. It reads the catalogue from Directus
+  (`list_products`, at most 50 rows) and matches in Python: it works
+  on every database and catches partial words, which is what Persian
+  shoppers type. There is no SQL here at all — no ILIKE, no Postgres
+  full-text (both were removed when Directus became the single
+  product source, 2026-11-24). The query text is never pasted into
+  SQL because there is no SQL to paste it into.
 - **Always limited** — default 20, max 50, enforced in the service
   (and in the route's `Query` bounds). An empty query returns `[]`,
   never a full-table dump.
@@ -25,7 +18,9 @@
   and `GET /products` (active products, newest first). The list sends
   `Cache-Control: public, max-age=60`: the list is the same for every
   visitor, so browsers and CDNs may cache it. (This is the product-list
-  header the caching topic planned.)
+  header the caching topic planned.) Stock numbers on every result
+  come from the shop's `product_stock` table
+  (`services/stock_service.attach_stock`), not from the Directus rows.
 
 ## Multi-select categories
 
@@ -43,12 +38,9 @@ GET /api/search-live?q=سامسونگ&category=یخچال و فریزر&category
   nothing). Matching is membership: a product shows when its category
   is in the picked set; an empty set means "no category filter".
 - Category filtering is Directus-side, in Python against the CMS rows
-  — the `Product` model maps no category column, so the database
-  cannot tell which category a row belongs to. With categories picked,
-  the `/search` text path skips the DB search entirely and reads from
-  Directus (same rule as the live search); without a category filter
-  the DB path runs as before. The DB fallback in the filter-only path
-  runs only when no category was picked, for the same reason.
+  — there is no database search anymore, so every search path (text,
+  category, filter-only) reads Directus the same way. An unknown
+  category matches nothing.
 - The URL is the state, so it is shareable: the search page's category
   chips are toggles (click adds/removes one category), the "همه دسته‌ها"
   chip clears all of them, the form carries one hidden input per

@@ -47,9 +47,10 @@ from core.security import SESSION_COOKIE_NAME, create_session
 from db.base import Base
 from db.models.order import Order
 from db.models.payment_attempt import PaymentAttempt
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.models.user import User, UserRole
 from db.session import get_db
+from integrations.directus_client import get_directus_client
 from integrations.zibal_client import ZibalClient, get_zibal_client
 from main import app
 from services.payment_service import release_expired_reservations
@@ -113,6 +114,54 @@ def paid_verify(amount_rial: int, result: int = 100) -> dict:
     }
 
 
+class _FakeDirectusClient:
+    """CMS stand-in: the two products this test buys.
+
+    Prices and names come from here; stock lives in the stock table
+    (seeded below). The ids are the test's own UUIDs, chosen before
+    the stock rows are created.
+    """
+
+    def __init__(self, fridge_id: uuid.UUID, tv_id: uuid.UUID) -> None:
+        self._rows = {
+            str(fridge_id): {
+                "id": str(fridge_id),
+                "name": "یخچال",
+                "description": None,
+                "price_toman": 100_000,
+                "stock": 0,
+                "reserved": 0,
+                "image_path": None,
+                "is_active": True,
+                "created_at": "2026-11-24T00:00:00+00:00",
+                "category": None,
+                "tag": None,
+                "condition": "new",
+                "condition_stars": None,
+                "specs": {},
+            },
+            str(tv_id): {
+                "id": str(tv_id),
+                "name": "تلویزیون",
+                "description": None,
+                "price_toman": 50_000,
+                "stock": 0,
+                "reserved": 0,
+                "image_path": None,
+                "is_active": True,
+                "created_at": "2026-11-24T00:00:00+00:00",
+                "category": None,
+                "tag": None,
+                "condition": "new",
+                "condition_stars": None,
+                "specs": {},
+            },
+        }
+
+    async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
+        return self._rows.get(str(product_id))
+
+
 async def main_async() -> None:
     state: dict = {
         "requests": [],
@@ -140,19 +189,27 @@ async def main_async() -> None:
     app.dependency_overrides[get_zibal_client] = lambda: ZibalClient(
         httpx.AsyncClient(transport=make_transport(state))
     )
+    fridge_id = uuid.uuid4()
+    tv_id = uuid.uuid4()
+    app.dependency_overrides[get_directus_client] = (
+        lambda: _FakeDirectusClient(fridge_id, tv_id)
+    )
     client = TestClient(app)
 
     async with Session() as s:
         customer = User(phone="09121111111", role=UserRole.CUSTOMER, is_active=True)
         other = User(phone="09129999999", role=UserRole.CUSTOMER, is_active=True)
-        fridge = Product(name="یخچال", price_toman=100_000, stock=5)
-        tv = Product(name="تلویزیون", price_toman=50_000, stock=3)
-        s.add_all([customer, other, fridge, tv])
+        s.add_all(
+            [
+                customer,
+                other,
+                ProductStock(directus_product_id=str(fridge_id), stock=5),
+                ProductStock(directus_product_id=str(tv_id), stock=3),
+            ]
+        )
         await s.commit()
         await s.refresh(customer)
         await s.refresh(other)
-        await s.refresh(fridge)
-        await s.refresh(tv)
 
     async def mint_session(user: User) -> str:
         async with Session() as s:
@@ -173,7 +230,7 @@ async def main_async() -> None:
 
     async def product_state(product_id: uuid.UUID) -> tuple[int, int]:
         async with Session() as s:
-            p = await s.get(Product, product_id)
+            p = await s.get(ProductStock, str(product_id))
             assert p is not None
             return p.stock, p.reserved
 
@@ -212,7 +269,7 @@ async def main_async() -> None:
     set_session(customer_cookie)
     resp = client.post(
         "/orders",
-        json={"items": [{"product_id": str(fridge.id), "quantity": 2}]},
+        json={"items": [{"product_id": str(fridge_id), "quantity": 2}]},
     )
     assert resp.status_code == 201, resp.status_code
     order1 = resp.json()["id"]
@@ -229,7 +286,7 @@ async def main_async() -> None:
     assert resp.json()["payment_url"] == f"https://gateway.zibal.ir/start/{track1}"
     assert state["last_request_body"]["amount"] == 2_000_000, "Zibal must get Rial"
     assert state["last_request_body"]["merchant"] == "zibal"
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (5, 2), (stock, reserved)
     status, attempts = await order_state(order1)
     assert status == "waiting_payment"
@@ -243,7 +300,7 @@ async def main_async() -> None:
     assert resp.json()["track_id"] == track1
     _, attempts = await order_state(order1)
     assert len(attempts) == 1
-    _, reserved = await product_state(fridge.id)
+    _, reserved = await product_state(fridge_id)
     assert reserved == 2, "second start must not reserve again"
     print("   [OK] start twice: same URL, one attempt, reserved once")
 
@@ -252,7 +309,7 @@ async def main_async() -> None:
     assert resp.status_code == 200, resp.status_code
     assert resp.json()["status"] == "paid", resp.json()
     assert resp.json()["ref_number"] == "987654321"
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0), (stock, reserved)
     status, attempts = await order_state(order1)
     assert status == "paid" and attempts[0].status == "paid"
@@ -263,24 +320,24 @@ async def main_async() -> None:
     resp = callback(track1, order1)
     assert resp.status_code == 200
     assert resp.json()["status"] == "already_paid", resp.json()
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0), "double callback must not move stock again"
     print("   [OK] double callback: already_paid, stock untouched")
 
     # 6. The hint is ignored: success=0 still pays when verify says 100 ----
-    order2 = make_order(customer_cookie, tv.id, 1)
+    order2 = make_order(customer_cookie, tv_id, 1)
     state["verify_amount"] = 500_000
     resp = start_order(customer_cookie, order2)
     track2 = resp.json()["track_id"]
     resp = callback(track2, order2, success="0", status="3")
     assert resp.status_code == 200
     assert resp.json()["status"] == "paid", resp.json()
-    stock, reserved = await product_state(tv.id)
+    stock, reserved = await product_state(tv_id)
     assert (stock, reserved) == (2, 0)
     print("   [OK] callback hint ignored: success=0 still paid on verify 100")
 
     # 7. Verify-201 replay: paid, stock moves once ---------------------------
-    order3 = make_order(customer_cookie, tv.id, 1)
+    order3 = make_order(customer_cookie, tv_id, 1)
     state["verify_amount"] = 500_000
     state["verify"] = lambda body: paid_verify(500_000, result=201)
     resp = start_order(customer_cookie, order3)
@@ -288,13 +345,13 @@ async def main_async() -> None:
     resp = callback(track3, order3)
     assert resp.status_code == 200
     assert resp.json()["status"] == "paid", resp.json()
-    stock, reserved = await product_state(tv.id)
+    stock, reserved = await product_state(tv_id)
     assert (stock, reserved) == (1, 0), (stock, reserved)
     state["verify"] = lambda body: paid_verify(state["verify_amount"])
     print("   [OK] verify 201: paid, stock moved once")
 
     # 8. Amount mismatch: NOT paid, hold released ----------------------------
-    order4 = make_order(customer_cookie, fridge.id, 1)  # 100,000 Toman = 1,000,000 Rial
+    order4 = make_order(customer_cookie, fridge_id, 1)  # 100,000 Toman = 1,000,000 Rial
     resp = start_order(customer_cookie, order4)
     track4 = resp.json()["track_id"]
     state["verify_amount"] = 999_999  # verify claims a different amount
@@ -302,14 +359,14 @@ async def main_async() -> None:
     assert resp.status_code == 200
     assert resp.json()["status"] == "failed", resp.json()
     assert resp.json()["reason"] == "amount_mismatch", resp.json()
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0), (stock, reserved)
     status, _ = await order_state(order4)
     assert status == "failed"
     print("   [OK] amount mismatch: not paid, hold released")
 
     # 9. Failed callback (verify 202): hold released -------------------------
-    order5 = make_order(customer_cookie, fridge.id, 1)
+    order5 = make_order(customer_cookie, fridge_id, 1)
     state["verify_amount"] = 100_000
     resp = start_order(customer_cookie, order5)
     track5 = resp.json()["track_id"]
@@ -317,7 +374,7 @@ async def main_async() -> None:
     resp = callback(track5, order5)
     assert resp.json()["status"] == "failed", resp.json()
     assert resp.json()["reason"] == "not_paid"
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0)
     state["verify"] = lambda body: paid_verify(state["verify_amount"])
     print("   [OK] verify 202: failed, hold released")
@@ -330,31 +387,31 @@ async def main_async() -> None:
     print("   [OK] ownership: other user's order is 404 everywhere")
 
     # 11. Insufficient stock at start: 409, nothing reserved -----------------
-    order6 = make_order(customer_cookie, fridge.id, 2)  # stock 3, ok at creation
+    order6 = make_order(customer_cookie, fridge_id, 2)  # stock 3, ok at creation
     async with Session() as s:
-        p = await s.get(Product, fridge.id)
+        p = await s.get(ProductStock, str(fridge_id))
         assert p is not None
         p.stock = 1  # stock drops before payment starts
         await s.commit()
     resp = start_order(customer_cookie, order6)
     assert resp.status_code == 409, resp.status_code
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (1, 0)
     _, attempts = await order_state(order6)
     assert attempts == []
     async with Session() as s:  # restore stock for the tests below
-        p = await s.get(Product, fridge.id)
+        p = await s.get(ProductStock, str(fridge_id))
         assert p is not None
         p.stock = 3
         await s.commit()
     print("   [OK] insufficient stock at start: 409, nothing reserved")
 
     # 12. Gateway refusal (result 105): 502, hold released, order failed -----
-    order7 = make_order(customer_cookie, fridge.id, 1)
+    order7 = make_order(customer_cookie, fridge_id, 1)
     state["request_result"] = 105
     resp = start_order(customer_cookie, order7)
     assert resp.status_code == 502, resp.status_code
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0), "refusal must release the hold"
     status, attempts = await order_state(order7)
     assert status == "failed" and attempts[0].status == "failed"
@@ -362,11 +419,11 @@ async def main_async() -> None:
     print("   [OK] gateway refusal: 502, hold released, order failed")
 
     # 13. Expired holds: old one freed, fresh one kept ------------------------
-    order8 = make_order(customer_cookie, fridge.id, 1)
+    order8 = make_order(customer_cookie, fridge_id, 1)
     state["verify_amount"] = 100_000
     resp = start_order(customer_cookie, order8)
     assert isinstance(resp.json()["track_id"], int)
-    order9 = make_order(customer_cookie, tv.id, 1)
+    order9 = make_order(customer_cookie, tv_id, 1)
     state["verify_amount"] = 500_000
     start_order(customer_cookie, order9)
     async with Session() as s:
@@ -381,11 +438,11 @@ async def main_async() -> None:
     async with Session() as s:
         released = await release_expired_reservations(s)
     assert released == 1, released
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (3, 0)
     status, attempts = await order_state(order8)
     assert status == "expired" and attempts[0].status == "expired"
-    stock, reserved = await product_state(tv.id)
+    stock, reserved = await product_state(tv_id)
     assert reserved == 1, "the fresh hold must survive"
     print("   [OK] expired holds: old freed, fresh kept")
 
@@ -393,7 +450,7 @@ async def main_async() -> None:
     set_session(customer_cookie)
     resp = client.post(f"/payments/{order9}/cancel")
     assert resp.status_code == 200, resp.status_code
-    stock, reserved = await product_state(tv.id)
+    stock, reserved = await product_state(tv_id)
     assert (stock, reserved) == (1, 0)
     status, _ = await order_state(order9)
     assert status == "failed"

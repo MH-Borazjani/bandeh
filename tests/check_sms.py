@@ -57,7 +57,7 @@ from core.datetime_utils import utcnow
 from core.security import SESSION_COOKIE_NAME, create_session
 from db.base import Base
 from db.models.order import Order, OrderItem
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.models.sms_log import SmsLog, SmsMessageType
 from db.models.user import User, UserRole
 from db.session import get_db
@@ -191,15 +191,25 @@ async def main_async() -> None:
                 query = query.where(SmsLog.reference == reference)
             return list((await s.execute(query)).scalars().all())
 
-    # Seed users + products -------------------------------------------------
+    # Seed users + stock -------------------------------------------------
+    # Content (names, prices) lives in Directus; only the stock numbers
+    # live here. The ids are chosen first so the frozen order items
+    # below can point at them.
+    fridge_id = uuid.uuid4()
+    tv_id = uuid.uuid4()
     async with Session() as s:
         customer = User(phone="09121111111", role=UserRole.CUSTOMER, is_active=True)
         admin = User(phone="09120000001", role=UserRole.ADMIN, is_active=True)
-        fridge = Product(name="یخچال", price_toman=100_000, stock=5)
-        tv = Product(name="تلویزیون", price_toman=50_000, stock=3)
-        s.add_all([customer, admin, fridge, tv])
+        s.add_all(
+            [
+                customer,
+                admin,
+                ProductStock(directus_product_id=str(fridge_id), stock=5),
+                ProductStock(directus_product_id=str(tv_id), stock=3),
+            ]
+        )
         await s.commit()
-        for obj in (customer, admin, fridge, tv):
+        for obj in (customer, admin):
             await s.refresh(obj)
 
     async def make_order(
@@ -429,15 +439,19 @@ async def main_async() -> None:
         # 14. Low-stock alert sends once per product (owner pattern) ----------------
         requests_before = len(state["requests"])
         async with Session() as s:
-            product = await s.get(Product, tv.id)
-            assert product is not None
-            product.stock = 2  # available 2 <= threshold 2
+            stock_row = await s.get(ProductStock, str(tv_id))
+            assert stock_row is not None
+            stock_row.stock = 2  # available 2 <= threshold 2
             await s.commit()
-            row = await send_low_stock_sms(s, product, client=client)
+            row = await send_low_stock_sms(
+                s, tv_id, "تلویزیون", 2, client=client
+            )
             assert row is not None and row.status == "sent"
-            assert row.reference == str(tv.id)
+            assert row.reference == str(tv_id)
             assert row.body_id == 104, row.body_id
-            row2 = await send_low_stock_sms(s, product, client=client)
+            row2 = await send_low_stock_sms(
+                s, tv_id, "تلویزیون", 2, client=client
+            )
             assert row2 is None, "second low-stock alert must be a no-op"
         assert len(await sms_rows(SmsMessageType.LOW_STOCK)) == 1
         assert len(state["requests"]) == requests_before + 1
@@ -445,17 +459,17 @@ async def main_async() -> None:
 
         # 15. Low-stock hook after payment ----------------------------------------
         low_order_id = await make_order(
-            "paid", phone="09121111111", items=[(fridge.id, 1)]
+            "paid", phone="09121111111", items=[(fridge_id, 1)]
         )
         async with Session() as s:
-            product = await s.get(Product, fridge.id)
-            assert product is not None
-            product.stock = 2  # payment just moved stock 3 -> 2
+            stock_row = await s.get(ProductStock, str(fridge_id))
+            assert stock_row is not None
+            stock_row.stock = 2  # payment just moved stock 3 -> 2
             await s.commit()
         low_order = await load_order_by_id(low_order_id)
         async with Session() as s:
             await check_low_stock_after_payment(s, low_order, client=client)
-        assert len(await sms_rows(SmsMessageType.LOW_STOCK, str(fridge.id))) == 1
+        assert len(await sms_rows(SmsMessageType.LOW_STOCK, str(fridge_id))) == 1
         print("   [OK] check_low_stock_after_payment: alert fired at threshold")
     finally:
         sms_service._get_owner_phone = orig_owner_phone  # noqa: SLF001

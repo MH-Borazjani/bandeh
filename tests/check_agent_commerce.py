@@ -55,9 +55,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from db.base import Base  # noqa: E402
 from db.models.agent_session import AgentCheckoutSession  # noqa: E402
 from db.models.order import Order  # noqa: E402
-from db.models.product import Product  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
 from db.models.user import User  # noqa: E402
 from db.session import get_db  # noqa: E402
+from integrations.directus_client import get_directus_client  # noqa: E402
 from integrations.zibal_client import ZibalClient, get_zibal_client  # noqa: E402
 from main import app  # noqa: E402
 from services.agent_commerce import emit_order_event  # noqa: E402
@@ -65,6 +66,45 @@ from services.agent_commerce import emit_order_event  # noqa: E402
 KEY = {"Authorization": "Bearer test-agent-key"}
 FRIDGE_TOMAN = 100_000
 TV_TOMAN = 50_000
+
+
+class _FakeDirectusClient:
+    """CMS stand-in: the two products this test buys."""
+
+    def __init__(self, fridge_id: uuid.UUID, tv_id: uuid.UUID) -> None:
+        self._rows = {
+            str(fridge_id): {
+                "id": str(fridge_id),
+                "name": "یخچال",
+                "description": None,
+                "price_toman": FRIDGE_TOMAN,
+                "image_path": None,
+                "is_active": True,
+            },
+            str(tv_id): {
+                "id": str(tv_id),
+                "name": "تلویزیون",
+                "description": None,
+                "price_toman": TV_TOMAN,
+                "image_path": None,
+                "is_active": True,
+            },
+        }
+
+    async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
+        return self._rows.get(str(product_id))
+
+    async def list_products(self, limit: int = 20) -> list[dict]:
+        return [dict(row) for row in self._rows.values()][:limit]
+
+    async def get_products_by_ids(
+        self, product_ids: list[uuid.UUID | str]
+    ) -> list[dict]:
+        return [
+            dict(self._rows[str(pid)])
+            for pid in product_ids
+            if str(pid) in self._rows
+        ]
 
 
 def make_transport(state: dict):
@@ -125,15 +165,21 @@ async def main_async() -> None:
     app.dependency_overrides[get_zibal_client] = lambda: ZibalClient(
         httpx.AsyncClient(transport=make_transport(state))
     )
+    fridge_id = uuid.uuid4()
+    tv_id = uuid.uuid4()
+    app.dependency_overrides[get_directus_client] = (
+        lambda: _FakeDirectusClient(fridge_id, tv_id)
+    )
     client = TestClient(app)
 
     async with Session() as s:
-        fridge = Product(name="یخچال", price_toman=FRIDGE_TOMAN, stock=5)
-        tv = Product(name="تلویزیون", price_toman=TV_TOMAN, stock=3)
-        s.add_all([fridge, tv])
+        s.add_all(
+            [
+                ProductStock(directus_product_id=str(fridge_id), stock=5),
+                ProductStock(directus_product_id=str(tv_id), stock=3),
+            ]
+        )
         await s.commit()
-        await s.refresh(fridge)
-        await s.refresh(tv)
 
     async def session_row(session_id: str) -> AgentCheckoutSession:
         async with Session() as s:
@@ -147,7 +193,7 @@ async def main_async() -> None:
 
     async def product_state(product_id: uuid.UUID) -> tuple[int, int]:
         async with Session() as s:
-            p = await s.get(Product, product_id)
+            p = await s.get(ProductStock, str(product_id))
             assert p is not None
             return p.stock, p.reserved
 
@@ -176,7 +222,7 @@ async def main_async() -> None:
     # 2. UCP auth: no key -> 401 -----------------------------------------
     resp = client.post(
         "/ucp/checkout-sessions",
-        json={"line_items": [{"id": str(fridge.id), "quantity": 1}]},
+        json={"line_items": [{"id": str(fridge_id), "quantity": 1}]},
     )
     assert resp.status_code == 401, resp.status_code
     print("   [OK] UCP without key: 401")
@@ -190,7 +236,7 @@ async def main_async() -> None:
     assert resp.status_code == 422, resp.status_code
     resp = client.post(
         "/ucp/checkout-sessions",
-        json={"line_items": [{"id": str(fridge.id), "quantity": 2}]},
+        json={"line_items": [{"id": str(fridge_id), "quantity": 2}]},
         headers=KEY,
     )
     assert resp.status_code == 200, resp.status_code
@@ -210,11 +256,11 @@ async def main_async() -> None:
     found = resp.json()["products"]
     assert len(found) == 1 and found[0]["price"] == FRIDGE_TOMAN * 10, found
     resp = client.post(
-        "/ucp/catalog/lookup", json={"ids": [str(tv.id)]}, headers=KEY
+        "/ucp/catalog/lookup", json={"ids": [str(tv_id)]}, headers=KEY
     )
     assert resp.status_code == 200 and len(resp.json()["products"]) == 1
-    resp = client.post("/ucp/catalog/product", json={"id": str(tv.id)}, headers=KEY)
-    assert resp.status_code == 200 and resp.json()["id"] == str(tv.id)
+    resp = client.post("/ucp/catalog/product", json={"id": str(tv_id)}, headers=KEY)
+    assert resp.status_code == 200 and resp.json()["id"] == str(tv_id)
     print("   [OK] UCP catalog: search, lookup, product")
 
     # 5. UCP update: add buyer -> ready_for_complete, reprice ------------
@@ -272,7 +318,7 @@ async def main_async() -> None:
     async with Session() as s:
         user = await s.get(User, order.user_id)
         assert user is not None and user.phone == "09123456789", user
-    stock, reserved = await product_state(fridge.id)
+    stock, reserved = await product_state(fridge_id)
     assert (stock, reserved) == (5, 2), (stock, reserved)
     print("   [OK] UCP complete: guest order, Zibal link, stock reserved")
 
@@ -284,7 +330,7 @@ async def main_async() -> None:
     assert resp.status_code == 409, resp.status_code
     resp = client.post(
         "/ucp/checkout-sessions",
-        json={"line_items": [{"id": str(tv.id), "quantity": 1}]},
+        json={"line_items": [{"id": str(tv_id), "quantity": 1}]},
         headers=KEY,
     )
     open_id = resp.json()["id"]
@@ -294,7 +340,7 @@ async def main_async() -> None:
 
     # 9. ACP create: key required, Idempotency-Key required, 201 ---------
     acp_body = {
-        "line_items": [{"id": str(tv.id), "quantity": 1}],
+        "line_items": [{"id": str(tv_id), "quantity": 1}],
         "buyer": {"first_name": "Mamad", "phone_number": "09123456789"},
     }
     resp = client.post("/acp/checkout_sessions", json=acp_body)
@@ -325,7 +371,7 @@ async def main_async() -> None:
     assert resp.headers.get("idempotent-replayed") == "true"
     assert resp.json()["id"] == acp["id"]
     other_body = {
-        "line_items": [{"id": str(tv.id), "quantity": 2}],
+        "line_items": [{"id": str(tv_id), "quantity": 2}],
         "buyer": {"first_name": "Mamad", "phone_number": "09123456789"},
     }
     resp = client.post(
@@ -361,7 +407,7 @@ async def main_async() -> None:
     ), done
     order = await order_by_id(done["order"]["id"][4:])
     assert order.status == "waiting_payment"
-    stock, reserved = await product_state(tv.id)
+    stock, reserved = await product_state(tv_id)
     assert (stock, reserved) == (3, 1), (stock, reserved)
     print("   [OK] ACP complete with SPT: Zibal link, token never charged/stored")
 

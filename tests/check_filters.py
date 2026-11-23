@@ -34,9 +34,9 @@ category-page filter panel and the same panel on /search:
 5. /search with exactly one category shows the attribute panel and
    filters by it; with two categories, or none, only the shared
    filters (price, condition, in-stock) show — no attribute inputs.
-6. The JSON /search branch applies the same filters, and the DB spec
-   statement compiles against the Postgres dialect (Postgres only —
-   see docs/product-attributes.md), like check_product_specs.py.
+6. The JSON /search branch applies the same filters. Spec filtering
+   is Python-side now (Directus owns search); the matcher is unit
+   checked in section 0.
 """
 
 from __future__ import annotations
@@ -49,7 +49,6 @@ from urllib.parse import unquote_plus
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "e-commerce"))
 
 from fastapi.testclient import TestClient
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.routes.products import (
@@ -60,11 +59,10 @@ from api.routes.products import (
     _parse_price_param,
 )
 from db.base import Base
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.session import get_db
 from integrations.directus_client import get_directus_client
 from main import app
-from services.search_service import build_spec_filter_statement
 
 
 class _FakeDirectusClient:
@@ -116,6 +114,8 @@ class _FakeDirectusClient:
             "category": "تلویزیون و صدا",
             "tag": None,
             "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
             "condition": "new",
             "condition_stars": None,
             "specs": {"screen_size_inch": 55},
@@ -130,6 +130,8 @@ class _FakeDirectusClient:
             "category": "تلویزیون و صدا",
             "tag": None,
             "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
             "condition": "new",
             "condition_stars": None,
             "specs": {"screen_size_inch": 65},
@@ -144,6 +146,8 @@ class _FakeDirectusClient:
             "category": "شستشو",
             "tag": None,
             "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
             "condition": "used",
             "condition_stars": 4,
             "specs": {"capacity_kg": 8},
@@ -158,6 +162,8 @@ class _FakeDirectusClient:
             "category": "شستشو",
             "tag": None,
             "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
             "condition": "new",
             "condition_stars": None,
             "specs": {"capacity_kg": 10},
@@ -172,6 +178,8 @@ class _FakeDirectusClient:
             "category": "آشپزخانه",
             "tag": None,
             "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
             "condition": "new",
             "condition_stars": None,
             "specs": {"capacity_liter": 450},
@@ -192,7 +200,7 @@ class _FakeDirectusClient:
         return out
 
     async def list_products(self, limit: int = 20) -> list[dict]:
-        return list(self.PRODUCTS)[:limit]
+        return [dict(p) for p in self.PRODUCTS][:limit]
 
     async def list_products_by_category(
         self, category_identifier: str | int, limit: int = 50
@@ -201,7 +209,9 @@ class _FakeDirectusClient:
         for c in self.CATEGORIES:
             if str(c["id"]) == name:
                 name = str(c["name"])
-        return [p for p in self.PRODUCTS if p.get("category") == name][:limit]
+        return [
+            dict(p) for p in self.PRODUCTS if p.get("category") == name
+        ][:limit]
 
     async def get_landing_content(self) -> dict:
         return {"categories": list(self.CATEGORIES), "products": list(self.PRODUCTS)}
@@ -226,22 +236,31 @@ async def main_async() -> None:
     app.dependency_overrides[get_directus_client] = lambda: _FakeDirectusClient()
 
     async with Session() as s:
-        # DB rows for the JSON /search branch (no category on DB rows).
+        # Stock rows for the fake's products (the in-stock filter
+        # reads these, not the fake's stock numbers): the 55-inch TV
+        # has 5, the 65-inch has 0, the washer 3, the 10-kg washer 2,
+        # the fridge 4.
         s.add_all(
             [
-                Product(
-                    name="تلویزیون ۵۵ اینچ",
-                    description="هوشمند",
-                    price_toman=32_000_000,
+                ProductStock(
+                    directus_product_id="11111111-1111-4111-8111-111111111111",
                     stock=5,
-                    specs={"screen_size_inch": 55},
                 ),
-                Product(
-                    name="تلویزیون ۶۵ اینچ",
-                    description="هوشمند بزرگ",
-                    price_toman=45_000_000,
+                ProductStock(
+                    directus_product_id="22222222-2222-4222-8222-222222222222",
                     stock=0,
-                    specs={"screen_size_inch": 65},
+                ),
+                ProductStock(
+                    directus_product_id="33333333-3333-4333-8333-333333333333",
+                    stock=3,
+                ),
+                ProductStock(
+                    directus_product_id="44444444-4444-4444-8444-444444444444",
+                    stock=2,
+                ),
+                ProductStock(
+                    directus_product_id="55555555-5555-4555-8555-555555555555",
+                    stock=4,
                 ),
             ]
         )
@@ -519,24 +538,6 @@ async def main_async() -> None:
         )
         assert [p["name"] for p in resp.json()] == ["تلویزیون ۵۵ اینچ"], resp.json()
         print("   [OK] JSON /search applies spec and in-stock filters")
-
-        # 12. DB spec statement: compiles for Postgres, bound only ----
-        stmt = build_spec_filter_statement(
-            {"screen_size_inch": [55], "capacity_kg": [8]},
-            condition="used",
-        )
-        sql = str(
-            stmt.compile(
-                dialect=postgresql.dialect(),
-                compile_kwargs={"literal_binds": False},
-            )
-        )
-        assert sql.count("->>") == 2, sql
-        assert "55" not in sql and "screen_size_inch" not in sql, sql
-        params = stmt.compile(dialect=postgresql.dialect()).params
-        assert "screen_size_inch" in params.values(), params
-        assert "used" in params.values(), params
-        print("   [OK] DB spec statement compiles for Postgres with bound parameters")
 
     print("All filter checks passed.")
 

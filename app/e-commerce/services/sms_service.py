@@ -71,14 +71,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.order import Order
-from db.models.product import Product
 from db.models.sms_log import SmsLog, SmsMessageType, SmsStatus
+from services import stock_service
 from integrations.sms import (
     _DEV_LAST_CODE,
     _DEV_SENT_MESSAGES,
@@ -316,7 +317,9 @@ async def send_owner_order_paid_sms(
 
 async def send_low_stock_sms(
     db: AsyncSession,
-    product: Product,
+    product_id: uuid.UUID,
+    product_name: str,
+    available: int,
     *,
     client: MeliPayamakClient | None = None,
 ) -> SmsLog | None:
@@ -324,26 +327,28 @@ async def send_low_stock_sms(
 
     Uses the OWNER pattern (no separate low-stock pattern). Returns
     None (no row, no send) when an alert for this product was already
-    logged, or when no owner phone is configured.
+    logged, or when no owner phone is configured. The name comes from
+    the frozen order item and the count from the stock table — the
+    caller already looked both up.
     """
     phone = _get_owner_phone()
     if not phone:
         logger.warning(
             "No owner phone configured; low-stock SMS skipped for product %s",
-            product.id,
+            product_id,
         )
         return None
-    if await _already_logged(db, SmsMessageType.LOW_STOCK, str(product.id)):
+    if await _already_logged(db, SmsMessageType.LOW_STOCK, str(product_id)):
         return None
     sms_client = client or get_sms_client()
     body_id = _resolve_body_id("owner", sms_client)
-    variables = [product.name, str(product.available)]
+    variables = [product_name, str(available)]
     return await log_and_send(
         db,
         phone=phone,
         message_type=SmsMessageType.LOW_STOCK,
         text=";".join(variables),
-        reference=str(product.id),
+        reference=str(product_id),
         body_id=body_id,
         send=lambda: sms_client.send_pattern(phone, body_id, variables),
     )
@@ -391,13 +396,21 @@ async def check_low_stock_after_payment(
     *,
     client: MeliPayamakClient | None = None,
 ) -> None:
-    """After a payment, alert the owner for each just-bought product at/below threshold."""
+    """After a payment, alert the owner for each just-bought product at/below threshold.
+
+    The name is the frozen order-item name; the count comes from the
+    stock table (the payment just moved reserved units to sold).
+    """
     for item in order.items:
-        product = await db.get(Product, item.product_id)
-        if product is None:
-            continue
-        if product.available <= LOW_STOCK_THRESHOLD:
-            await send_low_stock_sms(db, product, client=client)
+        available = await stock_service.available_for(db, item.product_id)
+        if available <= LOW_STOCK_THRESHOLD:
+            await send_low_stock_sms(
+                db,
+                item.product_id,
+                item.product_name,
+                available,
+                client=client,
+            )
 
 
 def send_otp_sync(phone: str, code: str) -> None:

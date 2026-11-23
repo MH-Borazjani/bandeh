@@ -36,9 +36,10 @@ from sqlalchemy.orm import selectinload
 
 from core.money import toman_to_rial
 from db.models.order import Order, OrderItem, OrderStatus
-from db.models.product import Product
 from db.models.user import User
+from integrations.directus_client import DirectusClient
 from schema.order_api import OrderItemCreate
+from services import stock_service
 
 
 class OrderItemInput(TypedDict):
@@ -97,6 +98,7 @@ async def create_order(
     db: AsyncSession,
     user: User,
     items: Sequence[OrderItemCreate] | Sequence[OrderItemInput],
+    directus: DirectusClient,
     recipient_name: str | None = None,
     recipient_phone: str | None = None,
     delivery_address: str | None = None,
@@ -104,7 +106,10 @@ async def create_order(
     """Create a frozen order from cart items.
 
     Raises OrderError when a product is missing, inactive, or short on
-    stock. Prices are frozen from the product rows at this moment.
+    stock. Prices and names are frozen from Directus at this moment;
+    availability is read from the stock table. A Directus failure
+    raises through (the catalogue is genuinely unavailable then) —
+    the route turns it into a 503.
     """
     if not items:
         raise OrderError("an order needs at least one item")
@@ -125,20 +130,24 @@ async def create_order(
     total_toman = 0
     order_items: list[OrderItem] = []
     for pid, quantity in merged_quantities.items():
-        product = await db.get(Product, pid)
-        if product is None or not product.is_active:
+        row = await directus.get_product(pid)
+        if row is None or not row.get("is_active", True):
             raise OrderError(f"product {pid} is not available")
-        if quantity > product.available:
+        available = await stock_service.available_for(db, pid)
+        if quantity > available:
             raise OrderError(
-                f"only {product.available} of {product.name} available"
+                f"only {available} of {row.get('name')} available"
             )
-        total_toman += product.price_toman * quantity
+        price = row.get("price_toman")
+        if not isinstance(price, int) or isinstance(price, bool):
+            raise OrderError(f"product {pid} has no price")
+        total_toman += price * quantity
         order_items.append(
             OrderItem(
-                product_id=product.id,
-                product_name=product.name,
+                product_id=pid,
+                product_name=row.get("name") or "",
                 quantity=quantity,
-                unit_price_toman=product.price_toman,
+                unit_price_toman=price,
             )
         )
 

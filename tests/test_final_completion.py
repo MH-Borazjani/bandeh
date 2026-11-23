@@ -55,10 +55,11 @@ from core.security import SESSION_COOKIE_NAME, create_session  # noqa: E402
 from db.base import Base  # noqa: E402
 from db.models.order import Order, OrderItem, OrderStatus  # noqa: E402
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus  # noqa: E402
-from db.models.product import Product  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
 from db.models.sms_log import SmsLog  # noqa: E402
 from db.models.user import User, UserRole  # noqa: E402
 from db.session import get_db  # noqa: E402
+from integrations.directus_client import get_directus_client  # noqa: E402
 from integrations.sms import (  # noqa: E402
     _DEV_SENT_MESSAGES,
     MeliPayamakClient,
@@ -69,6 +70,49 @@ from services.order_service import create_order  # noqa: E402
 from services.scheduler import ReservationCleanupTask  # noqa: E402
 from services.session_service import create_database_session  # noqa: E402
 from services.user_service import create_or_promote_staff_user  # noqa: E402
+
+
+class _FakeDirectusClient:
+    """CMS stand-in: products registered per test."""
+
+    def __init__(self) -> None:
+        self.products: dict[str, dict] = {}
+
+    def add_product(
+        self, product_id: uuid.UUID, name: str, price_toman: int
+    ) -> None:
+        self.products[str(product_id)] = {
+            "id": str(product_id),
+            "name": name,
+            "description": None,
+            "price_toman": price_toman,
+            "stock": 0,
+            "reserved": 0,
+            "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
+            "category": None,
+            "tag": None,
+            "condition": "new",
+            "condition_stars": None,
+            "specs": {},
+        }
+
+    async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
+        row = self.products.get(str(product_id))
+        return dict(row) if row is not None else None
+
+    async def list_products(self, limit: int = 20) -> list[dict]:
+        return [dict(row) for row in self.products.values()][:limit]
+
+    async def get_products_by_ids(
+        self, product_ids: list[uuid.UUID | str]
+    ) -> list[dict]:
+        return [
+            dict(self.products[str(pid)])
+            for pid in product_ids
+            if str(pid) in self.products
+        ]
 
 
 class FinalCompletionTests(unittest.TestCase):
@@ -83,6 +127,7 @@ class FinalCompletionTests(unittest.TestCase):
     admin_cookie: str
     staff_cookie: str
     customer_cookie: str
+    directus: _FakeDirectusClient
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -111,6 +156,11 @@ class FinalCompletionTests(unittest.TestCase):
                     raise
 
         app.dependency_overrides[get_db] = override_get_db
+        # The fake is used ONLY as a direct argument to create_order
+        # in the tests below — it is NOT installed as the app's
+        # Directus client, so the HTTP routes keep the real client's
+        # fallback behaviour (e.g. /terms renders its static page).
+        cls.directus = _FakeDirectusClient()
 
         async def seed_users() -> None:
             async with cls.Session() as s:
@@ -196,21 +246,22 @@ class FinalCompletionTests(unittest.TestCase):
     def test_admin_order_fulfillment_lifecycle(self) -> None:
         """Test fulfillment: paid -> shipped (with tracking code) -> delivered, plus SMS trigger."""
         # 1. Create a paid order in database
+        oven_id = uuid.uuid4()
+        self.directus.add_product(oven_id, "تست فر پیتزا", 10_000_000)
+
         async def create_paid_order() -> Order:
             async with self.Session() as s:
-                prod = Product(
-                    name="تست فر پیتزا",
-                    price_toman=10_000_000,
-                    stock=5,
-                    reserved=0,
-                    is_active=True,
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(oven_id), stock=5
+                    )
                 )
-                s.add(prod)
                 await s.flush()
                 order = await create_order(
                     s,
                     user=self.customer_user,
-                    items=[{"product_id": prod.id, "quantity": 1}],
+                    items=[{"product_id": oven_id, "quantity": 1}],
+                    directus=self.directus,
                     recipient_name="سارا احمدی",
                     recipient_phone="09128888888",
                     delivery_address="تهران، خیابان ولیعصر، پلاک ۱۰",
@@ -290,21 +341,22 @@ class FinalCompletionTests(unittest.TestCase):
 
     def test_admin_order_invalid_transition_rejected(self) -> None:
         """Orders that are not paid cannot be transitioned directly to shipped."""
+        fridge_id = uuid.uuid4()
+        self.directus.add_product(fridge_id, "یخچال آزمایشگاهی", 50_000_000)
+
         async def create_unpaid_order() -> Order:
             async with self.Session() as s:
-                prod = Product(
-                    name="یخچال آزمایشگاهی",
-                    price_toman=50_000_000,
-                    stock=2,
-                    reserved=0,
-                    is_active=True,
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(fridge_id), stock=2
+                    )
                 )
-                s.add(prod)
                 await s.flush()
                 order = await create_order(
                     s,
                     user=self.customer_user,
-                    items=[{"product_id": prod.id, "quantity": 1}],
+                    items=[{"product_id": fridge_id, "quantity": 1}],
+                    directus=self.directus,
                 )
                 # status is created / unpaid
                 return order
@@ -322,16 +374,15 @@ class FinalCompletionTests(unittest.TestCase):
     # 2. Reservation Timer / Scheduler Tests -----------------------------------
     def test_reservation_cleanup_frees_expired_holds(self) -> None:
         """ReservationCleanupTask frees holds older than hold_minutes and restores stock."""
+        tv_id = uuid.uuid4()
+
         async def scenario() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
             async with self.Session() as s:
-                p = Product(
-                    name="تلویزیون هوشمند تست زمان‌بندی",
-                    price_toman=30_000_000,
-                    stock=4,
-                    reserved=2,
-                    is_active=True,
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(tv_id), stock=4, reserved=2
+                    )
                 )
-                s.add(p)
                 await s.flush()
 
                 order = Order(
@@ -345,8 +396,8 @@ class FinalCompletionTests(unittest.TestCase):
 
                 item = OrderItem(
                     order_id=order.id,
-                    product_id=p.id,
-                    product_name=p.name,
+                    product_id=tv_id,
+                    product_name="تلویزیون هوشمند تست زمان‌بندی",
                     quantity=2,
                     unit_price_toman=30_000_000,
                 )
@@ -365,7 +416,7 @@ class FinalCompletionTests(unittest.TestCase):
                 attempt.created_at = expired_time
                 s.add(attempt)
                 await s.commit()
-                return p.id, order.id, attempt.id
+                return tv_id, order.id, attempt.id
 
         prod_id, order_id, attempt_id = asyncio.run(scenario())
 
@@ -382,7 +433,7 @@ class FinalCompletionTests(unittest.TestCase):
 
             async def verify_state() -> None:
                 async with self.Session() as s:
-                    p = await s.get(Product, prod_id)
+                    p = await s.get(ProductStock, str(prod_id))
                     assert p is not None
                     self.assertEqual(p.reserved, 0)
                     self.assertEqual(p.available, 4)

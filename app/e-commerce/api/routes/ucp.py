@@ -41,6 +41,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from db.session import DbSessionDep
+from integrations.directus_client import DirectusClientDep
 from integrations.zibal_client import ZibalClientDep
 from services import agent_commerce
 from services.agent_commerce import AgentError
@@ -97,6 +98,7 @@ def _response_headers(
 async def create_checkout_session(
     request: Request,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Create a checkout session from line items + optional buyer."""
     try:
@@ -105,7 +107,7 @@ async def create_checkout_session(
         agent_commerce.verify_agent_signature(request, raw)
         key = request.headers.get("idempotency-key")
         status, response, replayed = await agent_commerce.create_session(
-            db, "ucp", payload, _base_url(request), key, raw
+            db, directus, "ucp", payload, _base_url(request), key, raw
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc
@@ -139,6 +141,7 @@ async def update_checkout_session(
     request: Request,
     session_id: str,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Update items / buyer / fulfillment on an open session, reprice."""
     try:
@@ -148,7 +151,7 @@ async def update_checkout_session(
         key = request.headers.get("idempotency-key")
         row = await agent_commerce.load_session(db, "ucp", session_id)
         response, replayed = await agent_commerce.update_session(
-            db, row, payload, _base_url(request), key, raw
+            db, directus, row, payload, _base_url(request), key, raw
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc
@@ -163,6 +166,7 @@ async def complete_checkout_session(
     request: Request,
     session_id: str,
     db: DbSessionDep,
+    directus: DirectusClientDep,
     zibal: ZibalClientDep,
 ) -> JSONResponse:
     """Complete: create the order, start Zibal, return the payment link.
@@ -180,6 +184,7 @@ async def complete_checkout_session(
         http_client = getattr(request.app.state, "http_client", None)
         response, replayed = await agent_commerce.complete_session(
             db,
+            directus,
             row,
             payload,
             zibal,
@@ -275,12 +280,14 @@ async def get_order(
 async def catalog_search(
     request: Request,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Catalog search: ``{"query": "...", "limit": 20}`` → products."""
     try:
         agent_commerce.require_agent_key(request)
         payload, _ = await _read_payload(request)
         products = await agent_commerce.search_catalog(
+            directus,
             db,
             payload.get("query"),
             _base_url(request),
@@ -295,13 +302,14 @@ async def catalog_search(
 async def catalog_lookup(
     request: Request,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Catalog lookup: ``{"ids": [...]}`` → the products, in order."""
     try:
         agent_commerce.require_agent_key(request)
         payload, _ = await _read_payload(request)
         products = await agent_commerce.lookup_catalog(
-            db, payload.get("ids"), _base_url(request)
+            directus, db, payload.get("ids"), _base_url(request)
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc
@@ -312,13 +320,14 @@ async def catalog_lookup(
 async def catalog_product(
     request: Request,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Catalog product: ``{"id": "..."}`` → one product or 404."""
     try:
         agent_commerce.require_agent_key(request)
         payload, _ = await _read_payload(request)
         products = await agent_commerce.lookup_catalog(
-            db, [payload.get("id")], _base_url(request)
+            directus, db, [payload.get("id")], _base_url(request)
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc

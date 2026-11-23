@@ -46,7 +46,9 @@ class CartItem(Base, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    product_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
-    )
+    # The Directus product id, as a plain UUID — NOT a foreign key.
+    # Directus owns the products table now, and the shop's SQLAlchemy
+    # no longer maps it. A cart line whose product was deleted in
+    # Directus simply reads as missing (the MCP cart view skips it).
+    product_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

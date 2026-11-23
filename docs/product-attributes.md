@@ -3,7 +3,10 @@
 Short version: each product has attribute values (a TV is 55 inch, a
 washer is 8 kg). The *definitions* of those attributes live in
 Directus on the category; the *values* live in Directus on the
-product and are copied into Postgres, where the shop filters by them.
+product. The shop reads both from Directus and filters in Python —
+there is no Postgres copy anymore (the old sync script and the
+database spec filter were removed 2026-11-24, when Directus became
+the single product source).
 
 ## The model
 
@@ -13,20 +16,21 @@ product and are copied into Postgres, where the shop filters by them.
   `key` is a snake_case identifier; `label`/`unit` are what the shop
   shows; `type` is `"number"` for now.
 - **Values** — `products.specs` in Directus (JSON), e.g.
-  `{"screen_size_inch": 55}`. Copied into Postgres
-  `products.specs` (JSONB, `NOT NULL DEFAULT '{}'`, GIN index
-  `ix_products_specs_gin`, migration `011_product_specs`).
+  `{"screen_size_inch": 55}`. The `products` table still has a
+  `specs` column (Directus owns that table), but the shop never reads
+  it from the database — it reads `specs` from the Directus API.
 - **Reading** — `DirectusClient.list_products` / `list_products_by_category` /
   `get_product` return `specs` (from `PRODUCT_READ_FIELDS`); the API
   exposes it as `ProductRead.specs`. `list_categories` returns
   `filter_attributes`; `get_category_filter_attributes()` returns
   `{category id: [definitions]}`.
-- **Filtering (DB path)** — `services/search_service.py`:
-  `clean_spec_filters` (drops bad keys, empty lists, None values),
-  `apply_spec_filters` (adds `specs ->> 'key' IN (...)` per attribute,
-  bound parameters only), `build_spec_filter_statement` (built, not
-  run — tests compile it against the Postgres dialect) and
-  `filter_products_by_specs` (runs it; Postgres only, like full-text).
+- **Filtering (Python)** — `services/search_service.py`:
+  `clean_spec_filters` (drops bad keys, empty lists, None values).
+  The actual match is `_matches_product_filters` in
+  `api/routes/products.py`: the product's value for each picked
+  attribute must be one of the picked values (IN per key, AND across
+  keys), compared as strings because Directus specs hold numbers (55)
+  while the URL carries text ("55").
 
 ## Seeded test data (Directus + Postgres)
 
@@ -51,56 +55,28 @@ Category definitions seeded in Directus:
 All type `"number"`. The `[TEST]` suffix on the category names is
 deliberate — keep it.
 
-## Sync: Directus → Postgres
+## No sync anymore
 
-Directus owns the specs; Postgres is a copy for database search.
-There was no existing product-sync path in the repo, so the sync is a
-standalone script: `~/workspace/scripts/sync_product_specs.py`.
-
-**Shared-table note (2026-11-22):** on the laptop, Directus and the
-shop use the SAME Postgres database and the SAME `products` table —
-so editing `specs` in Directus already lands in Postgres
-immediately, and the sync is usually a no-op that just confirms it.
-Keep the script anyway: it is the explicit re-run path if the two
-ever diverge (or Directus ever points at a different database), and
-it is what the tests cover. It also explains why migration 011
-converts the Directus-created column instead of adding a new one.
-
-Re-run it after any CMS content change (specs edited, new product,
-new category definitions don't need a sync — definitions are read
-live from Directus). Run it on the laptop, inside the web container
-(Postgres has no host port):
-
-```bash
-cd /home/mhb/app/coding/easy-auto
-docker compose exec -T web uv run python - < ~/workspace/scripts/sync_product_specs.py
-```
-
-It reads products over the public Directus API (no login), updates
-only the `specs` column, matched by product id, and reports products
-that exist in Directus but not in Postgres (it never creates rows).
-Idempotent — safe to re-run any time.
+There used to be a sync script (`~/workspace/scripts/sync_product_specs.py`)
+that copied Directus specs into the Postgres `products.specs` column,
+because the shop filtered specs in the database. That copy is gone:
+since 2026-11-24 the shop reads specs from the Directus API and
+filters in Python, so there is nothing to sync. Do NOT run the old
+script — it writes to the Directus-owned `products.specs` column and
+would overwrite what the editors put in Directus. The script file
+still exists in `~/workspace/scripts/`; retire it when convenient.
 
 ## SQLite note
 
-`postgresql.JSONB` does not run on SQLite, and the check scripts use
-in-memory SQLite. The model therefore uses
-`MutableDict.as_mutable(JSONB().with_variant(JSON(), "sqlite"))` —
-variant **inside** `as_mutable`. The other order (as_mutable on each
-side) loads plain dicts on SQLite and silently loses in-place edits.
-`tests/check_product_specs.py` covers the round-trip including an
-in-place edit.
-
-One SQLite quirk, by design: `specs ->> 'key'` returns a number on
-SQLite but text on Postgres, so the spec filter is Postgres-only —
-the check script compiles it against the Postgres dialect instead of
-running it on SQLite, exactly like the full-text statement.
-
+The old Product model round-tripped specs on SQLite
+(`MutableDict.as_mutable(JSONB().with_variant(JSON(), "sqlite"))` —
+variant **inside** `as_mutable`). That model is gone now, and with it
+the round-trip test. Specs are plain dicts from the Directus API.
 ## How Phase 4 will use it
 
 The filter panel reads the current category's definitions from
 `get_category_filter_attributes()`, shows one filter per definition
-(label + unit), and sends the visitor's picks as
-`{key: [values]}` to `filter_products_by_specs` (DB path) — or to the
-equivalent Directus-side filter. No code change is needed when an
-editor adds a new attribute definition in Directus.
+(label + unit), and sends the visitor's picks as `{key: [values]}`;
+the route filters the Directus rows in Python
+(`_matches_product_filters`). No code change is needed when an editor
+adds a new attribute definition in Directus.

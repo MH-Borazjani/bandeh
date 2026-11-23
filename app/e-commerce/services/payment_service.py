@@ -16,7 +16,7 @@
 
 The rules, all in one place:
 - Stock is reserved in ONE transaction with SELECT ... FOR UPDATE:
-  lock the product rows, re-check availability, bump ``reserved``,
+  lock the stock rows, re-check availability, bump ``reserved``,
   create the attempt with a fresh uuid4 idempotency key. Only then
   call Zibal. If Zibal refuses, the reservation is given back in the
   same breath (compensate, then re-raise) — never leave stock held
@@ -50,7 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.datetime_utils import utcnow
 from db.models.order import Order, OrderStatus
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from integrations.zibal_client import (
     RESULT_ALREADY_VERIFIED,
     RESULT_NOT_PAID,
@@ -58,6 +58,7 @@ from integrations.zibal_client import (
     ZibalClient,
     ZibalError,
 )
+from services import stock_service
 from services.order_service import OrderError, load_order, load_order_for_user
 
 
@@ -120,20 +121,17 @@ HOLD_MINUTES = 15
 
 async def _lock_order_products(
     db: AsyncSession, order: Order
-) -> dict[uuid.UUID, Product]:
-    """Load the order's products with a row lock (FOR UPDATE).
+) -> dict[str, ProductStock]:
+    """Load the order's stock rows with a row lock (FOR UPDATE).
 
     On Postgres this serialises two checkouts racing for the same
     stock. On SQLite the clause is ignored (SQLite has no row locks),
-    which is why tests use one checkout at a time.
+    which is why tests use one checkout at a time. A product with no
+    stock row is absent from the result — the caller treats that as
+    zero stock.
     """
     product_ids = [item.product_id for item in order.items]
-    result = await db.execute(
-        select(Product)
-        .where(Product.id.in_(product_ids))
-        .with_for_update()
-    )
-    return {p.id: p for p in result.scalars().all()}
+    return await stock_service.lock_stock_rows(db, product_ids)
 
 
 async def _live_attempt(db: AsyncSession, order_id: uuid.UUID) -> PaymentAttempt | None:
@@ -151,7 +149,7 @@ async def _release_reservation(db: AsyncSession, order: Order) -> None:
     """Give reserved units back (reserved -= quantity). No commit here."""
     products = await _lock_order_products(db, order)
     for item in order.items:
-        product = products.get(item.product_id)
+        product = products.get(str(item.product_id))
         if product is not None:
             product.reserved = max(0, product.reserved - item.quantity)
 
@@ -160,7 +158,7 @@ async def _move_reserved_to_sold(db: AsyncSession, order: Order) -> None:
     """Payment confirmed: reserved units become sold (stock -= qty too)."""
     products = await _lock_order_products(db, order)
     for item in order.items:
-        product = products.get(item.product_id)
+        product = products.get(str(item.product_id))
         if product is not None:
             product.stock -= item.quantity
             product.reserved = max(0, product.reserved - item.quantity)
@@ -212,14 +210,14 @@ async def start_payment(
         required_by_product[item.product_id] = (prev_qty + item.quantity, item.product_name)
 
     for product_id, (needed, product_name) in required_by_product.items():
-        product = products.get(product_id)
+        product = products.get(str(product_id))
         if product is None or needed > product.available:
             raise OrderError(
                 f"only {product.available if product else 0} of "
                 f"{product_name} available"
             )
     for product_id, (needed, _) in required_by_product.items():
-        products[product_id].reserved += needed
+        products[str(product_id)].reserved += needed
 
     attempt = PaymentAttempt(
         order_id=order.id,

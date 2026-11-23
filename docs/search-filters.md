@@ -63,20 +63,16 @@ or a new product value in Directus needs no code change.
 
 ## How filtering is applied
 
-- **Primary path (Directus product dicts):** the route filters the
+- **Only path (Directus product dicts):** the route filters the
   product dicts in Python (`_matches_product_filters` in
   `api/routes/products.py`), using `clean_spec_filters` from
   `services/search_service.py` (Phase 3) to parse the `spec_*`
   params. Spec values compare as strings, because Directus specs
-  hold numbers (55) while the URL carries text ("55").
-- **Database fallback path:** when Directus returns nothing, the
-  category page falls back to the same table through SQLAlchemy. On
-  Postgres the spec narrowing runs in the database
-  (`filter_products_by_specs`, Phase 3); on SQLite the Python
-  matcher does it, because SQLite's `specs ->> 'key'` returns a
-  number where Postgres returns text (see `docs/product-attributes.md`).
-  Price and in-stock are applied by the same Python matcher on both
-  paths, so the two paths agree.
+  hold numbers (55) while the URL carries text ("55"). There used to
+  be a database fallback path with the spec filter running in
+  Postgres (`filter_products_by_specs`); it was removed 2026-11-24
+  when Directus became the single product source, so a Directus
+  failure now shows the empty state instead of stale rows.
 
 ## No brand filter
 

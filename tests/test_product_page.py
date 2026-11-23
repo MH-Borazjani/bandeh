@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 
 from core.templates import to_compact_price  # noqa: E402
 from db.base import Base  # noqa: E402
-from db.models.product import Product  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
 from db.session import get_db  # noqa: E402
 from integrations.directus_client import (  # noqa: E402
     format_toman_price,
@@ -67,7 +67,7 @@ class ProductPageTests(unittest.TestCase):
     Session: async_sessionmaker[AsyncSession]
     client: TestClient
     directus_product_id: uuid.UUID
-    db_product_id: uuid.UUID
+    not_in_directus_id: uuid.UUID
     directus_data: dict
 
     @classmethod
@@ -110,21 +110,22 @@ class ProductPageTests(unittest.TestCase):
             "created_at": "2026-11-14T12:00:00Z",
         }
 
-        # 2. Product fallback in SQLite DB
-        cls.db_product_id = uuid.uuid4()
+        # 2. A product id Directus does not know (no DB fallback anymore:
+        #    products live in Directus only, so this must 404).
+        cls.not_in_directus_id = uuid.uuid4()
 
         async def seed_db() -> None:
             async with cls.Session() as s:
-                p = Product(
-                    id=cls.db_product_id,
-                    name="ماشین لباسشویی ۹ کیلویی بنده",
-                    description="موتور دایرکت درایو اینورتر بیصدا",
-                    price_toman=28500000,
-                    stock=5,
-                    reserved=0,
-                    is_active=True,
+                # The stock numbers the page shows come from the stock
+                # table, not the CMS row (same values as the fake
+                # above, so the page reads are unchanged).
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(cls.directus_product_id),
+                        stock=8,
+                        reserved=1,
+                    )
                 )
-                s.add(p)
                 await s.commit()
 
         asyncio.run(seed_db())
@@ -192,18 +193,13 @@ class ProductPageTests(unittest.TestCase):
         self.assertIn('id="cart-count"', html)
         self.assertIn("/static/js/shop.js", html)
 
-    def test_product_page_database_fallback(self) -> None:
-        """When not in Directus, falls back to database and renders HTML page."""
-        url = f"/products/{self.db_product_id}"
+    def test_product_not_in_directus_returns_404(self) -> None:
+        """A product Directus does not know 404s — no DB fallback anymore."""
+        url = f"/products/{self.not_in_directus_id}"
         resp = self.client.get(url, headers={"accept": "text/html"})
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("ماشین لباسشویی ۹ کیلویی بنده", resp.text)
-        compact = to_compact_price(28500000)
-        self.assertIn(compact["value"], resp.text)
-        self.assertIn(compact["unit"], resp.text)
-        self.assertNotIn(format_toman_price(28500000), resp.text)
-        self.assertIn("تومان", resp.text)
+        self.assertEqual(resp.status_code, 404)
+        resp_json = self.client.get(url)
+        self.assertEqual(resp_json.status_code, 404)
 
     def test_product_with_integer_category_resolves_to_category_name(self) -> None:
         """When CMS returns category as an integer ID, it is resolved to real category name."""

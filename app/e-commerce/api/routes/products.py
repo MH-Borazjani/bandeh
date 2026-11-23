@@ -12,14 +12,23 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Product routes: create, read, upload a photo, serve uploads.
+"""Product routes: read, search, serve uploads.
 
-- Creating products and uploading photos is staff work: the gate is
-  ``RequireStaffDep`` (staff + admin), never an if in the route.
-- Reading one product and fetching its photo is public.
-- Photos are served from ``uploads/`` through this route, never through
-  the static file server: the path is checked so ``../`` cannot escape
-  the upload directory.
+Products are read from Directus — the CMS owns all product content
+(name, description, price, photo, condition, attributes). Stock
+numbers come from the shop's product_stock table (see
+services/stock_service.attach_stock): the Directus rows still carry
+stock/reserved columns, but those are dead and are overwritten with
+the real numbers before any answer is built.
+
+Creating products and uploading photos is NOT done here anymore:
+editors create products and attach photos in Directus itself. The
+only upload route left is GET /uploads/{filename}, which serves
+files that are already on disk.
+
+Photos are served from ``uploads/`` through this route, never through
+the static file server: the path is checked so ``../`` cannot escape
+the upload directory.
 """
 
 from __future__ import annotations
@@ -33,14 +42,12 @@ from urllib.parse import quote_plus, urlencode
 import httpx
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
+    Body,
     Depends,
-    File,
     HTTPException,
     Query,
     Request,
     Response,
-    UploadFile,
 )
 from fastapi import (
     Path as FastAPIPath,
@@ -58,10 +65,9 @@ from integrations.directus_client import (
     DirectusClientDep,
     format_toman_price,
 )
-from schema.product_api import ProductCreate, ProductPhotoRead, ProductRead
-from services import product_service, search_service
-from services.image_tasks import schedule_image_variants
-from services.upload_service import UploadError, get_upload_dir, save_upload
+from schema.product_api import ProductRead
+from services import search_service, stock_service
+from services.upload_service import get_upload_dir
 
 router = APIRouter(tags=["products"])
 
@@ -375,7 +381,6 @@ def _resolve_category_names(
 @router.get("/api/search-live", response_class=HTMLResponse)
 async def live_search_endpoint(
     request: Request,
-    db: DbSessionDep,
     directus: DirectusClientDep,
     q: Annotated[str, Query(max_length=search_service.MAX_QUERY_LENGTH)] = "",
     category: Annotated[list[str] | None, Query()] = None,
@@ -409,64 +414,34 @@ async def live_search_endpoint(
     cat_lower = {name.lower() for name in cat_names}
 
     matched: list[dict[str, object]] = []
-    # A category filter needs the CMS: the SQLAlchemy Product model does
-    # not map the category column, so the database cannot tell which
-    # category a row belongs to. With a category picked, skip the DB
-    # path and read from Directus (which does know the category).
-    if not cat_names:
-        try:
-            db_products = await search_service.search_products(
-                db, query, limit=6, condition=cond
-            )
-            for p in db_products:
-                p_read = ProductRead.model_validate(p)
-                matched.append(
-                    {
-                        "id": str(p_read.id),
-                        "name": p_read.name,
-                        "formatted_price": format_toman_price(p_read.price_toman),
-                        "category": p_read.category or "لوازم خانگی",
-                        "image_url": _resolve_product_img_url(
-                            p_read.name, p_read.image_path
-                        ),
-                    }
-                )
-        except Exception:
-            pass
-
-    if not matched:
-        try:
-            cms_products = await directus.list_products(limit=30)
-            q_lower = query.lower()
-            for cp in cms_products:
-                if cond is not None and cp.get("condition") != cond:
-                    continue
-                if (
-                    cat_names
-                    and isinstance(cp.get("category"), str)
-                    and cp["category"].strip().lower() not in cat_lower
-                ):
-                    continue
-                name_match = q_lower in cp.get("name", "").lower()
-                desc_match = q_lower in (cp.get("description") or "").lower()
-                if name_match or desc_match:
-                    matched.append(
-                        {
-                            "id": str(cp.get("id")),
-                            "name": cp.get("name"),
-                            "formatted_price": format_toman_price(
-                                cp.get("price_toman")
-                            ),
-                            "category": cp.get("category") or "لوازم خانگی",
-                            "image_url": _resolve_product_img_url(
-                                cp.get("name", ""), cp.get("image_path")
-                            ),
-                        }
-                    )
-                    if len(matched) >= 6:
-                        break
-        except Exception:
-            pass
+    # One search path: Directus owns the catalogue. The category
+    # filter is applied here, on the category name each row carries.
+    try:
+        found = await search_service.search_products(
+            directus, query, limit=50, condition=cond
+        )
+    except Exception:
+        found = []
+    for cp in found:
+        if (
+            cat_names
+            and isinstance(cp.get("category"), str)
+            and cp["category"].strip().lower() not in cat_lower
+        ):
+            continue
+        matched.append(
+            {
+                "id": str(cp.get("id")),
+                "name": cp.get("name"),
+                "formatted_price": format_toman_price(cp.get("price_toman")),
+                "category": cp.get("category") or "لوازم خانگی",
+                "image_url": _resolve_product_img_url(
+                    cp.get("name", ""), cp.get("image_path")
+                ),
+            }
+        )
+        if len(matched) >= 6:
+            break
 
     # The hardcoded fallback products have no category at all, so they
     # must never answer a category-filtered search — that would show a
@@ -527,9 +502,8 @@ async def list_products_endpoint(
     """Public: active products, newest first.
 
     Content comes from Directus (the source of truth). If Directus is
-    unreachable, the same table is read through SQLAlchemy as a fallback
-    — the same rows, not a second source of truth — so the shop never
-    goes blank because the CMS is down.
+    unreachable, the list is empty — there is no second copy of the
+    catalogue anymore, so the shop must not pretend otherwise.
 
     Public cache header: the list is the same for every visitor, so
     browsers and CDNs may cache it for 60 seconds.
@@ -537,12 +511,9 @@ async def list_products_endpoint(
     try:
         rows = await directus.list_products(limit)
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-        logger.warning(
-            "Directus product list failed, falling back to database: %s", exc
-        )
-        products = await search_service.list_products(db, limit)
-        response.headers["Cache-Control"] = "public, max-age=60"
-        return [ProductRead.model_validate(p) for p in products]
+        logger.warning("Directus product list failed: %s", exc)
+        rows = []
+    await stock_service.attach_stock(db, rows)
     response.headers["Cache-Control"] = "public, max-age=60"
     return [ProductRead.model_validate(row) for row in rows]
 
@@ -573,18 +544,19 @@ async def search_products_endpoint(
         cond = search_service.clean_condition(condition)
         filters = _parse_filter_params(request.query_params)
         if q.strip():
-            products = await search_service.search_products(
-                db, q, limit, condition=cond
+            rows = await search_service.search_products(
+                directus, q, limit, condition=cond
             )
         elif cond is not None:
             # Filter only, no text: list instead of search (an empty
             # query searches nothing by design — see check_search).
-            products = await search_service.list_products(
-                db, limit, condition=cond
+            rows = await search_service.list_products(
+                directus, limit, condition=cond
             )
         else:
-            products = await search_service.search_products(db, q, limit)
-        reads = [ProductRead.model_validate(p) for p in products]
+            rows = await search_service.search_products(directus, q, limit)
+        await stock_service.attach_stock(db, rows)
+        reads = [ProductRead.model_validate(row) for row in rows]
         if not filters["has_filters"]:
             return reads
         return [
@@ -641,34 +613,19 @@ async def search_products_endpoint(
         return True
 
     if has_query:
-        # A category filter needs the CMS: the DB rows carry no
-        # category (the Product model does not map that column), so
-        # with categories picked the DB path is skipped entirely —
-        # otherwise an unknown category would "match" DB rows that
-        # were merely labelled with the picked name. Same rule as the
-        # live search endpoint.
-        if not cat_names:
-            db_products = await search_service.search_products(
-                db, q, limit, condition=cond
+        # One search path: Directus owns the catalogue, so the text
+        # search reads Directus — with or without categories picked.
+        try:
+            found = await search_service.search_products(
+                directus, q, limit, condition=cond
             )
-            for p in db_products:
-                p_read = ProductRead.model_validate(p)
+            await stock_service.attach_stock(db, found)
+            for row in found:
                 matched_products.append(
-                    _product_dict_from_read(p_read, db_fallback_category)
+                    _product_dict_from_cms(row, db_fallback_category)
                 )
-        if not matched_products:
-            try:
-                cms_products = await directus.list_products(limit=50)
-                q_lower = q.strip().lower()
-                for cp in cms_products:
-                    name_match = q_lower in cp.get("name", "").lower()
-                    desc_match = q_lower in (cp.get("description") or "").lower()
-                    if name_match or desc_match:
-                        matched_products.append(
-                            _product_dict_from_cms(cp, db_fallback_category)
-                        )
-            except Exception:
-                pass
+        except Exception:
+            pass
         matched_products = [p for p in matched_products if _matches_filters(p)]
     elif has_category or has_condition or filters["has_filters"]:
         try:
@@ -681,30 +638,14 @@ async def search_products_endpoint(
                 # the list and keep the rows whose category is in the
                 # picked set — Directus has no multi-category filter.
                 cms_products = await directus.list_products(limit=limit)
+            await stock_service.attach_stock(db, cms_products)
             for cp in cms_products:
                 matched_products.append(
                     _product_dict_from_cms(cp, db_fallback_category)
                 )
         except Exception:
+            # Directus failed: show an empty result, not a 500.
             pass
-
-        # No CMS rows: fall back to the DB only when no category was
-        # picked. DB rows carry no category, so they must never answer
-        # a category-filtered search — an unknown category matches
-        # nothing instead of "matching" every DB row.
-        if not matched_products and not cat_names:
-            try:
-                db_all = await search_service.list_products(
-                    db, limit=limit, condition=cond
-                )
-            except Exception:
-                # Both sources failed: show an empty result, not a 500.
-                db_all = []
-            for p in db_all:
-                p_read = ProductRead.model_validate(p)
-                matched_products.append(
-                    _product_dict_from_read(p_read, db_fallback_category)
-                )
         matched_products = [p for p in matched_products if _matches_filters(p)]
 
     # Phase 4 filter panel. Attribute filters show only when exactly
@@ -733,6 +674,7 @@ async def search_products_endpoint(
             cat_rows = await directus.list_products_by_category(
                 cat_names[0], limit=limit
             )
+            await stock_service.attach_stock(db, cat_rows)
             value_source = [
                 _product_dict_from_cms(cp, db_fallback_category)
                 for cp in cat_rows
@@ -858,42 +800,10 @@ async def category_page_endpoint(
         cat_products_raw = await directus.list_products_by_category(
             cat_id if cat_id is not None else cat_name, limit=50
         )
+        await stock_service.attach_stock(db, cat_products_raw)
     except Exception as exc:
+        # Directus failed: show the empty state, not a 500.
         logger.warning("Failed to list products by category from Directus: %s", exc)
-
-    if not cat_products_raw:
-        try:
-            db_all = await search_service.list_products(db, limit=50)
-        except Exception as exc:
-            # Both sources failed: show the empty state, not a 500.
-            logger.warning("Category DB fallback failed: %s", exc)
-            db_all = []
-        # DB fallback, Postgres: narrow by specs in the database
-        # itself (filter_products_by_specs, Phase 3) before the
-        # name/category match below; price and in-stock are applied
-        # with the other filters afterwards, on the same dicts as the
-        # Directus path. On SQLite the spec filter cannot run (see
-        # docs/product-attributes.md), so the Python matcher does it.
-        if filters["spec_filters"] and db_all:
-            dialect = getattr(getattr(db, "bind", None), "dialect", None)
-            if dialect is not None and dialect.name == "postgresql":
-                try:
-                    db_all = await search_service.filter_products_by_specs(
-                        db,
-                        filters["spec_filters"],
-                        limit=50,
-                        condition=filters["condition"],
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Category DB spec filter failed, using list: %s", exc
-                    )
-        for p in db_all:
-            p_read = ProductRead.model_validate(p)
-            if cat_name.lower() in (p_read.name or "").lower() or (
-                p_read.category and cat_name.lower() in p_read.category.lower()
-            ):
-                cat_products_raw.append(p_read.model_dump())
 
     formatted_products = []
     for p in cat_products_raw:
@@ -970,44 +880,28 @@ async def category_page_endpoint(
     )
 
 
-@router.post("/products", status_code=201)
-async def create_product_endpoint(
-    data: ProductCreate,
-    staff: RequireStaffDep,
-    db: DbSessionDep,
-) -> ProductRead:
-    """Create a product (staff/admin). Photo comes later, via /photo."""
-    product = await product_service.create_product(db, data)
-    return ProductRead.model_validate(product)
-
-
 async def _fetch_product_read(
     db: AsyncSession,
     directus: DirectusClient,
     product_id: uuid.UUID,
 ) -> ProductRead:
-    """Read one product from Directus with database fallback."""
+    """Read one product from Directus, with its real stock attached.
+
+    404 when Directus has no such product. 503 when Directus cannot
+    be reached at all — there is no second copy of the catalogue to
+    fall back to, so the shop must say so instead of pretending the
+    product does not exist.
+    """
     try:
         row = await directus.get_product(product_id)
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-        logger.warning(
-            "Directus product read failed, falling back to database: %s", exc
-        )
-        product = await product_service.get_product(db, product_id)
-        if product is None:
-            raise HTTPException(
-                status_code=404, detail="product not found"
-            ) from exc
-        return ProductRead.model_validate(product)
+        logger.warning("Directus product read failed: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="product catalogue is unavailable"
+        ) from exc
     if row is None:
-        # Directus has no such product. In production the database is
-        # the same table, so this is normally the same answer — but check
-        # it anyway, so a product created through the API stays readable
-        # even if Directus is a step behind.
-        product = await product_service.get_product(db, product_id)
-        if product is None:
-            raise HTTPException(status_code=404, detail="product not found")
-        return ProductRead.model_validate(product)
+        raise HTTPException(status_code=404, detail="product not found")
+    await stock_service.attach_stock_one(db, row)
     return ProductRead.model_validate(row)
 
 
@@ -1065,31 +959,30 @@ async def product_page_endpoint(
     return _render_product_page(request, product, phone)
 
 
-@router.post("/products/{product_id}/photo")
-async def upload_product_photo(
+@router.patch("/products/{product_id}/stock", response_model=ProductRead)
+async def set_product_stock_endpoint(
     product_id: Annotated[uuid.UUID, FastAPIPath()],
-    file: Annotated[UploadFile, File()],
-    background_tasks: BackgroundTasks,
+    stock: Annotated[int, Body(ge=0)],
     staff: RequireStaffDep,
     db: DbSessionDep,
-    upload_dir: UploadDirDep,
-) -> ProductPhotoRead:
-    """Upload a product photo (staff/admin). Returns the public image URL.
+    directus: DirectusClientDep,
+) -> ProductRead:
+    """Staff: set how many units of a product the shop owns.
 
-    Validation (type, content, size) lives in the upload service. The
-    slow resize work is scheduled as a background task — the request
-    returns at once and never waits for it.
+    The product itself lives in Directus; this only sets the stock
+    number in the shop's product_stock table. A product with no stock
+    row yet gets one. 404 when Directus has no such product; 422 when
+    the new stock is below what is already reserved for unpaid orders.
     """
-    product = await product_service.get_product(db, product_id)
-    if product is None:
+    row = await directus.get_product(product_id)
+    if row is None:
         raise HTTPException(status_code=404, detail="product not found")
     try:
-        filename = await save_upload(file, upload_dir)
-    except UploadError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    await product_service.set_product_image(db, product, filename)
-    background_tasks.add_task(schedule_image_variants, filename, upload_dir)
-    return ProductPhotoRead(image_url=f"/uploads/{filename}", filename=filename)
+        await stock_service.set_stock(db, product_id, stock)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await stock_service.attach_stock_one(db, row)
+    return ProductRead.model_validate(row)
 
 
 @router.get("/uploads/{filename}")

@@ -45,7 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from core.cache import reset_cache_for_tests
 from db.base import Base
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.session import get_db
 from main import app
 
@@ -157,6 +157,19 @@ def _filter_rows(rows: list[dict], query: dict[str, list[str]]) -> list[dict]:
     out = list(rows)
     if query.get("filter[is_active][_eq]") == ["true"]:
         out = [r for r in out if r.get("is_active") is True]
+    cat = query.get("filter[category][_eq]")
+    if cat:
+        def _cat_id(row: dict) -> str | None:
+            value = row.get("category")
+            if isinstance(value, dict):
+                return str(value.get("id"))
+            return str(value) if value is not None else None
+
+        out = [r for r in out if _cat_id(r) == cat[0]]
+    ids = query.get("filter[id][_in]")
+    if ids:
+        wanted = set(ids[0].split(","))
+        out = [r for r in out if str(r.get("id")) in wanted]
     slug = query.get("filter[slug][_eq]")
     if slug:
         out = [r for r in out if r.get("slug") == slug[0]]
@@ -188,6 +201,15 @@ def _mock_handler(settings: dict, logo_bytes: bytes | None):
         if len(parts) == 2 and parts[0] == "items" and parts[1] in collections:
             rows = _filter_rows(collections[parts[1]], query)
             return httpx.Response(200, json={"data": rows})
+        if (
+            len(parts) == 3
+            and parts[0] == "items"
+            and parts[1] in collections
+        ):
+            for row in collections[parts[1]]:
+                if str(row.get("id")) == parts[2]:
+                    return httpx.Response(200, json={"data": row})
+            return httpx.Response(404, json={"errors": [{"message": "not found"}]})
         if len(parts) == 2 and parts[0] == "assets" and logo_bytes is not None:
             return httpx.Response(
                 200, content=logo_bytes, headers={"Content-Type": "image/png"}
@@ -240,31 +262,23 @@ async def main_async() -> None:
 
     app.dependency_overrides[get_db] = test_get_db
 
-    # DB seed: the same three products, with the migration-008 columns.
+    # Stock seed: the same three products as the mocked CMS (by their
+    # Directus ids). Content (names, prices, condition, stars) comes
+    # from the mock; only the stock numbers live here.
     async with Session() as s:
         s.add_all(
             [
-                Product(
-                    name="یخچال دو درب",
-                    description="کم‌مصرف",
-                    price_toman=45_000_000,
+                ProductStock(
+                    directus_product_id="ad7d6a7f-3d92-412c-a523-55deb334fa8c",
                     stock=5,
-                    condition="new",
                 ),
-                Product(
-                    name="تلویزیون ۵۵ اینچ",
-                    description="هوشمند",
-                    price_toman=32_000_000,
+                ProductStock(
+                    directus_product_id="4a9be4d9-5194-4b0d-b401-9594ebb8d030",
                     stock=5,
-                    condition="new",
                 ),
-                Product(
-                    name="ماشین لباسشویی ۸ کیلویی",
-                    description="کم‌صدا",
-                    price_toman=28_500_000,
+                ProductStock(
+                    directus_product_id="4b31ea7d-c2df-4068-877a-983cfa2734ba",
                     stock=5,
-                    condition="used",
-                    condition_stars=4,
                 ),
             ]
         )
@@ -286,12 +300,8 @@ async def main_async() -> None:
     print("2. plain /search still returns JSON list")
 
     # --- 3. HTMX product page returns HTML, never raw JSON ---
-    async with Session() as s:
-        from sqlalchemy import select
-
-        tv_id = (
-            await s.execute(select(Product.id).where(Product.name == "تلویزیون ۵۵ اینچ"))
-        ).scalar_one()
+    # The TV's id is the mocked CMS product's id.
+    tv_id = "4a9be4d9-5194-4b0d-b401-9594ebb8d030"
     r = client.get(
         f"/products/{tv_id}", headers={"HX-Request": "true", "Accept": "*/*"}
     )
@@ -395,20 +405,6 @@ async def main_async() -> None:
     r = client_no_logo.get("/site/logo")
     assert r.status_code == 404, "no logo configured must 404 (header falls back to ■)"
     print("10. /site/logo + /site/badge proxy CMS files; traversal ids refused")
-
-    # --- 11. Migration 008: the columns exist and round-trip ---
-    async with Session() as s:
-        from sqlalchemy import select
-
-        washer = (
-            await s.execute(select(Product).where(Product.name == "ماشین لباسشویی ۸ کیلویی"))
-        ).scalar_one()
-        assert washer.condition == "used" and washer.condition_stars == 4
-        tv = (
-            await s.execute(select(Product).where(Product.name == "تلویزیون ۵۵ اینچ"))
-        ).scalar_one()
-        assert tv.condition == "new" and tv.condition_stars is None
-    print("11. migration 008 columns round-trip (used=4 stars, new=None)")
 
     # --- 12. Pre-search filters: chips in the header panel + live search ---
     # The landing page header panel must offer the filters BEFORE the

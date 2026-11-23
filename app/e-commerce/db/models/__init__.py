@@ -19,7 +19,7 @@ from db.models.cart_item import CartItem
 from db.models.order import Order, OrderItem, OrderStatus
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus
 from db.models.personal_access_token import PersonalAccessToken
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.models.refresh_token import RefreshToken
 from db.models.session import UserSession
 from db.models.sms_log import SmsLog, SmsMessageType, SmsStatus
@@ -34,7 +34,7 @@ __all__ = [
     "PaymentAttempt",
     "PaymentStatus",
     "PersonalAccessToken",
-    "Product",
+    "ProductStock",
     "RefreshToken",
     "SmsLog",
     "SmsMessageType",

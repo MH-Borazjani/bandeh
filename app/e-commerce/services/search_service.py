@@ -12,48 +12,43 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Product search: ILIKE first, Postgres full-text second.
+"""Product search: Directus is the catalogue now.
 
-Two implementations, one rule for both: the user's words are ALWAYS a
-bound parameter, never pasted into SQL. ``%`` and ``_`` inside the
-query are escaped, so they match literally instead of acting as
-wildcards.
+Directus owns ALL product content, so search reads Directus — there
+is no Postgres products table in the shop's SQLAlchemy anymore.
+Matching is a plain substring search over name + description, in
+Python: it catches partial words (what Persian shoppers type), works
+the same on every database, and the catalogue is small (the list
+call fetches at most 50 rows). The query text is never pasted into
+SQL — there is no SQL here at all.
 
-- ILIKE: substring search over name + description. Works on every
-  database, catches partial words (what Persian shoppers type).
-- Full-text (Postgres only): ``to_tsvector`` + ``plainto_tsquery``
-  with the ``simple`` config (no stemming — Postgres has no Persian
-  stemmer; ``simple`` just tokenises) and ``ts_rank`` ordering. Used
-  when the database is Postgres; when it finds nothing, ILIKE runs as
-  the fallback. On other databases the route uses ILIKE directly.
+Results are Directus product dicts (the ``_product_row`` shape:
+id, name, description, price_toman, category, tag, condition,
+condition_stars, specs, plus stock/reserved set to 0 — the real
+stock numbers come from the stock table, and callers that show stock
+must run ``services.stock_service.attach_stock`` on the rows first).
 
-Both paths are always limited (default 20, max 50) — an unbounded
-search is a full-table scan handed to strangers.
+Spec filtering (attributes like TV screen size) does NOT live here:
+the routes filter the returned dicts in Python
+(``_matches_product_filters`` in api/routes/products.py), because
+the attribute values live in the same Directus rows.
 
-Spec filtering (Phase 3, Postgres only): products carry attribute
-values in ``specs`` (JSONB, e.g. {"screen_size_inch": 55}); the keys
-come from the category's definitions in Directus
-(categories.filter_attributes). ``apply_spec_filters`` adds one
-``specs ->> 'key' IN (...)`` clause per attribute, with bound
-parameters only. The statement is built, not run, so tests compile it
-against the Postgres dialect without a live Postgres.
+Both paths are always limited (default 20, max 50).
 """
 
 from __future__ import annotations
 
 import re
 
-from sqlalchemy import Select, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from db.models.product import Product
+from integrations.directus_client import DirectusClient
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 MAX_QUERY_LENGTH = 200
 
-# Product condition values (see db/models/product.py). A filter outside
-# this set means "no filter" — never an error, never an empty result.
+# Product condition values (see the Directus products collection). A
+# filter outside this set means "no filter" — never an error, never
+# an empty result.
 CONDITIONS = ("new", "used")
 
 
@@ -69,141 +64,70 @@ def _normalise_limit(limit: int) -> int:
     return min(max(limit, 1), MAX_LIMIT)
 
 
-def _escape_like(query: str) -> str:
-    """Escape LIKE wildcards so % and _ in the query match literally."""
-    return (
-        query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    )
-
-
 def _clean_query(query: str) -> str:
     """Strip and cap the query. Empty string means 'no search'."""
     return query.strip()[:MAX_QUERY_LENGTH]
 
 
-async def search_products_ilike(
-    db: AsyncSession,
+def _matches_query(row: dict, needle: str) -> bool:
+    """True when the needle is a substring of the name or description."""
+    if not needle:
+        return True
+    lowered = needle.lower()
+    name = str(row.get("name") or "").lower()
+    if lowered in name:
+        return True
+    description = str(row.get("description") or "").lower()
+    return lowered in description
+
+
+def _filter_condition(rows: list[dict], condition: str | None) -> list[dict]:
+    """Keep only rows with the picked condition (None means all)."""
+    cond = clean_condition(condition)
+    if cond is None:
+        return list(rows)
+    return [row for row in rows if row.get("condition", "new") == cond]
+
+
+async def search_products(
+    directus: DirectusClient,
     query: str,
     limit: int = DEFAULT_LIMIT,
     condition: str | None = None,
-) -> list[Product]:
+) -> list[dict]:
     """Substring search (name + description), active products only.
 
-    The pattern is a bound parameter — SQLAlchemy sends ``%...%`` as a
-    value, never as SQL text. Wildcards inside the query are escaped.
-    ``condition`` narrows to new / used products when given.
+    An empty query searches nothing, by design — callers that want a
+    plain list use :func:`list_products` instead.
     """
     clean = _clean_query(query)
     if not clean:
         return []
-    pattern = f"%{_escape_like(clean)}%"
-    cond = clean_condition(condition)
-    stmt = (
-        select(Product)
-        .where(
-            Product.is_active == True,  # noqa: E712 — SQLAlchemy needs == True here
-            or_(
-                Product.name.ilike(pattern, escape="\\"),
-                Product.description.ilike(pattern, escape="\\"),
-            ),
-        )
-        .order_by(Product.created_at.desc())
-        .limit(_normalise_limit(limit))
-    )
-    if cond is not None:
-        stmt = stmt.where(Product.condition == cond)
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
-
-
-def build_fulltext_statement(
-    query: str, limit: int = DEFAULT_LIMIT, condition: str | None = None
-) -> Select[Product, float]:
-    """Postgres full-text statement (built, not run — see below).
-
-    Separated from execution so tests can compile it against the
-    Postgres dialect and inspect the SQL without a live Postgres.
-    ``plainto_tsquery`` turns the user's words into a query; the
-    ``@@`` operator matches it against the document vector; ``ts_rank``
-    orders best matches first. The query text stays a bound parameter.
-    ``condition`` narrows to new / used products when given.
-    """
-    clean = _clean_query(query)
-    vector = func.to_tsvector(
-        "simple",
-        Product.name + " " + func.coalesce(Product.description, ""),
-    )
-    ts_query = func.plainto_tsquery("simple", clean)
-    stmt = (
-        select(Product, func.ts_rank(vector, ts_query).label("rank"))
-        .where(
-            Product.is_active == True,  # noqa: E712
-            vector.op("@@")(ts_query),
-        )
-        .order_by(func.ts_rank(vector, ts_query).desc())
-        .limit(_normalise_limit(limit))
-    )
-    cond = clean_condition(condition)
-    if cond is not None:
-        stmt = stmt.where(Product.condition == cond)
-    return stmt
-
-
-async def search_products_fulltext(
-    db: AsyncSession,
-    query: str,
-    limit: int = DEFAULT_LIMIT,
-    condition: str | None = None,
-) -> list[Product]:
-    """Run the full-text statement. Postgres only — callers check first."""
-    if _clean_query(query) == "":
-        return []
-    result = await db.execute(
-        build_fulltext_statement(query, limit, condition=condition)
-    )
-    return [row[0] for row in result.all()]
-
-
-async def search_products(
-    db: AsyncSession,
-    query: str,
-    limit: int = DEFAULT_LIMIT,
-    condition: str | None = None,
-) -> list[Product]:
-    """The route's one search call: full-text on Postgres, ILIKE elsewhere.
-
-    On Postgres, full-text runs first and ILIKE is the fallback when it
-    finds nothing (a substring can match where token search cannot).
-    ``condition`` narrows to new / used products when given.
-    """
-    if _clean_query(query) == "":
-        return []
-    is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
-    if is_postgres:
-        found = await search_products_fulltext(db, query, limit, condition=condition)
-        if found:
-            return found
-    return await search_products_ilike(db, query, limit, condition=condition)
+    rows = await directus.list_products(limit=50)
+    matched = [row for row in rows if _matches_query(row, clean)]
+    matched = _filter_condition(matched, condition)
+    return matched[: _normalise_limit(limit)]
 
 
 async def list_products(
-    db: AsyncSession, limit: int = DEFAULT_LIMIT, condition: str | None = None
-) -> list[Product]:
-    """Active products, newest first, always limited.
+    directus: DirectusClient,
+    limit: int = DEFAULT_LIMIT,
+    condition: str | None = None,
+) -> list[dict]:
+    """Active products, newest first, always limited."""
+    rows = await directus.list_products(limit=_normalise_limit(limit))
+    return _filter_condition(rows, condition)
 
-    ``condition`` narrows to new / used products when given.
-    """
-    stmt = (
-        select(Product)
-        .where(Product.is_active == True)  # noqa: E712
-        .order_by(Product.created_at.desc())
-        .limit(_normalise_limit(limit))
+
+async def list_products_by_category(
+    directus: DirectusClient,
+    category: str | int,
+    limit: int = 50,
+) -> list[dict]:
+    """Active products of one category, from Directus."""
+    return await directus.list_products_by_category(
+        category, limit=_normalise_limit(limit)
     )
-    cond = clean_condition(condition)
-    if cond is not None:
-        stmt = stmt.where(Product.condition == cond)
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
 
 
 # Attribute keys are snake_case identifiers from the category's
@@ -218,10 +142,10 @@ def clean_spec_filters(
     """Keep only usable spec filters: {key: [values]}.
 
     A key must be a plain identifier; a value list must be non-empty.
-    Values are stringified because ``specs ->> 'key'`` returns text —
-    a stored number 55 compares as the string "55". ``None`` values
-    are dropped; anything else (a bad key, an empty list) means "no
-    filter for that attribute", never an error.
+    Values are stringified because specs hold numbers (55) while the
+    URL carries text ("55"). ``None`` values are dropped; anything
+    else (a bad key, an empty list) means "no filter for that
+    attribute", never an error.
     """
     cleaned: dict[str, list[str]] = {}
     if not isinstance(filters, dict):
@@ -237,73 +161,14 @@ def clean_spec_filters(
     return cleaned
 
 
-def apply_spec_filters(
-    stmt: Select[Product], filters: dict[str, list[object]] | None
-) -> Select[Product]:
-    """Add JSONB spec WHERE clauses to a product statement (Postgres).
-
-    One clause per attribute: ``specs ->> 'key' IN ('55', ...)`` — a
-    product must match every attribute given (AND), and any one of the
-    values for that attribute (IN). Keys and values are bound
-    parameters, never pasted SQL. A product with no specs (``{}``)
-    matches nothing when a filter is given, because ``->>`` on a
-    missing key is NULL.
-    """
-    for key, values in clean_spec_filters(filters).items():
-        stmt = stmt.where(Product.specs[key].astext.in_(values))
-    return stmt
-
-
-def build_spec_filter_statement(
-    filters: dict[str, list[object]] | None,
-    limit: int = DEFAULT_LIMIT,
-    condition: str | None = None,
-) -> Select[Product]:
-    """Active products matching the spec filters (built, not run).
-
-    Separated from execution so tests can compile it against the
-    Postgres dialect and inspect the SQL without a live Postgres.
-    No filters means "all active products" — the same as no condition.
-    """
-    stmt = (
-        select(Product)
-        .where(Product.is_active == True)  # noqa: E712
-        .order_by(Product.created_at.desc())
-        .limit(_normalise_limit(limit))
-    )
-    stmt = apply_spec_filters(stmt, filters)
-    cond = clean_condition(condition)
-    if cond is not None:
-        stmt = stmt.where(Product.condition == cond)
-    return stmt
-
-
-async def filter_products_by_specs(
-    db: AsyncSession,
-    filters: dict[str, list[object]] | None,
-    limit: int = DEFAULT_LIMIT,
-    condition: str | None = None,
-) -> list[Product]:
-    """Run the spec-filter statement. Postgres only — callers check first."""
-    result = await db.execute(
-        build_spec_filter_statement(filters, limit, condition=condition)
-    )
-    return list(result.scalars().all())
-
-
 __all__ = [
     "CONDITIONS",
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
     "MAX_QUERY_LENGTH",
-    "apply_spec_filters",
-    "build_fulltext_statement",
-    "build_spec_filter_statement",
     "clean_condition",
     "clean_spec_filters",
-    "filter_products_by_specs",
     "list_products",
+    "list_products_by_category",
     "search_products",
-    "search_products_fulltext",
-    "search_products_ilike",
 ]

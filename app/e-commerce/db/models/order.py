@@ -148,8 +148,12 @@ class OrderItem(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
+    # The Directus product id, as a plain UUID — NOT a foreign key.
+    # Directus owns the products table now, and the shop's SQLAlchemy
+    # no longer maps it, so the database cannot enforce this link.
+    # That is fine: the name and price are frozen in this row, so the
+    # receipt stays correct even if the product is renamed or deleted.
     product_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("products.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

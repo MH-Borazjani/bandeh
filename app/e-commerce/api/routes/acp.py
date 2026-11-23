@@ -38,6 +38,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from db.session import DbSessionDep
+from integrations.directus_client import DirectusClientDep
 from integrations.zibal_client import ZibalClientDep
 from services import agent_commerce
 from services.agent_commerce import AgentError
@@ -101,6 +102,7 @@ def _idempotency_key(request: Request) -> str:
 async def create_checkout_session(
     request: Request,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Create a checkout session from items + optional buyer (201)."""
     try:
@@ -109,7 +111,7 @@ async def create_checkout_session(
         agent_commerce.verify_agent_signature(request, raw)
         key = _idempotency_key(request)
         status, response, replayed = await agent_commerce.create_session(
-            db, "acp", payload, _base_url(request), key, raw
+            db, directus, "acp", payload, _base_url(request), key, raw
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc
@@ -143,6 +145,7 @@ async def update_checkout_session(
     request: Request,
     session_id: str,
     db: DbSessionDep,
+    directus: DirectusClientDep,
 ) -> JSONResponse:
     """Update items / buyer / fulfillment on an open session, reprice."""
     try:
@@ -152,7 +155,7 @@ async def update_checkout_session(
         key = _idempotency_key(request)
         row = await agent_commerce.load_session(db, "acp", session_id)
         response, replayed = await agent_commerce.update_session(
-            db, row, payload, _base_url(request), key, raw
+            db, directus, row, payload, _base_url(request), key, raw
         )
     except AgentError as exc:
         raise _agent_error(exc) from exc
@@ -167,6 +170,7 @@ async def complete_checkout_session(
     request: Request,
     session_id: str,
     db: DbSessionDep,
+    directus: DirectusClientDep,
     zibal: ZibalClientDep,
 ) -> JSONResponse:
     """Complete: create the order, start Zibal, return the payment link.
@@ -184,6 +188,7 @@ async def complete_checkout_session(
         http_client = getattr(request.app.state, "http_client", None)
         response, replayed = await agent_commerce.complete_session(
             db,
+            directus,
             row,
             payload,
             zibal,

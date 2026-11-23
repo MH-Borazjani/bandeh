@@ -31,8 +31,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.cart_item import CartItem
-from db.models.product import Product
 from db.models.user import User
+from integrations.directus_client import DirectusClient
+from services import stock_service
 
 
 class CartError(ValueError):
@@ -50,20 +51,29 @@ async def get_cart_items(db: AsyncSession, user: User) -> list[CartItem]:
 
 
 async def add_to_cart(
-    db: AsyncSession, user: User, product_id: uuid.UUID, quantity: int = 1
+    db: AsyncSession,
+    user: User,
+    product_id: uuid.UUID,
+    directus: DirectusClient,
+    quantity: int = 1,
 ) -> CartItem:
-    """Add a product to the cart (raises quantity when already there)."""
+    """Add a product to the cart (raises quantity when already there).
+
+    The product must exist in Directus and be active, and the stock
+    table must hold enough free units. Prices are NOT checked here —
+    the order draft freezes them later, from Directus.
+    """
     if quantity < 1:
         raise CartError("quantity must be at least 1")
-    product = await db.get(Product, product_id)
-    if product is None or not product.is_active:
+    row = await directus.get_product(product_id)
+    if row is None or not row.get("is_active", True):
         raise CartError("no such product")
     stmt = select(CartItem).where(
         CartItem.user_id == user.id, CartItem.product_id == product_id
     )
     line = (await db.execute(stmt)).scalar_one_or_none()
     new_quantity = quantity + (line.quantity if line is not None else 0)
-    if product.available < new_quantity:
+    if await stock_service.available_for(db, product_id) < new_quantity:
         raise CartError("not enough stock")
     if line is None:
         line = CartItem(user_id=user.id, product_id=product_id, quantity=new_quantity)

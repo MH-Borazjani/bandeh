@@ -52,7 +52,7 @@ from core.security import (
 from db.base import Base
 from db.models.order import OrderStatus
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus
-from db.models.product import Product
+from db.models.product_stock import ProductStock
 from db.models.refresh_token import RefreshToken
 from db.models.session import UserSession
 from db.models.user import User, UserRole
@@ -61,6 +61,7 @@ from integrations.directus_client import (
     FALLBACK_CATEGORIES,
     DirectusClient,
     format_toman_price,
+    get_directus_client,
 )
 from integrations.zibal_client import ZibalClient, ZibalError, get_zibal_client
 from main import app
@@ -73,9 +74,56 @@ from schema.payment_api import (
 )
 from services.order_service import OrderError, create_order
 from services.refresh_service import issue_refresh_token
-from services.search_service import search_products_ilike
+from services.search_service import search_products
 from services.session_service import create_database_session
 from services.upload_service import UploadError, save_upload
+
+
+class _FakeDirectusClient:
+    """CMS stand-in for the integration tests: products registered per test."""
+
+    def __init__(self) -> None:
+        self.products: dict[str, dict] = {}
+
+    def add_product(
+        self,
+        product_id: uuid.UUID,
+        name: str,
+        price_toman: int,
+        description: str | None = None,
+    ) -> None:
+        self.products[str(product_id)] = {
+            "id": str(product_id),
+            "name": name,
+            "description": description,
+            "price_toman": price_toman,
+            "stock": 0,
+            "reserved": 0,
+            "image_path": None,
+            "is_active": True,
+            "created_at": "2026-11-24T00:00:00+00:00",
+            "category": None,
+            "tag": None,
+            "condition": "new",
+            "condition_stars": None,
+            "specs": {},
+        }
+
+    async def get_product(self, product_id: uuid.UUID | str) -> dict | None:
+        row = self.products.get(str(product_id))
+        return dict(row) if row is not None else None
+
+    async def list_products(self, limit: int = 20) -> list[dict]:
+        return [dict(row) for row in self.products.values()][:limit]
+
+    async def get_products_by_ids(
+        self, product_ids: list[uuid.UUID | str]
+    ) -> list[dict]:
+        return [
+            dict(self.products[str(pid)])
+            for pid in product_ids
+            if str(pid) in self.products
+        ]
 
 
 def _extract_cookie(response: Response, name: str) -> str:
@@ -288,6 +336,8 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         self._prev_overrides = dict(app.dependency_overrides)
         app.dependency_overrides[get_db] = override_get_db
+        self.directus = _FakeDirectusClient()
+        app.dependency_overrides[get_directus_client] = lambda: self.directus
 
     async def asyncTearDown(self) -> None:
         app.dependency_overrides.clear()
@@ -306,20 +356,20 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return _extract_cookie(resp, SESSION_COOKIE_NAME)
 
     async def test_duplicate_product_id_in_order_cannot_overreserve_stock(self) -> None:
+        blender_id = uuid.uuid4()
+        self.directus.add_product(blender_id, "Blender", 500_000)
         async with self.Session() as s:
             user = User(phone="09120000001", role=UserRole.CUSTOMER, is_active=True)
-            product = Product(
-                name="Blender",
-                description="100% copper \\ motor",
-                price_toman=500_000,
-                stock=3,
-                reserved=0,
-                is_active=True,
+            s.add_all(
+                [
+                    user,
+                    ProductStock(
+                        directus_product_id=str(blender_id), stock=3
+                    ),
+                ]
             )
-            s.add_all([user, product])
             await s.commit()
             await s.refresh(user)
-            await s.refresh(product)
 
         async with self.Session() as s:
             # 2 + 2 = 4 > stock (3): must be rejected!
@@ -328,9 +378,10 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     s,
                     user,
                     [
-                        {"product_id": product.id, "quantity": 2},
-                        {"product_id": product.id, "quantity": 2},
+                        {"product_id": blender_id, "quantity": 2},
+                        {"product_id": blender_id, "quantity": 2},
                     ],
+                    self.directus,
                 )
 
             # 1 + 2 = 3 <= stock (3): valid and merged into one line!
@@ -338,9 +389,10 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 s,
                 user,
                 [
-                    {"product_id": product.id, "quantity": 1},
-                    {"product_id": product.id, "quantity": 2},
+                    {"product_id": blender_id, "quantity": 1},
+                    {"product_id": blender_id, "quantity": 2},
                 ],
+                self.directus,
             )
             self.assertEqual(len(order.items), 1)
             self.assertEqual(order.items[0].quantity, 3)
@@ -348,29 +400,22 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(order.total_rial, 15_000_000)
 
     async def test_search_backslash_escape_and_whitespace_query(self) -> None:
-        async with self.Session() as s:
-            p1 = Product(
-                name="Coffee Grinder",
-                description="path\\model_x",
-                price_toman=100_000,
-                stock=5,
-                is_active=True,
-            )
-            p2 = Product(
-                name="Toaster",
-                description="pathmodel_x",
-                price_toman=100_000,
-                stock=5,
-                is_active=True,
-            )
-            s.add_all([p1, p2])
-            await s.commit()
-
-        async with self.Session() as s:
-            self.assertEqual(await search_products_ilike(s, "   \t  "), [])
-            matched = await search_products_ilike(s, "\\")
-            self.assertEqual(len(matched), 1)
-            self.assertEqual(matched[0].name, "Coffee Grinder")
+        # No SQL anymore: search is a plain substring match over the
+        # Directus rows, so a backslash is just a character (it can
+        # never escape anything) and a whitespace-only query matches
+        # nothing.
+        grinder_id = uuid.uuid4()
+        toaster_id = uuid.uuid4()
+        self.directus.add_product(
+            grinder_id, "Coffee Grinder", 100_000, description="path\\model_x"
+        )
+        self.directus.add_product(
+            toaster_id, "Toaster", 100_000, description="pathmodel_x"
+        )
+        self.assertEqual(await search_products(self.directus, "   \t  "), [])
+        matched = await search_products(self.directus, "\\")
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["name"], "Coffee Grinder")
 
     async def test_inactive_user_blocked_in_fallback_and_refresh(self) -> None:
         async with self.Session() as s:
@@ -463,19 +508,23 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["live_sessions"], 1)
 
     async def test_payment_network_error_returns_502_and_releases_hold(self) -> None:
+        microwave_id = uuid.uuid4()
+        bolt_id = uuid.uuid4()
+        self.directus.add_product(microwave_id, "Microwave", 200_000)
+        self.directus.add_product(bolt_id, "Bolt", 50)
         async with self.Session() as s:
             user = User(phone="09120000006", role=UserRole.CUSTOMER, is_active=True)
-            product = Product(
-                name="Microwave", price_toman=200_000, stock=4, reserved=0, is_active=True
+            s.add_all(
+                [
+                    user,
+                    ProductStock(
+                        directus_product_id=str(microwave_id), stock=4
+                    ),
+                    ProductStock(directus_product_id=str(bolt_id), stock=10),
+                ]
             )
-            low_product = Product(
-                name="Bolt", price_toman=50, stock=10, reserved=0, is_active=True
-            )
-            s.add_all([user, product, low_product])
             await s.commit()
             await s.refresh(user)
-            await s.refresh(product)
-            await s.refresh(low_product)
 
         def network_fail_handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("gateway unreachable", request=request)
@@ -491,7 +540,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             # Create normal order -> start payment when gateway is unreachable -> 502 + free hold
             r_order = client.post(
                 "/orders",
-                json={"items": [{"product_id": str(product.id), "quantity": 2}]},
+                json={"items": [{"product_id": str(microwave_id), "quantity": 2}]},
             )
             self.assertEqual(r_order.status_code, 201)
             order_id = r_order.json()["id"]
@@ -500,7 +549,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(r_start.status_code, 502)
 
             async with self.Session() as s:
-                prod = await s.get(Product, product.id)
+                prod = await s.get(ProductStock, str(microwave_id))
                 assert prod is not None
                 self.assertEqual(prod.reserved, 0)
                 self.assertEqual(prod.stock, 4)
@@ -521,7 +570,10 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             # Callback when verify endpoint times out -> 502 instead of 500
             async with self.Session() as s:
                 order2 = await create_order(
-                    s, user, [{"product_id": product.id, "quantity": 1}]
+                    s,
+                    user,
+                    [{"product_id": microwave_id, "quantity": 1}],
+                    self.directus,
                 )
                 attempt2 = PaymentAttempt(
                     order_id=order2.id,
@@ -542,42 +594,42 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             # Below Zibal minimum (50 Toman = 500 Rial < 1000 Rial) -> 400 + no hold left
             r_low = client.post(
                 "/orders",
-                json={"items": [{"product_id": str(low_product.id), "quantity": 1}]},
+                json={"items": [{"product_id": str(bolt_id), "quantity": 1}]},
             )
             self.assertEqual(r_low.status_code, 201)
             low_order_id = r_low.json()["id"]
             r_low_start = client.post(f"/payments/{low_order_id}/start")
             self.assertEqual(r_low_start.status_code, 400)
             async with self.Session() as s:
-                lp = await s.get(Product, low_product.id)
+                lp = await s.get(ProductStock, str(bolt_id))
                 assert lp is not None
                 self.assertEqual(lp.reserved, 0)
         finally:
             await async_client.aclose()
 
     async def test_create_order_accepts_typed_order_item_create_models(self) -> None:
+        tea_id = uuid.uuid4()
+        self.directus.add_product(tea_id, "Tea Maker", 350_000)
         async with self.Session() as s:
             user = User(phone="09120000007", role=UserRole.CUSTOMER, is_active=True)
-            product = Product(
-                name="Tea Maker",
-                price_toman=350_000,
-                stock=5,
-                reserved=0,
-                is_active=True,
+            s.add_all(
+                [
+                    user,
+                    ProductStock(directus_product_id=str(tea_id), stock=5),
+                ]
             )
-            s.add_all([user, product])
             await s.commit()
             await s.refresh(user)
-            await s.refresh(product)
 
         async with self.Session() as s:
             order = await create_order(
                 s,
                 user,
                 [
-                    OrderItemCreate(product_id=product.id, quantity=1),
-                    OrderItemCreate(product_id=product.id, quantity=2),
+                    OrderItemCreate(product_id=tea_id, quantity=1),
+                    OrderItemCreate(product_id=tea_id, quantity=2),
                 ],
+                self.directus,
             )
             self.assertEqual(len(order.items), 1)
             self.assertEqual(order.items[0].quantity, 3)
@@ -592,7 +644,6 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "PaymentCancelRead",
             "PaymentStartRead",
             "PaymentStatusRead",
-            "ProductPhotoRead",
         ):
             self.assertIn(schema_name, schemas)
 
@@ -611,15 +662,18 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("anyOf", callback_schema)
 
     async def test_typed_payment_and_admin_response_models_validate_live_json(self) -> None:
+        fryer_id = uuid.uuid4()
+        self.directus.add_product(fryer_id, "Air Fryer", 400_000)
         async with self.Session() as s:
             admin = User(phone="09120000008", role=UserRole.ADMIN, is_active=True)
-            product = Product(
-                name="Air Fryer", price_toman=400_000, stock=4, reserved=0, is_active=True
+            s.add_all(
+                [
+                    admin,
+                    ProductStock(directus_product_id=str(fryer_id), stock=4),
+                ]
             )
-            s.add_all([admin, product])
             await s.commit()
             await s.refresh(admin)
-            await s.refresh(product)
 
         def ok_handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/v1/request":
@@ -640,7 +694,7 @@ class HardeningIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
             order_resp = client.post(
                 "/orders",
-                json={"items": [{"product_id": str(product.id), "quantity": 1}]},
+                json={"items": [{"product_id": str(fryer_id), "quantity": 1}]},
             )
             order_id = uuid.UUID(order_resp.json()["id"])
 

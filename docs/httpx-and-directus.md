@@ -22,12 +22,14 @@ the landing template expects. Prices stored as Toman integers
 
 Product content is served through the same client, not the database:
 `DirectusClient.list_products()` feeds `GET /products` and
-`DirectusClient.get_product()` feeds `GET /products/{id}`. Both fall
-back to reading the same `products` table through SQLAlchemy when
-Directus is unreachable — the same rows, not a second source of truth —
-so the shop never goes blank because the CMS is down. Search
-(`GET /search`) still runs on Postgres full-text, and stock/reserved
-stay in SQLAlchemy, because orders and payments need real database
+`DirectusClient.get_product()` feeds `GET /products/{id}`. There is
+no database fallback anymore (removed 2026-11-24, when Directus
+became the single product source): when Directus is unreachable the
+list is empty and a single-product read answers 503, because there is
+no second copy of the catalogue to fall back to. Search
+(`GET /search`) also reads Directus now (substring match in Python,
+no Postgres full-text). Stock/reserved live in the shop's own
+`product_stock` table, because orders and payments need real database
 transactions, which the Directus API has none of.
 
 **The fallback rule:** if Directus is down, slow, returns an error, or

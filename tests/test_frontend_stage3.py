@@ -53,7 +53,7 @@ from core.templates import to_compact_price  # noqa: E402
 from db.base import Base  # noqa: E402
 from db.models.order import Order, OrderItem, OrderStatus  # noqa: E402
 from db.models.payment_attempt import PaymentAttempt, PaymentStatus  # noqa: E402
-from db.models.product import Product  # noqa: E402
+from db.models.product_stock import ProductStock  # noqa: E402
 from db.models.user import User, UserRole  # noqa: E402
 from db.session import get_db  # noqa: E402
 from integrations.directus_client import (  # noqa: E402
@@ -142,7 +142,7 @@ class FrontendStage3Tests(unittest.TestCase):
     client: TestClient
     user: User
     order: Order
-    product: Product
+    product_id: uuid.UUID
     session_cookie: str
 
     @classmethod
@@ -169,23 +169,22 @@ class FrontendStage3Tests(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
 
+        # Seed user + stock. The product itself lives in the fake
+        # Directus below (name + price); only its stock is here.
+        cls.product_id = uuid.uuid4()
+
         async def seed() -> None:
             async with cls.Session() as s:
                 u = User(phone="09121112233", role=UserRole.CUSTOMER, is_active=True)
-                p = Product(
-                    name="یخچال فریزر هوشمند بنده",
-                    description="سیستم نوفراست و مصرف انرژی کم",
-                    price_toman=42000000,
-                    stock=5,
-                    reserved=0,
-                    is_active=True,
+                s.add(u)
+                s.add(
+                    ProductStock(
+                        directus_product_id=str(cls.product_id), stock=5
+                    )
                 )
-                s.add_all([u, p])
                 await s.commit()
                 await s.refresh(u)
-                await s.refresh(p)
                 cls.user = u
-                cls.product = p
 
                 db_sess = await create_database_session(s, u)
                 await s.commit()
@@ -209,10 +208,10 @@ class FrontendStage3Tests(unittest.TestCase):
 
                 item = OrderItem(
                     order_id=order.id,
-                    product_id=p.id,
-                    product_name=p.name,
+                    product_id=cls.product_id,
+                    product_name="یخچال فریزر هوشمند بنده",
                     quantity=1,
-                    unit_price_toman=p.price_toman,
+                    unit_price_toman=42000000,
                 )
                 attempt = PaymentAttempt(
                     order_id=order.id,
@@ -230,17 +229,21 @@ class FrontendStage3Tests(unittest.TestCase):
 
         fake_cms = FakeDirectusClient(
             products={
-                str(cls.product.id): {
-                    "id": str(cls.product.id),
-                    "name": cls.product.name,
-                    "description": cls.product.description,
-                    "price_toman": cls.product.price_toman,
-                    "stock": cls.product.stock,
-                    "reserved": cls.product.reserved,
+                str(cls.product_id): {
+                    "id": str(cls.product_id),
+                    "name": "یخچال فریزر هوشمند بنده",
+                    "description": "سیستم نوفراست و مصرف انرژی کم",
+                    "price_toman": 42000000,
+                    "stock": 0,
+                    "reserved": 0,
+                    "image_path": None,
                     "is_active": True,
-                    "category": 1,
+                    "category": "یخچال و فریزر",
                     "tag": "پیشنهاد ویژه",
                     "created_at": "2026-11-14T10:00:00Z",
+                    "condition": "new",
+                    "condition_stars": None,
+                    "specs": {},
                 }
             }
         )
@@ -302,8 +305,8 @@ class FrontendStage3Tests(unittest.TestCase):
         self.assertIn("پرداخت شده", html)
 
         # Items details
-        self.assertIn(self.product.name, html)
-        self.assertIn(format_toman_price(self.product.price_toman), html)
+        self.assertIn("یخچال فریزر هوشمند بنده", html)
+        self.assertIn(format_toman_price(42000000), html)
 
         # Delivery address details
         self.assertIn("احمد رضایی", html)
