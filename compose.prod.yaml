@@ -155,6 +155,29 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       PUBLIC_URL: "https://directus.${DOMAIN:-example.com}"
 
+  # ---------------------------------------------------------------------------
+  # Search Index: Meilisearch (products index, derived copy of Directus)
+  # ---------------------------------------------------------------------------
+  # Meilisearch v1.56 (Persian support since v1.21). The index is a
+  # derived copy of the Directus catalogue, never a source of truth:
+  # the shop re-indexes from Directus every 5 minutes and search falls
+  # back to the Directus substring search when this service is down,
+  # so `web` deliberately does NOT depend on it — the shop must start
+  # even with search unavailable. Port 7700 is internal only (no
+  # published port): only the web container reaches it, at
+  # MEILI_URL=http://search:7700. MEILI_MASTER_KEY must be set in .env
+  # (a long random value); without it Meilisearch runs without auth.
+  search:
+    container_name: fastapi-e-commerce-search
+    image: getmeili/meilisearch:v1.56
+    restart: unless-stopped
+    expose:
+      - "7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes:
+      - ./data/meilisearch:/meili_data
+
 volumes:
   caddy_data:
   caddy_config:

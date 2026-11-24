@@ -87,6 +87,19 @@ class Settings(BaseSettings):
         default=None, description="Pattern code for owner alerts"
     )
 
+    # Meilisearch search index. The index is a derived copy of the
+    # Directus catalogue (never a source of truth). Both are optional:
+    # without them search falls back to the Directus substring search.
+    # The master key is also the key the search container itself gets
+    # (compose.prod.yaml); never log it.
+    meili_url: str | None = Field(
+        default=None, description="Meilisearch base URL, e.g. http://search:7700"
+    )
+    meili_master_key: SecretStr | None = Field(
+        default=None,
+        description="Meilisearch master key (never log it)",
+    )
+
     # Dynamic database connection URL construction
     @computed_field
     @property

@@ -31,6 +31,13 @@ class AdminOverviewRead(BaseModel):
     live_sessions: int
 
 
+class SearchReindexRead(BaseModel):
+    """Result of a manual search-index rebuild."""
+
+    indexed: int
+    deleted: int
+
+
 class AdminOrderUpdate(BaseModel):
     """Admin order fulfillment status and tracking code update."""
 
@@ -91,4 +98,5 @@ __all__ = [
     "AdminOrderRead",
     "AdminOrderUpdate",
     "AdminOverviewRead",
+    "SearchReindexRead",
 ]

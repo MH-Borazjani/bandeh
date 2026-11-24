@@ -12,15 +12,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Product search: Directus is the catalogue now.
+"""Product search: Directus is the catalogue, Meilisearch is the index.
 
 Directus owns ALL product content, so search reads Directus — there
 is no Postgres products table in the shop's SQLAlchemy anymore.
-Matching is a plain substring search over name + description, in
+Meilisearch holds a derived copy of the catalogue (see
+services/search_index_service) and answers text searches first:
+typo-tolerant and Persian-aware (v1.21+ has a dedicated Persian
+pipeline), where the old plain substring match needed the exact
+letters. On ANY Meilisearch failure — down, unconfigured, timeout —
+search falls back to the substring match over name + description, in
 Python: it catches partial words (what Persian shoppers type), works
 the same on every database, and the catalogue is small (the list
 call fetches at most 50 rows). The query text is never pasted into
-SQL — there is no SQL here at all.
+SQL — there is no SQL here at all. Search never 500s because
+Meilisearch is down.
 
 Results are Directus product dicts (the ``_product_row`` shape:
 id, name, description, price_toman, category, tag, condition,
@@ -38,9 +44,14 @@ Both paths are always limited (default 20, max 50).
 
 from __future__ import annotations
 
+import datetime
+import logging
 import re
 
 from integrations.directus_client import DirectusClient
+from integrations.meilisearch_client import MeilisearchClient, get_meilisearch_client
+
+logger = logging.getLogger("bandeh.search")
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
@@ -69,6 +80,32 @@ def _clean_query(query: str) -> str:
     return query.strip()[:MAX_QUERY_LENGTH]
 
 
+# Arabic-keyboard letters -> the Persian letters the catalogue uses.
+# Shoppers type both; Directus stores Persian. Without this map an
+# Arabic-keyboard query (ي / ك) never matches a Persian product name.
+# Meilisearch v1.56 does NOT unify them (its Persian pipeline does
+# segmentation + decomposition, but the Kaf/Yeh unification is still
+# an open upstream change), so the shop normalises the query itself —
+# which also fixes the substring fallback path.
+_ARABIC_TO_PERSIAN = str.maketrans(
+    {
+        "ي": "ی",  # Arabic yeh -> Persian yeh
+        "ك": "ک",  # Arabic kaf -> Persian kaf
+        "ى": "ی",  # Alef maksura -> Persian yeh
+        "ة": "ه",  # Teh marbuta -> heh
+        "ؤ": "و",  # Waw with hamza -> waw
+        "أ": "ا",  # Alef with hamza above -> alef
+        "إ": "ا",  # Alef with hamza below -> alef
+        "آ": "ا",  # Alef with madda -> alef
+    }
+)
+
+
+def _normalise_persian_text(text: str) -> str:
+    """Map Arabic-keyboard letters to the Persian letters the catalogue uses."""
+    return text.translate(_ARABIC_TO_PERSIAN)
+
+
 def _matches_query(row: dict, needle: str) -> bool:
     """True when the needle is a substring of the name or description."""
     if not needle:
@@ -89,20 +126,100 @@ def _filter_condition(rows: list[dict], condition: str | None) -> list[dict]:
     return [row for row in rows if row.get("condition", "new") == cond]
 
 
+def _clean_hit(hit: dict) -> dict:
+    """A Meilisearch hit back into the Directus product-row shape.
+
+    The sync service writes the documents from ``_product_row``, so a
+    hit is normally already clean; this only fills defaults for a
+    stale or hand-made document. Stock/reserved are 0 here on purpose
+    — the caller attaches the real numbers from the stock table,
+    exactly like the Directus path.
+    """
+    condition = hit.get("condition")
+    if not isinstance(condition, str) or condition.strip().lower() not in (
+        "new",
+        "used",
+    ):
+        condition = "new"
+    else:
+        condition = condition.strip().lower()
+    stars = hit.get("condition_stars")
+    if (
+        condition != "used"
+        or not isinstance(stars, int)
+        or isinstance(stars, bool)
+        or not 1 <= stars <= 5
+    ):
+        stars = None
+    created_at = hit.get("created_at")
+    if not isinstance(created_at, str):
+        created_at = datetime.datetime.now(datetime.UTC).isoformat()
+    price = hit.get("price_toman")
+    return {
+        "id": str(hit.get("id")),
+        "name": hit.get("name") if isinstance(hit.get("name"), str) else "",
+        "description": (
+            hit.get("description")
+            if isinstance(hit.get("description"), str)
+            else None
+        ),
+        "price_toman": (
+            price if isinstance(price, int) and not isinstance(price, bool) else 0
+        ),
+        "stock": 0,
+        "reserved": 0,
+        "image_path": (
+            hit.get("image_path")
+            if isinstance(hit.get("image_path"), str)
+            else None
+        ),
+        "is_active": hit.get("is_active") is True,
+        "created_at": created_at,
+        "category": (
+            hit.get("category") if isinstance(hit.get("category"), str) else None
+        ),
+        "tag": hit.get("tag") if isinstance(hit.get("tag"), str) else None,
+        "condition": condition,
+        "condition_stars": stars,
+        "specs": hit.get("specs") if isinstance(hit.get("specs"), dict) else {},
+    }
+
+
 async def search_products(
     directus: DirectusClient,
     query: str,
     limit: int = DEFAULT_LIMIT,
     condition: str | None = None,
+    meilisearch: MeilisearchClient | None = None,
 ) -> list[dict]:
-    """Substring search (name + description), active products only.
+    """Search products by name/description, active products only.
+
+    Meilisearch first (typo-tolerant, Persian-aware). On ANY
+    Meilisearch failure — unconfigured, down, timeout, bad answer —
+    the search falls back to the Directus substring match, so a dead
+    index never breaks search. Pass an explicit ``meilisearch`` client
+    to reuse one (tests do); otherwise one is built from settings.
 
     An empty query searches nothing, by design — callers that want a
     plain list use :func:`list_products` instead.
     """
-    clean = _clean_query(query)
+    clean = _normalise_persian_text(_clean_query(query))
     if not clean:
         return []
+    client = meilisearch
+    if client is None:
+        client = get_meilisearch_client()
+    if client is not None:
+        try:
+            hits = await client.search(clean, limit=50)
+            rows = [_clean_hit(hit) for hit in hits]
+            rows = _filter_condition(rows, condition)
+            return rows[: _normalise_limit(limit)]
+        except Exception as exc:  # noqa: BLE001 - any failure means fallback
+            logger.warning(
+                "Meilisearch search failed, falling back to substring search: %s",
+                exc,
+            )
     rows = await directus.list_products(limit=50)
     matched = [row for row in rows if _matches_query(row, clean)]
     matched = _filter_condition(matched, condition)

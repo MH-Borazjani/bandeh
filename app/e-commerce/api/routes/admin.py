@@ -25,6 +25,7 @@ import datetime
 import uuid
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Form, HTTPException, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
@@ -37,13 +38,19 @@ from db.models.order import Order
 from db.models.session import UserSession
 from db.models.user import User
 from db.session import DbSessionDep
-from integrations.directus_client import _FA_DIGITS, format_toman_price
+from integrations.directus_client import (
+    _FA_DIGITS,
+    DirectusClientDep,
+    format_toman_price,
+)
+from integrations.meilisearch_client import MeilisearchClientDep, MeilisearchError
 from schema.admin import (
     AdminOrderItemRead,
     AdminOrderListItem,
     AdminOrderRead,
     AdminOrderUpdate,
     AdminOverviewRead,
+    SearchReindexRead,
 )
 from services.order_service import (
     OrderError,
@@ -51,6 +58,7 @@ from services.order_service import (
     load_order,
     update_order_fulfillment,
 )
+from services.search_index_service import sync_products_index
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -69,6 +77,33 @@ async def admin_overview(admin: RequireAdminDep, db: DbSessionDep) -> AdminOverv
         total_users=total_users or 0,
         live_sessions=live_sessions or 0,
     )
+
+
+@router.post("/search/reindex", response_model=SearchReindexRead)
+async def admin_reindex_search(
+    staff: RequireStaffDep,
+    directus: DirectusClientDep,
+    meilisearch: MeilisearchClientDep,
+) -> SearchReindexRead:
+    """Staff: rebuild the Meilisearch products index from Directus now.
+
+    The same full re-index the 5-minute timer runs: every active
+    Directus product is copied into the index, and index documents
+    whose product no longer exists are deleted. 503 when Meilisearch
+    is not configured or unreachable — search itself never breaks,
+    it falls back to the Directus substring search.
+    """
+    if meilisearch is None:
+        raise HTTPException(
+            status_code=503, detail="Meilisearch is not configured"
+        )
+    try:
+        result = await sync_products_index(directus, meilisearch=meilisearch)
+    except (MeilisearchError, httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503, detail=f"search index sync failed: {exc}"
+        ) from exc
+    return SearchReindexRead(indexed=result["indexed"], deleted=result["deleted"])
 
 
 def _render_admin_orders_page(

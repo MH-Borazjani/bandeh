@@ -45,7 +45,11 @@ from core.templates import templates
 from integrations.http_client import create_http_client
 from integrations.mcp_server import build_mcp_endpoint, create_mcp_server
 from services.auth_service import mask_phone
-from services.scheduler import FailedPaymentReminderTask, ReservationCleanupTask
+from services.scheduler import (
+    FailedPaymentReminderTask,
+    ReservationCleanupTask,
+    SearchIndexTask,
+)
 
 logger = logging.getLogger("bandeh.main")
 
@@ -66,6 +70,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     reminder_task = FailedPaymentReminderTask(interval_seconds=60.0)
     app.state.reminder_task = reminder_task
     reminder_task.start()
+    # Search index sync: every 5 minutes the products index is rebuilt
+    # from Directus. A failed run is harmless (search falls back), and
+    # an unconfigured Meilisearch makes it a logged no-op.
+    search_index_task = SearchIndexTask(interval_seconds=300.0)
+    app.state.search_index_task = search_index_task
+    search_index_task.start()
     # The MCP endpoint is registered below as a direct route, but a
     # custom lifespan replaces the router lifespan that would normally
     # start the SDK app — so start its session manager explicitly, or
@@ -85,6 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with fresh_sdk_app.router.lifespan_context(fresh_sdk_app):
         yield
     await reminder_task.stop()
+    await search_index_task.stop()
     await cleanup_task.stop()
     await app.state.http_client.aclose()
 

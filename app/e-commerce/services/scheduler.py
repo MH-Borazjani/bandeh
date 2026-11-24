@@ -197,4 +197,71 @@ class FailedPaymentReminderTask:
             self._task = None
 
 
-__all__ = ["FailedPaymentReminderTask", "ReservationCleanupTask"]
+class SearchIndexTask:
+    """Periodic timer that re-indexes the Meilisearch products index.
+
+    Meilisearch is only a search index — a derived copy of the
+    Directus catalogue, never a source of truth — so a full re-index
+    every 5 minutes is enough to pick up edits. A missed or failed
+    run is harmless: search falls back to the Directus substring
+    search, and the next run catches up. When Meilisearch is not
+    configured the run is a logged no-op.
+    """
+
+    def __init__(self, interval_seconds: float = 300.0) -> None:
+        self.interval_seconds = interval_seconds
+        self._task: asyncio.Task[None] | None = None
+        self._running = False
+
+    async def run_once(self) -> dict[str, int]:
+        """Execute one sync pass and return its counts."""
+        from integrations.directus_client import DirectusClient
+        from integrations.http_client import create_http_client
+        from integrations.meilisearch_client import get_meilisearch_client
+        from services.search_index_service import sync_products_index
+
+        async with create_http_client() as http:
+            client = get_meilisearch_client(http)
+            if client is None:
+                logger.info("Meilisearch not configured, skipping search index sync")
+                return {"indexed": 0, "deleted": 0, "skipped": 1}
+            directus = DirectusClient(http)
+            result = await sync_products_index(directus, meilisearch=client)
+        logger.info(
+            "Search index synced: %d indexed, %d deleted",
+            result["indexed"],
+            result["deleted"],
+        )
+        return result
+
+    async def _loop(self) -> None:
+        """Continuous execution loop with error recovery."""
+        while self._running:
+            try:
+                await self.run_once()
+            except Exception as exc:
+                logger.error("Search index task failed: %s", exc)
+
+            try:
+                await asyncio.sleep(self.interval_seconds)
+            except asyncio.CancelledError:
+                break
+
+    def start(self) -> asyncio.Task[None]:
+        """Start the background timer loop if not already running."""
+        if self._task is None or self._task.done():
+            self._running = True
+            self._task = asyncio.create_task(self._loop())
+        return self._task
+
+    async def stop(self) -> None:
+        """Gracefully stop and cancel the background task."""
+        self._running = False
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+
+
+__all__ = ["FailedPaymentReminderTask", "ReservationCleanupTask", "SearchIndexTask"]
