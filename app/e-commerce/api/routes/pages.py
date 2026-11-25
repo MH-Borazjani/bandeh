@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Public web routes for shop storefront."""
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -412,10 +413,57 @@ def favicon() -> Response:
 
 
 @router.get("/manifest.webmanifest", response_class=Response)
-def web_manifest() -> Response:
-    """Serve the PWA manifest from the site root."""
-    content = (_STATIC_DIR / "manifest.webmanifest").read_text(encoding="utf-8")
-    response = Response(content=content, media_type="application/manifest+json")
+async def web_manifest(directus: DirectusClientDep) -> Response:
+    """Serve the PWA manifest from the site root, built per-site.
+
+    The name, short name and description come from site_settings, so
+    each site installs under its own name (Genabay installs as
+    «گنابِی», Genaveh Stocks installs as «Genaveh Stocks»). The
+    icons, colors and scope are the same on every site.
+    """
+    site = await directus.get_site_content()
+    settings = site["settings"]
+    title = settings.get("site_title") or "گنابِی"
+    suffix = settings.get("title_suffix") or ""
+    name = f"{title} | {suffix}" if suffix else title
+    manifest = {
+        "background_color": "#121110",
+        "categories": ["shopping"],
+        "description": settings.get("site_tagline") or "",
+        "dir": "rtl",
+        "display": "standalone",
+        "icons": [
+            {
+                "purpose": "any",
+                "sizes": "192x192",
+                "src": "/static/img/icons/icon-192.png",
+                "type": "image/png",
+            },
+            {
+                "purpose": "any",
+                "sizes": "512x512",
+                "src": "/static/img/icons/icon-512.png",
+                "type": "image/png",
+            },
+            {
+                "purpose": "maskable",
+                "sizes": "512x512",
+                "src": "/static/img/icons/icon-512-maskable.png",
+                "type": "image/png",
+            },
+        ],
+        "lang": "fa",
+        "name": name,
+        "orientation": "portrait",
+        "scope": "/",
+        "short_name": title,
+        "start_url": "/",
+        "theme_color": "#121110",
+    }
+    response = Response(
+        content=json.dumps(manifest, ensure_ascii=False),
+        media_type="application/manifest+json",
+    )
     response.headers["Cache-Control"] = "public, max-age=3600"
     return response
 

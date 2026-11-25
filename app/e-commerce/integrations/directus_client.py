@@ -111,6 +111,15 @@ class SiteSettings(TypedDict):
     site_tagline: str
     hero_title: str
     hero_subtitle: str
+    # Short suffix after the site title in <title> and the footer line,
+    # e.g. "فروشگاه لوازم خانگی" for Genabay, "بازار سهام گناوه" for
+    # Genaveh Stocks. Empty means no suffix at all.
+    title_suffix: str
+    # Enamad trust seal: the id and Code from the Enamad panel. Both
+    # must be set for the seal to render; both empty means no seal.
+    # Per-site, so one site never shows another site's seal.
+    enamad_seal_id: str | None
+    enamad_seal_code: str | None
     # Directus file id of the logo, or None (header falls back to text).
     logo: str | None
     # True when this site also sells second-hand goods. False hides the
@@ -259,6 +268,9 @@ FALLBACK_SITE_CONTENT: SiteContent = {
         "site_tagline": "ضمانت اصالت و ارسال مستقیم با بهترین قیمت",
         "hero_title": "خانه‌ی مدرن، زندگی بهتر",
         "hero_subtitle": "وسایل ضروری مدرن برای هر لحظه از روز",
+        "title_suffix": "فروشگاه لوازم خانگی",
+        "enamad_seal_id": "8856743",
+        "enamad_seal_code": "S6nwLjmqnP9H84VIqFaj0olAcSxyVyo3",
         "logo": None,
         "sells_used": False,
         "mcp_title": "هوش مصنوعی‌ات را به فروشگاهمون وصل کن؛ خرید با یک سوال",
@@ -842,6 +854,9 @@ class DirectusClient:
                 "site_tagline",
                 "hero_title",
                 "hero_subtitle",
+                "title_suffix",
+                "enamad_seal_id",
+                "enamad_seal_code",
                 "logo",
                 "sells_used",
                 "mcp_title",
@@ -872,6 +887,18 @@ class DirectusClient:
             hero_subtitle = row.get("hero_subtitle")
             if isinstance(hero_subtitle, str):
                 settings["hero_subtitle"] = hero_subtitle
+            # Title suffix: a CMS string wins (an explicitly empty
+            # string means no suffix); NULL keeps the fallback.
+            title_suffix = row.get("title_suffix")
+            if isinstance(title_suffix, str):
+                settings["title_suffix"] = title_suffix.strip()
+            # Enamad seal: a non-empty CMS value wins; an explicitly
+            # empty string means "no seal on this site" (overrides the
+            # fallback); NULL keeps the fallback (Genabay's seal).
+            for key in ("enamad_seal_id", "enamad_seal_code"):
+                raw = row.get(key)
+                if isinstance(raw, str):
+                    settings[key] = raw.strip() or None
             logo = row.get("logo")
             settings["logo"] = logo if isinstance(logo, str) else None
             sells_used = row.get("sells_used")
