@@ -1,2 +1,2 @@
-<title>{% block title %}{{ site.settings.site_title }} | فروشگاه لوازم خانگی{% endblock %}</title>
+<title>{% block title %}{{ site.settings.site_title }}{% if site.settings.title_suffix %} | {{ site.settings.title_suffix }}{% endif %}{% endblock %}</title>
 {% block content %}{% endblock %}

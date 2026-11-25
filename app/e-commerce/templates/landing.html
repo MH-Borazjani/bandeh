@@ -1,7 +1,7 @@
 {% extends base_template | default("base.html") %}
 {% from "_condition_label.html" import condition_label %}
 {% from "_category_icon.html" import category_icon %}
-{% block title %}{{ site.settings.site_title }} | فروشگاه لوازم خانگی{% endblock %}
+{% block title %}{{ site.settings.site_title }}{% if site.settings.title_suffix %} | {{ site.settings.title_suffix }}{% endif %}{% endblock %}
 {% block content %}
 <!-- Landing page: Mobile-first & Desktop-responsive
      Amber accent: #d97706, dark theme default, light theme supported.
