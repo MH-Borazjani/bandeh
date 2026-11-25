@@ -100,6 +100,16 @@ class Settings(BaseSettings):
         description="Meilisearch master key (never log it)",
     )
 
+    # Directus Flow secret. Directus is the shell: it shows the data
+    # and triggers actions, but the logic lives in this code. A
+    # Directus Flow calls the internal endpoints below with this
+    # secret in the X-Directus-Flow-Secret header (never log it).
+    # If unset, the internal endpoints return 503.
+    directus_flow_secret: SecretStr | None = Field(
+        default=None,
+        description="Shared secret for Directus Flow webhooks (never log it)",
+    )
+
     # Dynamic database connection URL construction
     @computed_field
     @property

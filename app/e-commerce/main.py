@@ -33,6 +33,7 @@ from api.routes import (
     acp_router,
     admin_router,
     auth_router,
+    internal_router,
     orders_router,
     pages_router,
     payments_router,
@@ -200,6 +201,7 @@ app.include_router(acp_router)
 app.include_router(auth_router)
 app.include_router(pages_router)
 app.include_router(admin_router)
+app.include_router(internal_router)
 app.include_router(products_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
